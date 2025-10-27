@@ -184,9 +184,30 @@ If you see red, green, then blue flashes, your wiring is correct!
 **Safe to use for HUB75**:
 - GPIO 4, 5, 12-19, 21, 23, 25-27, 33-39
 
+**Default pins**
+
+| HUB75 Pin | ESP32-S3 GPIO |
+|-----------|---------------|
+| R1        | 4             |
+| G1        | 5             |
+| B1        | 6             |
+| R2        | 7             |
+| G2        | 15            |
+| B2        | 16            |
+| A        | 18            |
+| B        | 8              |
+| C       | 3              |
+| D       | 42             |
+| E       | -1             | // required for 1/32 scan panels, like 64x64. Any available pin would do, i.e. IO32
+| LAT     | 40             |
+| OE      | 2              |
+| CLK     | 41       |
+
+
+
 ## Shopping List
 
-- [ ] 2x HUB75 LED Matrix Panels (64x32, P4 or P5 pitch)
+- [ ] 2x HUB75 LED Matrix Panels (64x32)
 - [ ] 1x ESP32-S3 DevKit-C (16MB Flash, PSRAM)
 - [ ] 1x 5V 10A Power Supply
 - [ ] 2x HUB75 IDC cables (16-pin, usually included with panels)
@@ -196,5 +217,7 @@ If you see red, green, then blue flashes, your wiring is correct!
 ## Additional Resources
 
 - [ESP32-HUB75-MatrixPanel-DMA Library](https://github.com/mrfaptastic/ESP32-HUB75-MatrixPanel-DMA)
+- [ESP-32S3 Notes](https://github.com/mrcodetastic/ESP32-HUB75-MatrixPanel-DMA/tree/master/src/platforms/esp32s3)
 - [HUB75 Interface Specification](https://www.google.com/search?q=HUB75+interface+specification)
+
 - SG Timer Documentation: `docs/sg_timer_public_bt_api_32.md`

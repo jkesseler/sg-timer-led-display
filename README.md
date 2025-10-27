@@ -127,14 +127,16 @@ pio device monitor
 
 ### Phase 1: Core Implementation *(Current)*
 - [x] Device abstraction layer for future timer support
-- [x] Multi-device protocol support
+- [x] Multi-device support, currently SG Timer Sport and GO.
 - [x] Automatic device discovery and connection
 - [x] Real-time LED matrix display
 
 ### Phase 2: Enhanced Features
 - [ ] Additional timer device support
-- [ ] Support for multiple LED displays
+- [ ] Publish timer data over MQTT
+- [ ] Squads, online shooter, and current shooter display
 - [ ] Web interface for display on any device with a browser
+      Score logging, online / current shooter management
 
 
 
