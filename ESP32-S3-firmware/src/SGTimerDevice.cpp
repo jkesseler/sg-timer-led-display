@@ -1,4 +1,6 @@
 #include "SGTimerDevice.h"
+#include "Logger.h"
+#include "common.h"
 
 // Static constants
 const char* SGTimerDevice::DEVICE_NAME_PREFIX = "SG-SST4";
@@ -18,9 +20,9 @@ public:
   AdvertisedDeviceCallbacks(SGTimerDevice* dev) : device(dev) {}
 
   void onResult(BLEAdvertisedDevice advertisedDevice) {
-    Serial.printf("[SG-SCAN] Found device: %s (RSSI: %d)\n",
-                  advertisedDevice.toString().c_str(),
-                  advertisedDevice.getRSSI());
+    LOG_DEBUG("SG-SCAN", "Found device: %s (RSSI: %d)",
+              advertisedDevice.toString().c_str(),
+              advertisedDevice.getRSSI());
 
     // Check if this is our target device
     String deviceName = advertisedDevice.getName().c_str();
@@ -28,7 +30,7 @@ public:
         (advertisedDevice.haveServiceUUID() &&
          advertisedDevice.getServiceUUID().equals(BLEUUID(SERVICE_UUID)))) {
 
-      Serial.printf("[SG-SCAN] Found SG Shot Timer: %s\n", deviceName.c_str());
+      LOG_INFO("SG-SCAN", "Found SG Shot Timer: %s", deviceName.c_str());
 
       if (device->pServerAddress) {
         delete device->pServerAddress;
@@ -53,13 +55,13 @@ public:
   ClientCallback(SGTimerDevice* dev) : device(dev) {}
 
   void onConnect(BLEClient* pclient) {
-    Serial.println("[SG-BLE] Connected to SG Shot Timer");
+    LOG_BLE("Connected to SG Shot Timer");
     device->deviceConnected = true;
     device->setConnectionState(DeviceConnectionState::CONNECTED);
   }
 
   void onDisconnect(BLEClient* pclient) {
-    Serial.println("[SG-BLE] Disconnected from SG Shot Timer");
+    LOG_BLE("Disconnected from SG Shot Timer");
     device->deviceConnected = false;
     device->doScan = true;
     device->setConnectionState(DeviceConnectionState::DISCONNECTED);
@@ -98,7 +100,7 @@ SGTimerDevice::~SGTimerDevice() {
 }
 
 bool SGTimerDevice::initialize() {
-  Serial.println("[SG-TIMER] Initializing SG Timer device interface");
+  LOG_INFO("SG-TIMER", "Initializing SG Timer device interface");
 
   // BLE should already be initialized by main
   setConnectionState(DeviceConnectionState::DISCONNECTED);
@@ -106,7 +108,7 @@ bool SGTimerDevice::initialize() {
 }
 
 bool SGTimerDevice::startScanning() {
-  Serial.println("[SG-TIMER] Starting scan for SG Timer devices");
+  LOG_INFO("SG-TIMER", "Starting scan for SG Timer devices");
   setConnectionState(DeviceConnectionState::SCANNING);
   doScan = true;
   return true;
@@ -221,8 +223,8 @@ void SGTimerDevice::update() {
   // Check for reconnection
   if (!deviceConnected && pClient != nullptr && connectionState == DeviceConnectionState::DISCONNECTED) {
     static unsigned long lastReconnectAttempt = 0;
-    if (millis() - lastReconnectAttempt > 5000) {
-      Serial.println("[SG-TIMER] Attempting to reconnect...");
+    if (millis() - lastReconnectAttempt > BLE_RECONNECT_INTERVAL) {
+      LOG_INFO("SG-TIMER", "Attempting to reconnect...");
       startScanning();
       lastReconnectAttempt = millis();
     }

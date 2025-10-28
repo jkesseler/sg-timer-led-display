@@ -55,6 +55,26 @@
 // System Configuration
 // =============================================================================
 
+// =============================================================================
+// System Configuration
+// =============================================================================
+
 #define BRIGHTNESS_CHANGE_THRESHOLD 2   // Minimum change required to update brightness (reduces flickering)
+
+// =============================================================================
+// BLE Configuration Constants
+// =============================================================================
+
+#define BLE_SCAN_DURATION 10           // BLE scan duration in seconds
+#define BLE_RECONNECT_INTERVAL 5000    // Reconnection attempt interval in milliseconds
+#define BLE_SCAN_INTERVAL 1349         // BLE scan interval
+#define BLE_SCAN_WINDOW 449            // BLE scan window
+
+// =============================================================================
+// Protocol Constants
+// =============================================================================
+
+#define MAX_SHOTS_PER_SESSION 100      // Maximum shots to read from shot list
+#define SHOT_LIST_READ_DELAY 10        // Delay between shot list reads in milliseconds
 
 #endif // COMMON_H
