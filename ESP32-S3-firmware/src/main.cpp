@@ -3,6 +3,7 @@
 #include <ESP32-HUB75-MatrixPanel-I2S-DMA.h>
 #include "ITimerDevice.h"
 #include "SGTimerDevice.h"
+#include "common.h"
 
 // Timer device interface
 ITimerDevice* timerDevice = nullptr;
@@ -11,23 +12,22 @@ ITimerDevice* timerDevice = nullptr;
 bool sessionActive = false;
 uint16_t lastShotNum = 0;
 uint32_t lastShotTime = 0;  // in milliseconds
-uint16_t sessionTotalShots = 0;
 bool showSessionEnd = false;
 SessionData currentSessionData;
 NormalizedShotData lastShotData;
 
-// HUB75 LED Panel Configuration
-// Two 64x32 panels chained = 128x32 total
-#define PANEL_WIDTH 64
-#define PANEL_HEIGHT 32
-#define PANEL_CHAIN 2
-#define PANEL_TOTAL_WIDTH (PANEL_WIDTH * PANEL_CHAIN)
+// Brightness control variables
+uint8_t currentBrightness = DEFAULT_BRIGHTNESS;  // Default brightness (0-255)
+unsigned long lastBrightnessUpdate = 0;
 
+// HUB75 LED Panel Configuration
 MatrixPanel_I2S_DMA *display = nullptr;
 
 // Function declarations
 void initDisplay();
 void updateDisplay();
+void updateBrightness();
+uint8_t readPotentiometerBrightness();
 void displayShotData(const NormalizedShotData& shotData);
 void displaySessionEnd(const SessionData& sessionData);
 void displayWaiting();
@@ -42,17 +42,22 @@ void onSessionResumed(const SessionData& sessionData);
 void onConnectionStateChanged(DeviceConnectionState state);
 
 void setup() {
-  Serial.begin(115200);
-  delay(1000);
+  Serial.begin(SERIAL_BAUD_RATE);
+  delay(STARTUP_DELAY);
 
   Serial.println("=== SG Shot Timer BLE Bridge ===");
   Serial.println("ESP32-S3 DevKit-C Starting...");
+
+  // Initialize potentiometer pin for brightness control
+  pinMode(POTENTIOMETER_PIN, INPUT);
+  analogReadResolution(ADC_RESOLUTION);  // Set ADC resolution to 12 bits
+  Serial.printf("[BRIGHTNESS] Potentiometer initialized on pin %d\n", POTENTIOMETER_PIN);
 
   // Initialize LED Display
   initDisplay();
 
   // Initialize BLE
-  BLEDevice::init("ESP32-S3 Shot Timer Bridge");
+  BLEDevice::init(BLE_DEVICE_NAME);
   Serial.println("[BLE] ESP32-S3 BLE Client initialized");
 
   // Create timer device (SG Timer implementation)
@@ -81,10 +86,13 @@ void loop() {
     timerDevice->update();
   }
 
+  // Update brightness from potentiometer
+  updateBrightness();
+
   // Update display
   updateDisplay();
 
-  delay(100);
+  delay(MAIN_LOOP_DELAY);
 }
 
 // Timer device event callbacks
@@ -113,7 +121,6 @@ void onSessionStarted(const SessionData& sessionData) {
   showSessionEnd = false;
   lastShotNum = 0;
   lastShotTime = 0;
-  sessionTotalShots = 0;
 
   displayWaiting();  // Show waiting state
 }
@@ -124,7 +131,6 @@ void onSessionStopped(const SessionData& sessionData) {
 
   currentSessionData = sessionData;
   sessionActive = false;
-  sessionTotalShots = sessionData.totalShots;
   showSessionEnd = true;
 
   displaySessionEnd(sessionData);
@@ -171,24 +177,35 @@ void initDisplay() {
 
   // Configure for ESP32-S3
   mxconfig.gpio.e = 18;
-  mxconfig.clkphase = false;
   mxconfig.driver = HUB75_I2S_CFG::FM6126A;
+
+  // Uncomment if vertical output isn't aligned in the two panels of a single 1/16 scan panel
+  // OR x-coord 0 isn't visible on screen
+  // mxconfig.clkphase = false;
+
+  // Uncomment if ghosting/artefacts are seen on the display
+  // mxconfig.latch_blanking = 4;
+  // mxconfig.i2sspeed = HUB75_I2S_CFG::HZ_10M;
+
+
+
+
 
   display = new MatrixPanel_I2S_DMA(mxconfig);
   display->begin();
-  display->setBrightness8(90); // 0-255
+  display->setBrightness8(DEFAULT_BRIGHTNESS); // 0-255
   display->clearScreen();
 
   // Show startup message
   display->setTextSize(1);
   display->setTextColor(display->color565(0, 255, 0)); // Green
   display->setCursor(2, 2);
-  display->print("SG TIMER");
+  display->print("TIMER");
   display->setCursor(2, 12);
   display->print("READY");
 
   Serial.println("[DISPLAY] HUB75 panels initialized");
-  delay(2000);
+  delay(STARTUP_MESSAGE_DELAY);
   display->clearScreen();
 }
 
@@ -256,7 +273,7 @@ void displayWaiting() {
   display->print("READY");
 
   display->setTextSize(3);
-  display->setTextColor(display->color565(255, 255, 255)); // White
+  display->setTextColor(display->color565(200, 200, 200)); // White
   display->setCursor(10, 18);
   display->print("00:00");
 
@@ -327,5 +344,38 @@ void displayConnectionStatus(DeviceConnectionState state) {
       display->print("CONNECTION ERROR");
       break;
   }
+}
+
+// Update display brightness based on potentiometer reading
+void updateBrightness() {
+  unsigned long currentTime = millis();
+
+  // Only update brightness at specified intervals to avoid flickering
+  if (currentTime - lastBrightnessUpdate >= BRIGHTNESS_UPDATE_INTERVAL) {
+    uint8_t newBrightness = readPotentiometerBrightness();
+
+    // Only update if brightness changed significantly (avoid small fluctuations)
+    if (abs(newBrightness - currentBrightness) > BRIGHTNESS_CHANGE_THRESHOLD) {
+      currentBrightness = newBrightness;
+      if (display) {
+        display->setBrightness8(currentBrightness);
+      }
+      Serial.printf("[BRIGHTNESS] Updated to %d (%.1f%%)\n",
+                    currentBrightness, (currentBrightness / 255.0) * 100);
+    }
+
+    lastBrightnessUpdate = currentTime;
+  }
+}
+
+// Read potentiometer and convert to brightness value (0-255)
+uint8_t readPotentiometerBrightness() {
+  int potValue = analogRead(POTENTIOMETER_PIN);
+
+  // Map potentiometer reading (0 to POTENTIOMETER_MAX_VALUE) to brightness (MIN_BRIGHTNESS to MAX_BRIGHTNESS)
+  // Minimum brightness to ensure display is always visible
+  uint8_t brightness = map(potValue, 0, POTENTIOMETER_MAX_VALUE, MIN_BRIGHTNESS, MAX_BRIGHTNESS);
+
+  return brightness;
 }
 

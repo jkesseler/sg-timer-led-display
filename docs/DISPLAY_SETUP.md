@@ -40,6 +40,7 @@ The HUB75 panels connect to the ESP32-S3 using the I2S parallel interface. Below
 - Use a dedicated 5V power supply (e.g., 5V 10A)
 - **DO NOT** power the panels from the ESP32-S3 USB power
 - Connect panel power and ESP32-S3 GND together (common ground)
+- Add a 1000 ~ 2000uf capacitor soldered to the back of each LED Panel across the GND and VCC pins of each panel to prevent flickering and other issues. [Explaination](https://github.com/hzeller/rpi-rgb-led-matrix/blob/master/wiring.md#a-word-about-power)
 
 ### Panel Chaining
 
