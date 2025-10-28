@@ -1,5 +1,8 @@
 #include "TimerApplication.h"
 #include "SGTimerDevice.h"
+#include "SGTimerSimulator.h"
+#include "SimulatorCommands.h"
+#include "common.h"
 #include <BLEDevice.h>
 
 TimerApplication::TimerApplication()
@@ -38,12 +41,22 @@ bool TimerApplication::initialize() {
     displayManager->setBrightness(brightness);
   });
 
-  // Initialize BLE
+  // Initialize BLE (only if not using simulator)
+#ifndef USE_SIMULATOR
   BLEDevice::init(BLE_DEVICE_NAME);
   LOG_BLE("ESP32-S3 BLE Client initialized");
+#endif
 
-  // Create timer device (SG Timer implementation)
+  // Create timer device (SG Timer implementation or simulator)
+#ifdef USE_SIMULATOR
+  LOG_SYSTEM("Using SG Timer Simulator");
+  simulator = std::unique_ptr<SGTimerSimulator>(new SGTimerSimulator(SimulationMode::AUTO_SHOTS));
+  timerDevice = simulator.get();
+  simCommands = std::unique_ptr<SimulatorCommands>(new SimulatorCommands(simulator.get()));
+#else
+  LOG_SYSTEM("Using Real SG Timer Device");
   timerDevice = std::unique_ptr<SGTimerDevice>(new SGTimerDevice());
+#endif
 
   // Set up callbacks
   setupCallbacks();
@@ -67,6 +80,13 @@ void TimerApplication::run() {
   if (timerDevice) {
     timerDevice->update();
   }
+
+#ifdef USE_SIMULATOR
+  // Update simulator command interface
+  if (simCommands) {
+    simCommands->update();
+  }
+#endif
 
   if (brightnessController) {
     brightnessController->update();
