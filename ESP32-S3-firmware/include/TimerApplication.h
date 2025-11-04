@@ -3,6 +3,8 @@
 #include "ITimerDevice.h"
 #include "DisplayManager.h"
 #include "BrightnessController.h"
+#include "SystemStateMachine.h"
+#include "ButtonHandler.h"
 #include "Logger.h"
 #include <memory>
 
@@ -21,13 +23,15 @@ private:
   std::unique_ptr<ITimerDevice> timerDevice;
   std::unique_ptr<DisplayManager> displayManager;
   std::unique_ptr<BrightnessController> brightnessController;
+  std::unique_ptr<SystemStateMachine> stateMachine;
+  std::unique_ptr<ButtonHandler> buttonHandler;
 
 #ifdef USE_SIMULATOR
   std::unique_ptr<SGTimerSimulator> simulator;
   std::unique_ptr<SimulatorCommands> simCommands;
 #endif
 
-  // Application state
+  // Application state (legacy - will be migrated to state machine)
   bool sessionActive;
   uint16_t lastShotNumber;
   uint32_t lastShotTime;
@@ -61,8 +65,14 @@ public:
   // Getters for debugging/monitoring
   bool isSessionActive() const { return sessionActive; }
   DisplayManager* getDisplayManager() const { return displayManager.get(); }
+  SystemStateMachine* getStateMachine() const { return stateMachine.get(); }
 
   // System health
   bool isHealthy() const;
+  bool isInitialized() const;
   unsigned long getUptimeMs() const;
+
+  // State machine integration
+  void resetToInitialState();
+  void handleButtonPress();
 };

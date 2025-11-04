@@ -6,7 +6,7 @@
 // =============================================================================
 
 // Uncomment to use the SG Timer Simulator instead of real device
-#define USE_SIMULATOR
+// #define USE_SIMULATOR
 
 // =============================================================================
 // Hardware Pin Definitions
@@ -14,6 +14,10 @@
 
 // Potentiometer configuration for brightness control
 #define POTENTIOMETER_PIN A0        // ADC pin for potentiometer (GPIO1 on ESP32-S3)
+
+// Button configuration for manual reset
+#define RESET_BUTTON_PIN 4          // GPIO pin for reset button
+#define BUTTON_DEBOUNCE_MS 50       // Button debounce delay
 
 // =============================================================================
 // ADC Configuration

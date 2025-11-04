@@ -57,20 +57,35 @@ public:
   void onConnect(BLEClient* pclient) {
     LOG_BLE("Connected to SG Shot Timer");
     device->deviceConnected = true;
-    device->setConnectionState(DeviceConnectionState::CONNECTED);
+    device->connectionInProgress = false;
+
+    // Perform service discovery now that we're connected
+    device->discoverServices(pclient);
   }
 
   void onDisconnect(BLEClient* pclient) {
     LOG_BLE("Disconnected from SG Shot Timer");
     device->deviceConnected = false;
-    device->doScan = true;
-    device->setConnectionState(DeviceConnectionState::DISCONNECTED);
+
+    // Check if this was during a connection attempt (connection failure)
+    if (device->connectionInProgress) {
+      LOG_BLE("Connection failed during attempt");
+      device->connectionInProgress = false;
+      device->setConnectionState(DeviceConnectionState::ERROR);
+    } else {
+      // Normal disconnection
+      device->doScan = true;
+      device->setConnectionState(DeviceConnectionState::DISCONNECTED);
+    }
 
     // Reset session tracking
     device->hasFirstShot = false;
     device->previousShotTime = 0;
     device->currentSession = {};
   }
+
+  // Handle connection failures
+  // Note: ESP32 BLE library doesn't have onConnParamsUpdateRequest callback
 };
 
 SGTimerDevice::SGTimerDevice() :
@@ -82,6 +97,7 @@ SGTimerDevice::SGTimerDevice() :
   deviceConnected(false),
   doConnect(false),
   doScan(false),
+  connectionInProgress(false),
   deviceModel("SG Timer"),
   previousShotTime(0),
   hasFirstShot(false)
@@ -264,29 +280,44 @@ void SGTimerDevice::scanForDevices() {
 void SGTimerDevice::connectToServer() {
   if (!pServerAddress) {
     Serial.println("[SG-BLE] No server address available");
+    setConnectionState(DeviceConnectionState::ERROR);
     return;
   }
 
   Serial.printf("[SG-BLE] Connecting to device at address: %s\n", pServerAddress->toString().c_str());
   setConnectionState(DeviceConnectionState::CONNECTING);
+  connectionInProgress = true;  // Mark that we're attempting connection
 
   // Create BLE client
   pClient = BLEDevice::createClient();
   pClient->setClientCallbacks(new ClientCallback(this));
 
-  // Connect to the server
-  if (!pClient->connect(*pServerAddress)) {
-    Serial.println("[SG-BLE] Failed to connect to server");
+  // Note: ESP32 BLE library doesn't have setConnectTimeout method
+  // The timeout is handled by the ESP32 BLE stack (typically 30 seconds)
+
+  // Connect to the server - this may succeed initially but fail during handshake
+  bool connectResult = pClient->connect(*pServerAddress);
+
+  if (!connectResult) {
+    Serial.println("[SG-BLE] Failed to initiate connection to server");
+    connectionInProgress = false;
     setConnectionState(DeviceConnectionState::ERROR);
     return;
   }
 
+  // If we get here, connection was initiated successfully
+  // The actual connection success/failure will be handled by the ClientCallback
+  Serial.println("[SG-BLE] Connection initiated, waiting for result...");
+}
+
+void SGTimerDevice::discoverServices(BLEClient* pClient) {
   Serial.println("[SG-BLE] Connected to server, discovering services...");
 
   // Get the service
   BLERemoteService* pRemoteService = pClient->getService(SERVICE_UUID);
   if (pRemoteService == nullptr) {
     Serial.printf("[SG-BLE] Failed to find service UUID: %s\n", SERVICE_UUID);
+    connectionInProgress = false;
     pClient->disconnect();
     setConnectionState(DeviceConnectionState::ERROR);
     return;
@@ -298,6 +329,7 @@ void SGTimerDevice::connectToServer() {
   pRemoteCharacteristic = pRemoteService->getCharacteristic(CHARACTERISTIC_UUID);
   if (pRemoteCharacteristic == nullptr) {
     Serial.printf("[SG-BLE] Failed to find characteristic UUID: %s\n", CHARACTERISTIC_UUID);
+    connectionInProgress = false;
     pClient->disconnect();
     setConnectionState(DeviceConnectionState::ERROR);
     return;
@@ -317,15 +349,17 @@ void SGTimerDevice::connectToServer() {
     pRemoteCharacteristic->registerForNotify(notifyCallback);
     Serial.println("[SG-BLE] Notification callback registered");
     Serial.println("[SG-BLE] === Ready to receive shot timer data ===");
+
+    // Connection is now fully established
+    connectionInProgress = false;
+    setConnectionState(DeviceConnectionState::CONNECTED);
   } else {
     Serial.println("[SG-BLE] Characteristic cannot notify");
+    connectionInProgress = false;
     pClient->disconnect();
     setConnectionState(DeviceConnectionState::ERROR);
     return;
   }
-
-  deviceConnected = true;
-  setConnectionState(DeviceConnectionState::CONNECTED);
 }
 
 // Static notification callback

@@ -25,6 +25,7 @@ private:
   bool deviceConnected;
   bool doConnect;
   bool doScan;
+  bool connectionInProgress;  // Track if we're currently attempting connection
 
   // Device information
   String deviceName;
@@ -46,6 +47,7 @@ private:
   // Internal methods
   void scanForDevices();
   void connectToServer();
+  void discoverServices(BLEClient* pClient);
   void processTimerData(uint8_t* data, size_t length);
   void setConnectionState(DeviceConnectionState newState);
   String parseHexData(uint8_t* data, size_t length);
