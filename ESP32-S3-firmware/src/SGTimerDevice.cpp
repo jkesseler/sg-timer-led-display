@@ -292,9 +292,6 @@ void SGTimerDevice::connectToServer() {
   pClient = BLEDevice::createClient();
   pClient->setClientCallbacks(new ClientCallback(this));
 
-  // Note: ESP32 BLE library doesn't have setConnectTimeout method
-  // The timeout is handled by the ESP32 BLE stack (typically 30 seconds)
-
   // Connect to the server - this may succeed initially but fail during handshake
   bool connectResult = pClient->connect(*pServerAddress);
 

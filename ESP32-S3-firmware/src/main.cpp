@@ -28,5 +28,3 @@ void loop() {
     app->run();
   }
 }
-
-
