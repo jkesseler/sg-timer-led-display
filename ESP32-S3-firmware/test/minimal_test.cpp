@@ -1,6 +1,7 @@
 #include <Arduino.h>
 #include <BLEDevice.h>
 
+static const char *DEVICE_NAME_PREFIX = "SG-SST4";
 static BLEUUID serviceUUID("7520FFFF-14D2-4CDA-8B6B-697C554C9311");
 static BLEUUID eventUUID("75200001-14D2-4CDA-8B6B-697C554C9311");
 
@@ -49,9 +50,14 @@ class MyAdvertisedDeviceCallbacks : public BLEAdvertisedDeviceCallbacks
 {
   void onResult(BLEAdvertisedDevice advertisedDevice) override
   {
-    if (advertisedDevice.haveName() && advertisedDevice.getName().find("SG-SST4") != std::string::npos)
+    Serial.printf("SG-SCAN", "Found device: %s (RSSI: %d)",
+                  advertisedDevice.toString().c_str(),
+                  advertisedDevice.getRSSI());
+
+    String deviceName = advertisedDevice.getName().c_str();
+    if (advertisedDevice.haveName() && deviceName.startsWith(DEVICE_NAME_PREFIX))
     {
-      Serial.printf("Found %s\n", advertisedDevice.getName().c_str());
+      Serial.printf("Found %s\n", deviceName.c_str());
       BLEDevice::getScan()->stop();
       foundDevice = new BLEAdvertisedDevice(advertisedDevice);
     }
@@ -68,6 +74,10 @@ bool connectToDevice(BLEAdvertisedDevice *device)
     Serial.println("❌ Connection failed");
     return false;
   }
+
+  Serial.printf("✅ Connected to %s (RSSI %d)\n",
+                device->getName().c_str(),
+                device->getRSSI());
 
   BLERemoteService *pService = pClient->getService(serviceUUID);
   if (!pService)
