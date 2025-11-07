@@ -1,7 +1,5 @@
 #include "TimerApplication.h"
 #include "SGTimerDevice.h"
-#include "SGTimerSimulator.h"
-#include "SimulatorCommands.h"
 #include "SystemStateMachine.h"
 #include "ButtonHandler.h"
 #include "common.h"
@@ -57,33 +55,19 @@ bool TimerApplication::initialize() {
     return false;
   }
 
-  // Initialize BLE (only if not using simulator)
-#ifndef USE_SIMULATOR
+  // Initialize BLE
   BLEDevice::init(BLE_DEVICE_NAME);
   LOG_BLE("ESP32-S3 BLE Client initialized");
-#endif
 
-  // Create timer device (SG Timer implementation or simulator)
-#ifdef USE_SIMULATOR
-  LOG_SYSTEM("Using SG Timer Simulator");
-  simulator = std::unique_ptr<SGTimerSimulator>(new SGTimerSimulator(SimulationMode::AUTO_SHOTS));
-  // Note: We can't assign simulator.get() directly to unique_ptr,
-  // so we'll use simulator directly and cast when needed
-  simCommands = std::unique_ptr<SimulatorCommands>(new SimulatorCommands(simulator.get()));
-#else
+  // Create timer device (SG Timer implementation)
   LOG_SYSTEM("Using Real SG Timer Device");
   timerDevice = std::unique_ptr<SGTimerDevice>(new SGTimerDevice());
-#endif
 
   // Set up callbacks
   setupCallbacks();
 
   // Initialize the timer device
-#ifdef USE_SIMULATOR
-  ITimerDevice* device = simulator.get();
-#else
   ITimerDevice* device = timerDevice.get();
-#endif
 
   if (!device || !device->initialize()) {
     LOG_ERROR("TIMER", "Failed to initialize timer device");
@@ -113,22 +97,9 @@ void TimerApplication::run() {
   }
 
   // Update all components
-#ifdef USE_SIMULATOR
-  if (simulator) {
-    simulator->update();
-  }
-#else
   if (timerDevice) {
     timerDevice->update();
   }
-#endif
-
-#ifdef USE_SIMULATOR
-  // Update simulator command interface
-  if (simCommands) {
-    simCommands->update();
-  }
-#endif
 
   if (brightnessController) {
     brightnessController->update();
@@ -145,11 +116,7 @@ void TimerApplication::run() {
 }
 
 void TimerApplication::setupCallbacks() {
-#ifdef USE_SIMULATOR
-  ITimerDevice* device = simulator.get();
-#else
   ITimerDevice* device = timerDevice.get();
-#endif
 
   if (!device) return;
 
@@ -278,15 +245,9 @@ void TimerApplication::onConnectionStateChanged(DeviceConnectionState state) {
   }
 
   const char* deviceName = nullptr;
-#ifdef USE_SIMULATOR
-  if (simulator) {
-    deviceName = simulator->getDeviceName();
-  }
-#else
   if (timerDevice) {
     deviceName = timerDevice->getDeviceName();
   }
-#endif
 
   if (displayManager) {
     displayManager->showConnectionState(state, deviceName);
@@ -306,11 +267,7 @@ void TimerApplication::performHealthCheck() {
   if (currentTime - lastHealthCheck >= AppConfig::HEALTH_CHECK_INTERVAL_MS) {
     // Check component health
     bool displayHealthy = displayManager && displayManager->isInitialized();
-#ifdef USE_SIMULATOR
-    bool timerHealthy = simulator != nullptr;
-#else
     bool timerHealthy = timerDevice != nullptr;
-#endif
     bool brightnessHealthy = brightnessController != nullptr;
 
     if (!displayHealthy) {
@@ -343,11 +300,7 @@ void TimerApplication::updateActivityTime() {
 
 bool TimerApplication::isHealthy() const {
   bool displayHealthy = displayManager && displayManager->isInitialized();
-#ifdef USE_SIMULATOR
-  bool timerHealthy = simulator != nullptr;
-#else
   bool timerHealthy = timerDevice != nullptr;
-#endif
   bool brightnessHealthy = brightnessController != nullptr;
   bool activityHealthy = (millis() - lastActivityTime) < AppConfig::WATCHDOG_TIMEOUT_MS;
 
@@ -360,11 +313,7 @@ unsigned long TimerApplication::getUptimeMs() const {
 
 bool TimerApplication::isInitialized() const {
   bool displayHealthy = displayManager && displayManager->isInitialized();
-#ifdef USE_SIMULATOR
-  bool timerHealthy = simulator != nullptr;
-#else
   bool timerHealthy = timerDevice != nullptr;
-#endif
   bool brightnessHealthy = brightnessController != nullptr;
   bool stateMachineHealthy = stateMachine != nullptr;
   bool buttonHealthy = buttonHandler != nullptr;
@@ -382,15 +331,9 @@ void TimerApplication::resetToInitialState() {
   showSessionEnd = false;
 
   // Disconnect from device if connected
-#ifdef USE_SIMULATOR
-  if (simulator && simulator->isConnected()) {
-    simulator->disconnect();
-  }
-#else
   if (timerDevice && timerDevice->isConnected()) {
     timerDevice->disconnect();
   }
-#endif
 
   // Update activity time
   updateActivityTime();

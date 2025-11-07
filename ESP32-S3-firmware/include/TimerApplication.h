@@ -8,10 +8,6 @@
 #include "Logger.h"
 #include <memory>
 
-// Forward declarations for simulator
-class SGTimerSimulator;
-class SimulatorCommands;
-
 // Application configuration
 namespace AppConfig {
   constexpr uint32_t WATCHDOG_TIMEOUT_MS = 10000;  // 10 seconds
@@ -25,11 +21,6 @@ private:
   std::unique_ptr<BrightnessController> brightnessController;
   std::unique_ptr<SystemStateMachine> stateMachine;
   std::unique_ptr<ButtonHandler> buttonHandler;
-
-#ifdef USE_SIMULATOR
-  std::unique_ptr<SGTimerSimulator> simulator;
-  std::unique_ptr<SimulatorCommands> simCommands;
-#endif
 
   // Application state (legacy - will be migrated to state machine)
   bool sessionActive;
