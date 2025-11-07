@@ -4,37 +4,38 @@
 #include <BLEDevice.h>
 #include <BLEClient.h>
 #include <BLEUtils.h>
-#include <BLE2902.h>
+#include <BLEScan.h>
 
 class SGTimerDevice : public ITimerDevice {
 private:
   // SG Timer specific configuration
-  static const char* DEVICE_NAME_PREFIX;
+  static const char* TARGET_DEVICE_ADDRESS;  // Simplified: just target the known device
   static const char* SERVICE_UUID;
   static const char* CHARACTERISTIC_UUID;
   static const char* SHOT_LIST_UUID;
 
-  // BLE components
+  // BLE components (simplified)
   BLEClient* pClient;
-  BLERemoteCharacteristic* pRemoteCharacteristic;
-  BLERemoteCharacteristic* pShotListCharacteristic;
-  BLEAddress* pServerAddress;
+  BLERemoteCharacteristic* pEventCharacteristic;
+  BLERemoteService* pService;
 
   // Connection state
   DeviceConnectionState connectionState;
-  bool deviceConnected;
-  bool doConnect;
-  bool doScan;
-  bool connectionInProgress;  // Track if we're currently attempting connection
+  bool isConnectedFlag;
+  unsigned long lastReconnectAttempt;
+  unsigned long lastHeartbeat;
 
   // Device information
-  String deviceName;
   String deviceModel;
 
   // Session tracking
   SessionData currentSession;
   uint32_t previousShotTime;
   bool hasFirstShot;
+  uint16_t lastShotNum;
+  uint32_t lastShotSeconds;
+  uint32_t lastShotHundredths;
+  bool hasLastShot;
 
   // Callbacks
   std::function<void(const NormalizedShotData&)> shotDetectedCallback;
@@ -44,18 +45,10 @@ private:
   std::function<void(const SessionData&)> sessionResumedCallback;
   std::function<void(DeviceConnectionState)> connectionStateCallback;
 
-  // Internal methods
-  void scanForDevices();
-  void connectToServer();
-  void discoverServices(BLEClient* pClient);
+  // Internal methods (simplified)
+  void attemptConnection();
   void processTimerData(uint8_t* data, size_t length);
   void setConnectionState(DeviceConnectionState newState);
-  String parseHexData(uint8_t* data, size_t length);
-  void readShotListInternal(uint32_t sessionId);
-
-  // BLE callback classes
-  class AdvertisedDeviceCallbacks;
-  class ClientCallback;
 
   // Static callback for BLE notifications
   static void notifyCallback(BLERemoteCharacteristic* pBLERemoteCharacteristic,
