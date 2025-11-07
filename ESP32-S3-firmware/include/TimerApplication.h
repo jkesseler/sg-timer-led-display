@@ -3,7 +3,6 @@
 #include "ITimerDevice.h"
 #include "DisplayManager.h"
 #include "BrightnessController.h"
-#include "SystemStateMachine.h"
 #include "ButtonHandler.h"
 #include "Logger.h"
 #include <memory>
@@ -19,14 +18,12 @@ private:
   std::unique_ptr<ITimerDevice> timerDevice;
   std::unique_ptr<DisplayManager> displayManager;
   std::unique_ptr<BrightnessController> brightnessController;
-  std::unique_ptr<SystemStateMachine> stateMachine;
   std::unique_ptr<ButtonHandler> buttonHandler;
 
-  // Application state (legacy - will be migrated to state machine)
+  // Application state
   bool sessionActive;
   uint16_t lastShotNumber;
   uint32_t lastShotTime;
-  bool showSessionEnd;
 
   // Health monitoring
   unsigned long lastHealthCheck;
@@ -45,6 +42,7 @@ private:
   void logShotData(const NormalizedShotData& shotData);
   void performHealthCheck();
   void updateActivityTime();
+  void handleButtonPress();
 
 public:
   TimerApplication();
@@ -56,14 +54,9 @@ public:
   // Getters for debugging/monitoring
   bool isSessionActive() const { return sessionActive; }
   DisplayManager* getDisplayManager() const { return displayManager.get(); }
-  SystemStateMachine* getStateMachine() const { return stateMachine.get(); }
 
   // System health
   bool isHealthy() const;
   bool isInitialized() const;
   unsigned long getUptimeMs() const;
-
-  // State machine integration
-  void resetToInitialState();
-  void handleButtonPress();
 };

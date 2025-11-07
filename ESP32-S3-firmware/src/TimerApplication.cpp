@@ -1,6 +1,5 @@
 #include "TimerApplication.h"
 #include "SGTimerDevice.h"
-#include "SystemStateMachine.h"
 #include "ButtonHandler.h"
 #include "common.h"
 #include <BLEDevice.h>
@@ -9,7 +8,6 @@ TimerApplication::TimerApplication()
   : sessionActive(false),
     lastShotNumber(0),
     lastShotTime(0),
-    showSessionEnd(false),
     lastHealthCheck(0),
     lastActivityTime(0) {
 }
@@ -41,13 +39,6 @@ bool TimerApplication::initialize() {
     displayManager->setBrightness(brightness);
   });
 
-  // Initialize state machine
-  stateMachine = std::unique_ptr<SystemStateMachine>(new SystemStateMachine(this));
-  if (!stateMachine) {
-    LOG_ERROR("SYSTEM", "Failed to create state machine");
-    return false;
-  }
-
   // Initialize button handler
   buttonHandler = std::unique_ptr<ButtonHandler>(new ButtonHandler());
   if (!buttonHandler || !buttonHandler->initialize()) {
@@ -77,9 +68,6 @@ bool TimerApplication::initialize() {
   LOG_TIMER("Timer device initialized successfully");
   device->startScanning();
 
-  // Initialize state machine
-  stateMachine->initialize();
-
   LOG_SYSTEM("Application initialized successfully");
   lastActivityTime = millis();
   return true;
@@ -89,11 +77,6 @@ void TimerApplication::run() {
   // Check for button presses
   if (buttonHandler && buttonHandler->checkButtonPress()) {
     handleButtonPress();
-  }
-
-  // Update state machine first
-  if (stateMachine) {
-    stateMachine->update();
   }
 
   // Update all components
@@ -151,11 +134,6 @@ void TimerApplication::onShotDetected(const NormalizedShotData& shotData) {
   lastShotTime = shotData.absoluteTimeMs;
   updateActivityTime();
 
-  // Notify state machine
-  if (stateMachine) {
-    stateMachine->onSessionEvent("shot");
-  }
-
   // Update display if session is active
   if (sessionActive && displayManager) {
     displayManager->showShotData(shotData);
@@ -168,14 +146,8 @@ void TimerApplication::onSessionStarted(const SessionData& sessionData) {
   LOG_TIMER("Session started: ID %u", sessionData.sessionId);
 
   sessionActive = true;
-  showSessionEnd = false;
   lastShotNumber = 0;
   lastShotTime = 0;
-
-  // Notify state machine
-  if (stateMachine) {
-    stateMachine->onSessionEvent("started");
-  }
 
   if (displayManager) {
     displayManager->showWaitingForShots(sessionData);
@@ -187,12 +159,6 @@ void TimerApplication::onSessionStopped(const SessionData& sessionData) {
             sessionData.sessionId, sessionData.totalShots);
 
   sessionActive = false;
-  showSessionEnd = true;
-
-  // Notify state machine
-  if (stateMachine) {
-    stateMachine->onSessionEvent("ended");
-  }
 
   if (displayManager) {
     displayManager->showSessionEnd(sessionData, lastShotNumber);
@@ -202,14 +168,7 @@ void TimerApplication::onSessionStopped(const SessionData& sessionData) {
 void TimerApplication::onSessionSuspended(const SessionData& sessionData) {
   LOG_TIMER("Session suspended: ID %u, Total shots: %d",
             sessionData.sessionId, sessionData.totalShots);
-
   // Keep sessionActive true for suspended sessions
-  // Notify state machine
-  if (stateMachine) {
-    stateMachine->onSessionEvent("suspended");
-  }
-
-  // Display manager will handle the visual state
 }
 
 void TimerApplication::onSessionResumed(const SessionData& sessionData) {
@@ -217,12 +176,6 @@ void TimerApplication::onSessionResumed(const SessionData& sessionData) {
             sessionData.sessionId, sessionData.totalShots);
 
   sessionActive = true;
-  showSessionEnd = false;
-
-  // Notify state machine
-  if (stateMachine) {
-    stateMachine->onSessionEvent("resumed");
-  }
 
   if (displayManager) {
     displayManager->showWaitingForShots(sessionData);
@@ -233,15 +186,9 @@ void TimerApplication::onConnectionStateChanged(DeviceConnectionState state) {
   LOG_BLE("Connection state changed: %d", (int)state);
   updateActivityTime();
 
-  // Notify state machine
-  if (stateMachine) {
-    stateMachine->onConnectionStateChanged(state);
-  }
-
   // Update display based on connection state
   if (state == DeviceConnectionState::DISCONNECTED && sessionActive) {
     sessionActive = false;
-    showSessionEnd = false;
   }
 
   const char* deviceName = nullptr;
@@ -315,33 +262,28 @@ bool TimerApplication::isInitialized() const {
   bool displayHealthy = displayManager && displayManager->isInitialized();
   bool timerHealthy = timerDevice != nullptr;
   bool brightnessHealthy = brightnessController != nullptr;
-  bool stateMachineHealthy = stateMachine != nullptr;
   bool buttonHealthy = buttonHandler != nullptr;
 
-  return displayHealthy && timerHealthy && brightnessHealthy && stateMachineHealthy && buttonHealthy;
+  return displayHealthy && timerHealthy && brightnessHealthy && buttonHealthy;
 }
 
-void TimerApplication::resetToInitialState() {
-  LOG_SYSTEM("Resetting application to initial state");
-
-  // Reset application state
-  sessionActive = false;
-  lastShotNumber = 0;
-  lastShotTime = 0;
-  showSessionEnd = false;
+void TimerApplication::handleButtonPress() {
+  LOG_SYSTEM("Button press detected - resetting");
 
   // Disconnect from device if connected
   if (timerDevice && timerDevice->isConnected()) {
     timerDevice->disconnect();
   }
 
-  // Update activity time
-  updateActivityTime();
-}
+  // Reset application state
+  sessionActive = false;
+  lastShotNumber = 0;
+  lastShotTime = 0;
 
-void TimerApplication::handleButtonPress() {
-  LOG_SYSTEM("Button press detected");
-  if (stateMachine) {
-    stateMachine->onButtonPressed();
+  // Start scanning again
+  if (timerDevice) {
+    timerDevice->startScanning();
   }
+
+  updateActivityTime();
 }
