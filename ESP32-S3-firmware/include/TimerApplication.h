@@ -25,6 +25,10 @@ private:
   uint16_t lastShotNumber;
   uint32_t lastShotTime;
 
+  // Device scanning state
+  unsigned long lastScanAttempt;
+  bool isScanning;
+
   // Health monitoring
   unsigned long lastHealthCheck;
   unsigned long lastActivityTime;
@@ -43,6 +47,7 @@ private:
   void performHealthCheck();
   void updateActivityTime();
   void handleButtonPress();
+  void scanForDevices();
 
 public:
   TimerApplication();

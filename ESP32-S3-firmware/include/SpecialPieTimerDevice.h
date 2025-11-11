@@ -6,17 +6,15 @@
 #include <BLEUtils.h>
 #include <BLEScan.h>
 
-class SGTimerDevice : public ITimerDevice {
+class SpecialPieTimerDevice : public ITimerDevice {
 private:
-  // SG Timer specific configuration
-  static const char* TARGET_DEVICE_ADDRESS;  // Simplified: just target the known device
+  // Special Pie Timer specific configuration
   static const char* SERVICE_UUID;
   static const char* CHARACTERISTIC_UUID;
-  static const char* SHOT_LIST_UUID;
 
-  // BLE components (simplified)
+  // BLE components
   BLEClient* pClient;
-  BLERemoteCharacteristic* pEventCharacteristic;
+  BLERemoteCharacteristic* pNotifyCharacteristic;
   BLERemoteService* pService;
 
   // Connection state
@@ -24,18 +22,21 @@ private:
   bool isConnectedFlag;
   unsigned long lastReconnectAttempt;
   unsigned long lastHeartbeat;
+  BLEAddress deviceAddress;
+  String deviceName;
 
   // Device information
   String deviceModel;
 
   // Session tracking
   SessionData currentSession;
-  uint32_t previousShotTime;
-  bool hasFirstShot;
-  uint16_t lastShotNum;
-  uint32_t lastShotSeconds;
-  uint32_t lastShotHundredths;
-  bool hasLastShot;
+  uint8_t currentSessionId;
+  bool sessionActiveFlag;
+
+  // Shot tracking for split calculation
+  uint32_t previousTimeSeconds;
+  uint32_t previousTimeCentiseconds;
+  bool hasPreviousShot;
 
   // Callbacks
   std::function<void(const NormalizedShotData&)> shotDetectedCallback;
@@ -45,7 +46,7 @@ private:
   std::function<void(const SessionData&)> sessionResumedCallback;
   std::function<void(DeviceConnectionState)> connectionStateCallback;
 
-  // Internal methods (simplified)
+  // Internal methods
   void processTimerData(uint8_t* data, size_t length);
   void setConnectionState(DeviceConnectionState newState);
 
@@ -54,8 +55,8 @@ private:
                            uint8_t* pData, size_t length, bool isNotify);
 
 public:
-  SGTimerDevice();
-  virtual ~SGTimerDevice();
+  SpecialPieTimerDevice();
+  virtual ~SpecialPieTimerDevice();
 
   // ITimerDevice interface implementation
   bool initialize() override;
@@ -87,8 +88,11 @@ public:
   void update() override;
 
   // Static instance for callbacks
-  static SGTimerDevice* instance;
+  static SpecialPieTimerDevice* instance;
+
+  // Helper method to check if a device is a Special Pie Timer
+  static bool isSpecialPieTimer(BLEAdvertisedDevice* device);
 
   // Public connection method for TimerApplication
-  void attemptConnection();
+  bool attemptConnection(BLEAdvertisedDevice* device);
 };

@@ -133,21 +133,10 @@ bool SGTimerDevice::stopSession() {
   return false;
 }
 
-// Main update loop - simplified to match minimal_test.cpp pattern
+// Main update loop - check connection health
 void SGTimerDevice::update() {
-  // If not connected, try to scan and connect
-  if (!isConnectedFlag) {
-    unsigned long now = millis();
-
-    // Throttle reconnection attempts
-    if (now - lastReconnectAttempt < 5000) {
-      return;
-    }
-
-    lastReconnectAttempt = now;
-    attemptConnection();
-  } else {
-    // Connected - check connection status and print heartbeat
+  // If connected, check connection status
+  if (isConnectedFlag) {
     if (pClient && pClient->isConnected()) {
       // Print heartbeat every 30 seconds
       if (millis() - lastHeartbeat > 30000) {
@@ -176,6 +165,7 @@ void SGTimerDevice::update() {
       Serial.println("Will attempt to reconnect...\n");
     }
   }
+  // Note: Scanning is handled by TimerApplication for multi-device support
 }
 
 void SGTimerDevice::setConnectionState(DeviceConnectionState newState) {

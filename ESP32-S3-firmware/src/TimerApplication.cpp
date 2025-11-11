@@ -1,5 +1,6 @@
 #include "TimerApplication.h"
 #include "SGTimerDevice.h"
+#include "SpecialPieTimerDevice.h"
 #include "ButtonHandler.h"
 #include "common.h"
 #include <BLEDevice.h>
@@ -8,6 +9,8 @@ TimerApplication::TimerApplication()
   : sessionActive(false),
     lastShotNumber(0),
     lastShotTime(0),
+    lastScanAttempt(0),
+    isScanning(false),
     lastHealthCheck(0),
     lastActivityTime(0) {
 }
@@ -50,23 +53,8 @@ bool TimerApplication::initialize() {
   BLEDevice::init(BLE_DEVICE_NAME);
   LOG_BLE("ESP32-S3 BLE Client initialized");
 
-  // Create timer device (SG Timer implementation)
-  LOG_SYSTEM("Using Real SG Timer Device");
-  timerDevice = std::unique_ptr<SGTimerDevice>(new SGTimerDevice());
-
-  // Set up callbacks
-  setupCallbacks();
-
-  // Initialize the timer device
-  ITimerDevice* device = timerDevice.get();
-
-  if (!device || !device->initialize()) {
-    LOG_ERROR("TIMER", "Failed to initialize timer device");
-    return false;
-  }
-
-  LOG_TIMER("Timer device initialized successfully");
-  device->startScanning();
+  // Note: Device will be created dynamically when found during scanning
+  LOG_SYSTEM("Ready to scan for timer devices (SG Timer or Special Pie Timer)");
 
   LOG_SYSTEM("Application initialized successfully");
   lastActivityTime = millis();
@@ -77,6 +65,11 @@ void TimerApplication::run() {
   // Check for button presses
   if (buttonHandler && buttonHandler->checkButtonPress()) {
     handleButtonPress();
+  }
+
+  // If no device is connected, scan for available devices
+  if (!timerDevice || !timerDevice->isConnected()) {
+    scanForDevices();
   }
 
   // Update all components
@@ -275,15 +268,101 @@ void TimerApplication::handleButtonPress() {
     timerDevice->disconnect();
   }
 
+  // Clear the device to force re-scanning
+  timerDevice.reset();
+
   // Reset application state
   sessionActive = false;
   lastShotNumber = 0;
   lastShotTime = 0;
-
-  // Start scanning again
-  if (timerDevice) {
-    timerDevice->startScanning();
-  }
+  isScanning = false;
 
   updateActivityTime();
+}
+
+void TimerApplication::scanForDevices() {
+  unsigned long now = millis();
+
+  // Throttle scan attempts
+  if (isScanning || (now - lastScanAttempt < 5000)) {
+    return;
+  }
+
+  lastScanAttempt = now;
+  isScanning = true;
+
+  LOG_SYSTEM("Scanning for timer devices...");
+
+  BLEScan* pScan = BLEDevice::getScan();
+  pScan->setActiveScan(true);
+  pScan->setInterval(100);
+  pScan->setWindow(99);
+
+  BLEScanResults foundDevices = pScan->start(10, false);
+
+  // Check for SG Timer
+  BLEUUID sgServiceUuid("7520FFFF-14D2-4CDA-8B6B-697C554C9311");
+  const char* sgTargetAddress = "dd:0e:9d:04:72:c3";
+
+  // Check for Special Pie Timer
+  BLEUUID specialPieServiceUuid("0000fff0-0000-1000-8000-00805f9b34fb");
+
+  bool deviceFound = false;
+
+  for (int i = 0; i < foundDevices.getCount(); i++) {
+    BLEAdvertisedDevice device = foundDevices.getDevice(i);
+
+    // Check for SG Timer (by address)
+    if (device.getAddress().toString() == sgTargetAddress) {
+      LOG_SYSTEM("SG Timer found! Connecting...");
+
+      // Create SG Timer device
+      SGTimerDevice* sgDevice = new SGTimerDevice();
+      timerDevice = std::unique_ptr<ITimerDevice>(sgDevice);
+      setupCallbacks();
+
+      if (timerDevice->initialize()) {
+        // Attempt connection using SG Timer's connection logic
+        sgDevice->attemptConnection();
+        // Connection status will be checked in next update cycle
+        deviceFound = true;
+        break;
+      } else {
+        LOG_ERROR("TIMER", "Failed to initialize SG Timer");
+        timerDevice.reset();
+      }
+    }
+    // Check for Special Pie Timer (by service UUID)
+    else if (device.haveServiceUUID() && device.isAdvertisingService(specialPieServiceUuid)) {
+      LOG_SYSTEM("Special Pie Timer found! Connecting...");
+
+      // Create Special Pie Timer device
+      SpecialPieTimerDevice* specialPieDevice = new SpecialPieTimerDevice();
+      timerDevice = std::unique_ptr<ITimerDevice>(specialPieDevice);
+      setupCallbacks();
+
+      if (timerDevice->initialize()) {
+        // Attempt connection
+        if (specialPieDevice->attemptConnection(&device)) {
+          LOG_SYSTEM("Successfully connected to Special Pie Timer");
+          deviceFound = true;
+          break;
+        } else {
+          LOG_ERROR("TIMER", "Failed to connect to Special Pie Timer");
+          timerDevice.reset();
+        }
+      } else {
+        LOG_ERROR("TIMER", "Failed to initialize Special Pie Timer");
+        timerDevice.reset();
+      }
+    }
+  }
+
+  pScan->clearResults();
+
+  if (!deviceFound) {
+    LOG_SYSTEM("No compatible timer devices found. Retrying...");
+  }
+
+  isScanning = false;
 }
