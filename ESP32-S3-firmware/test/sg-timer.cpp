@@ -4,8 +4,8 @@
 #include <BLEScan.h>
 #include <BLEAdvertisedDevice.h>
 
-// dd:0e:9d:04:72:c3
-// Target device: Name: SG-SST4B11880, Address: dd:0e:9d:04:72:c3
+// Discovers any SG Timer device by service UUID
+// Example device: Name: SG-SST4B11880, Address: dd:0e:9d:04:72:c3
 
 // Global references for connection management
 BLEClient *g_pClient = nullptr;
@@ -13,6 +13,8 @@ BLERemoteService *g_pService = nullptr;
 BLEAdvertisedDevice *g_pTargetDevice = nullptr;
 bool g_isConnected = false;
 unsigned long g_lastHeartbeat = 0;
+String g_deviceName = "";
+String g_deviceModel = "SG Timer";
 
 // Track last shot received
 uint16_t g_lastShotNum = 0;
@@ -145,20 +147,45 @@ void loop() {
     pScan->setInterval(100);
     pScan->setWindow(99);
 
-    Serial.println("Scanning for 10 seconds...");
+    Serial.println("Scanning for SG Timer devices (10 seconds)...");
     BLEScanResults foundDevices = pScan->start(10, false);
 
     BLEUUID serviceUuid("7520FFFF-14D2-4CDA-8B6B-697C554C9311");
     bool deviceFound = false;
 
+    // Look for any device advertising the SG Timer service UUID
     for (int i = 0; i < foundDevices.getCount(); i++)
     {
       BLEAdvertisedDevice device = foundDevices.getDevice(i);
 
-      if (device.getAddress().toString() == "dd:0e:9d:04:72:c3")
+      // Check if device advertises the SG Timer service
+      if (device.isAdvertisingService(serviceUuid))
       {
-        Serial.println("Target device found!");
+        Serial.printf("SG Timer found: %s", device.getAddress().toString().c_str());
+        if (device.haveName()) {
+          Serial.printf(" (%s)", device.getName().c_str());
+        }
+        Serial.println();
         deviceFound = true;
+
+        // Store device information
+        if (device.haveName()) {
+          g_deviceName = device.getName().c_str();
+          // Extract model from name (SG-SST4XYYYYY where X is model identifier)
+          if (g_deviceName.startsWith("SG-SST4")) {
+            char modelId = g_deviceName.charAt(7);
+            if (modelId == 'A') {
+              g_deviceModel = "SG Timer Sport";
+            } else if (modelId == 'B') {
+              g_deviceModel = "SG Timer GO";
+            } else {
+              g_deviceModel = "SG Timer";
+            }
+          }
+          Serial.printf("Device Model: %s\n", g_deviceModel.c_str());
+        } else {
+          g_deviceName = device.getAddress().toString().c_str();
+        }
 
         // Wait before attempting connection
         Serial.println("Waiting 2 seconds before connecting...");
@@ -237,7 +264,7 @@ void loop() {
     pScan->clearResults();
 
     if (!deviceFound) {
-      Serial.println("Target device not found. Retrying in 5 seconds...");
+      Serial.println("No SG Timer devices found. Retrying in 5 seconds...");
       delay(5000);
     } else if (!g_isConnected) {
       Serial.println("Connection failed. Retrying in 5 seconds...");

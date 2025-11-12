@@ -2,8 +2,8 @@
 #include "Logger.h"
 #include "common.h"
 
-// Static constants - Target the known device address
-const char* SGTimerDevice::TARGET_DEVICE_ADDRESS = "dd:0e:9d:04:72:c3";
+// Static constants - Service UUIDs for device discovery
+const char* SGTimerDevice::TARGET_DEVICE_ADDRESS = nullptr;
 const char* SGTimerDevice::SERVICE_UUID = "7520FFFF-14D2-4CDA-8B6B-697C554C9311";
 const char* SGTimerDevice::CHARACTERISTIC_UUID = "75200001-14D2-4CDA-8B6B-697C554C9311";
 const char* SGTimerDevice::SHOT_LIST_UUID = "75200004-14D2-4CDA-8B6B-697C554C9311";
@@ -20,6 +20,8 @@ SGTimerDevice::SGTimerDevice() :
   lastReconnectAttempt(0),
   lastHeartbeat(0),
   deviceModel("SG Timer"),
+  deviceName(""),
+  deviceAddress("00:00:00:00:00:00"),
   previousShotTime(0),
   hasFirstShot(false),
   lastShotNum(0),
@@ -78,11 +80,11 @@ const char* SGTimerDevice::getDeviceModel() const {
 }
 
 const char* SGTimerDevice::getDeviceName() const {
-  return TARGET_DEVICE_ADDRESS;
+  return deviceName.c_str();
 }
 
 BLEAddress SGTimerDevice::getDeviceAddress() const {
-  return BLEAddress(TARGET_DEVICE_ADDRESS);
+  return deviceAddress;
 }
 
 void SGTimerDevice::onShotDetected(std::function<void(const NormalizedShotData&)> callback) {
@@ -177,9 +179,9 @@ void SGTimerDevice::setConnectionState(DeviceConnectionState newState) {
   }
 }
 
-// Simplified connection attempt matching minimal_test.cpp
+// Discover and connect to any SG Timer device by service UUID
 void SGTimerDevice::attemptConnection() {
-  Serial.println("\n--- Starting device scan ---");
+  Serial.println("\n--- Starting SG Timer device scan ---");
   setConnectionState(DeviceConnectionState::SCANNING);
 
   BLEScan* pScan = BLEDevice::getScan();
@@ -187,18 +189,43 @@ void SGTimerDevice::attemptConnection() {
   pScan->setInterval(100);
   pScan->setWindow(99);
 
-  Serial.println("Scanning for 10 seconds...");
+  Serial.println("Scanning for SG Timer devices (10 seconds)...");
   BLEScanResults foundDevices = pScan->start(10, false);
 
   BLEUUID serviceUuid(SERVICE_UUID);
   bool deviceFound = false;
 
+  // Look for any device advertising the SG Timer service UUID
   for (int i = 0; i < foundDevices.getCount(); i++) {
     BLEAdvertisedDevice device = foundDevices.getDevice(i);
 
-    if (device.getAddress().toString() == TARGET_DEVICE_ADDRESS) {
-      Serial.println("Target device found!");
+    // Check if device advertises the SG Timer service
+    if (device.isAdvertisingService(serviceUuid)) {
+      Serial.printf("SG Timer found: %s", device.getAddress().toString().c_str());
+      if (device.haveName()) {
+        Serial.printf(" (%s)", device.getName().c_str());
+      }
+      Serial.println();
       deviceFound = true;
+
+      // Store device information
+      deviceAddress = device.getAddress();
+      if (device.haveName()) {
+        deviceName = device.getName().c_str();
+        // Extract model from name (SG-SST4XYYYYY where X is model identifier)
+        if (deviceName.startsWith("SG-SST4")) {
+          char modelId = deviceName.charAt(7);
+          if (modelId == 'A') {
+            deviceModel = "SG Timer Sport";
+          } else if (modelId == 'B') {
+            deviceModel = "SG Timer GO";
+          } else {
+            deviceModel = "SG Timer";
+          }
+        }
+      } else {
+        deviceName = device.getAddress().toString().c_str();
+      }
 
       // Wait before attempting connection
       Serial.println("Waiting 2 seconds before connecting...");
@@ -270,7 +297,7 @@ void SGTimerDevice::attemptConnection() {
   pScan->clearResults();
 
   if (!deviceFound) {
-    Serial.println("Target device not found. Retrying in 5 seconds...");
+    Serial.println("No SG Timer devices found. Retrying in 5 seconds...");
     setConnectionState(DeviceConnectionState::DISCONNECTED);
   } else if (!isConnectedFlag) {
     Serial.println("Connection failed. Retrying in 5 seconds...");

@@ -9,7 +9,7 @@
 class SGTimerDevice : public ITimerDevice {
 private:
   // SG Timer specific configuration
-  static const char* TARGET_DEVICE_ADDRESS;  // Simplified: just target the known device
+  static const char* TARGET_DEVICE_ADDRESS;  // Deprecated - kept for compatibility
   static const char* SERVICE_UUID;
   static const char* CHARACTERISTIC_UUID;
   static const char* SHOT_LIST_UUID;
@@ -27,6 +27,8 @@ private:
 
   // Device information
   String deviceModel;
+  String deviceName;
+  BLEAddress deviceAddress;
 
   // Session tracking
   SessionData currentSession;
