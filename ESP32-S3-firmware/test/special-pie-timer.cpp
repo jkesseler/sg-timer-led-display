@@ -5,9 +5,15 @@
 #include <BLEAdvertisedDevice.h>
 
 // Target device: Special Pie M1A2+ Timer
-// Service UUID: FFF0 (0000fff0-0000-1000-8000-00805f9b34fb)
-// Characteristic UUID: FFF1 (0000fff1-0000-1000-8000-00805f9b34fb)
-// Example device address: 54:14:A7:77:02:A2
+//
+// Timer Service: FFF0 (0000fff0-0000-1000-8000-00805f9b34fb)
+//   - FFF1 characteristic: Timer events (notify)
+//   - FFF2 characteristic: Purpose unknown
+//
+// Device Info Service: 0917FE11-5D37-816D-8000-00805F9B34FB
+//   - 09170002 characteristic: Firmware version
+//
+// Discovery: Scans for devices advertising FFF0 or 0917FE11 service UUIDs
 
 // Global references for connection management
 BLEClient *g_pClient = nullptr;
@@ -137,23 +143,37 @@ void loop() {
     Serial.println("Scanning for 10 seconds...");
     BLEScanResults foundDevices = pScan->start(10, false);
 
-    // Special Pie Timer Service UUID
-    BLEUUID serviceUuid("0000fff0-0000-1000-8000-00805f9b34fb");
+    // Special Pie Timer Service UUIDs
+    BLEUUID timerServiceUuid("0000FFF0-0000-1000-8000-00805F9B34FB");
+    BLEUUID deviceInfoServiceUuid("0917FE11-5D37-816D-8000-00805F9B34FB");
     bool deviceFound = false;
+
+    Serial.printf("Found %d devices\n", foundDevices.getCount());
 
     for (int i = 0; i < foundDevices.getCount(); i++)
     {
       BLEAdvertisedDevice device = foundDevices.getDevice(i);
 
-      // Look for devices advertising the Special Pie service
-      if (device.haveServiceUUID() && device.isAdvertisingService(serviceUuid))
-      {
-        Serial.printf("Special Pie Timer found: %s (%s)\n",
-                     device.getName().c_str(),
-                     device.getAddress().toString().c_str());
-        deviceFound = true;
+      Serial.printf("Device %d: %s", i, device.getAddress().toString().c_str());
+      if (device.haveName()) {
+        Serial.printf(" - %s", device.getName().c_str());
+      }
+      Serial.println();
 
-        // Wait before attempting connection
+      // Look for devices advertising the Special Pie timer service or device info service
+      bool hasTimerService = device.isAdvertisingService(timerServiceUuid);
+      bool hasDeviceInfoService = device.isAdvertisingService(deviceInfoServiceUuid);
+
+      if (hasTimerService || hasDeviceInfoService)
+      {
+        Serial.println("*** Special Pie Timer found! ***");
+        if (hasTimerService) {
+          Serial.println("  - Has Timer Service (FFF0)");
+        }
+        if (hasDeviceInfoService) {
+          Serial.println("  - Has Device Info Service (0917FE11)");
+        }
+        deviceFound = true;        // Wait before attempting connection
         Serial.println("Waiting 2 seconds before connecting...");
         delay(2000);
 
@@ -169,34 +189,52 @@ void loop() {
         if (g_pClient->connect(&device))
         {
           Serial.println("Connected to device!");
-          BLERemoteService *pService = g_pClient->getService(serviceUuid);
+          BLERemoteService *pService = g_pClient->getService(timerServiceUuid);
 
           if (pService != nullptr)
           {
-            Serial.println("Service found");
+            Serial.println("Timer Service (FFF0) found");
             g_pService = pService;
 
-            // FFF1 characteristic for notifications
+            // Try to get device info service for firmware version
+            BLERemoteService *pDeviceInfoService = g_pClient->getService(deviceInfoServiceUuid);
+            if (pDeviceInfoService != nullptr) {
+              Serial.println("Device Info Service (0917FE11) found");
+
+              // Get firmware version characteristic
+              BLERemoteCharacteristic *pFirmwareChar =
+                pDeviceInfoService->getCharacteristic("09170002-5D37-816D-8000-00805F9B34FB");
+
+              if (pFirmwareChar != nullptr && pFirmwareChar->canRead()) {
+                Serial.println("Reading firmware version...");
+                std::string firmwareValue = pFirmwareChar->readValue();
+                if (firmwareValue.length() > 0) {
+                  Serial.printf("Firmware: %s\n", firmwareValue.c_str());
+                }
+              }
+            }
+
+            // FFF1 characteristic for timer event notifications
             BLERemoteCharacteristic *pNotifyCharacteristic =
-              pService->getCharacteristic("0000fff1-0000-1000-8000-00805f9b34fb");
+              pService->getCharacteristic("0000FFF1-0000-1000-8000-00805F9B34FB");
 
             if (pNotifyCharacteristic != nullptr)
             {
-              Serial.println("FFF1 characteristic found");
+              Serial.println("FFF1 (timer events) characteristic found");
 
               // Check if characteristic can notify
               if (pNotifyCharacteristic->canNotify())
               {
-                Serial.println("Registering for notifications...");
+                Serial.println("Registering for notifications on FFF1...");
                 pNotifyCharacteristic->registerForNotify(notifyCallback);
-                Serial.println("SUCCESS: Registered for notifications!");
+                Serial.println("SUCCESS: Registered for timer event notifications!");
                 Serial.println("Listening for events indefinitely...\n");
                 g_isConnected = true;
                 g_lastHeartbeat = millis();
               }
               else
               {
-                Serial.println("ERROR: Characteristic cannot notify");
+                Serial.println("ERROR: FFF1 characteristic cannot notify");
                 g_pClient->disconnect();
                 delete g_pClient;
                 g_pClient = nullptr;

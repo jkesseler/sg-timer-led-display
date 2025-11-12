@@ -3,8 +3,8 @@
 #include "common.h"
 
 // Static constants
-const char* SpecialPieTimerDevice::SERVICE_UUID = "0000fff0-0000-1000-8000-00805f9b34fb";
-const char* SpecialPieTimerDevice::CHARACTERISTIC_UUID = "0000fff1-0000-1000-8000-00805f9b34fb";
+const char* SpecialPieTimerDevice::SERVICE_UUID = "0000FFF0-0000-1000-8000-00805F9B34FB";
+const char* SpecialPieTimerDevice::CHARACTERISTIC_UUID = "0000FFF1-0000-1000-8000-00805F9B34FB";
 
 // Static instance for callbacks
 SpecialPieTimerDevice* SpecialPieTimerDevice::instance = nullptr;
