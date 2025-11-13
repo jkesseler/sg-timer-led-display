@@ -6,6 +6,7 @@ An ESP32-based system that connects to shot timer devices via Bluetooth and disp
 
 
 ## Motivation
+
 As a competitive shooter and software developer, I recognized the need for a reliable and visually engaging way to display shot timer data during training and competitions. While some manufacturers offer visual display solutions, this project provides an open, extensible platform that works with multiple timer brands through a unified interface.
 
 This project is also an experiment in AI-assisted development to explore how AI tools can aid in building embedded systems.
@@ -40,7 +41,7 @@ Additional timer devices can be added through the `ITimerDevice` interface.
 │  │  SG Timer GO  │   │  SG Timer Sport  │   │ Special Pie │ │
 │  │               │   │                  │   │   M1A2+     │ │
 │  └────────┬──────┘   └─────────┬────────┘   └──────┬──────┘ │
-└───────────┼────────────────────┼───────────────────┼─────────┘
+└───────────┼────────────────────┼───────────────────┼────────┘
             │                    │                   │
             ▼                    ▼                   ▼
 ┌─────────────────────────────────────────────────────────────┐
@@ -259,6 +260,7 @@ sg-timer-LED-display/
 ```
 
 ### Build Configuration
+
 The project uses PlatformIO with ESP32-S3 target:
 
 ```ini
@@ -279,3 +281,10 @@ build_flags =
 ## License
 
 This project is licensed under the Apache License License - see the [LICENSE](LICENSE) file for details.
+
+
+# Use of AI
+
+Although I am a professional software developer, my expertise lies in web development and distributed systems, with a focus on medium- to large-scale e-commerce applications not in embedded programming with C++. This project is an experiment to explore how AI tools can assist with programming tasks. Most of the code in this repository was generated with AI support (GitHub Copilot and Claude Sonnet 4.5).
+
+For small greenfield projects like this, AI offers clear advantages by enabling rapid prototyping and exploration of different architectures and implementations. This contrasts with my usual work, where AI tools often struggle to provide meaningful value within complex, domain-specific systems that have established codebases—sometimes even proposing unnecessary or harmful refactors.
