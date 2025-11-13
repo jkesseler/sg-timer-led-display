@@ -19,6 +19,7 @@ pio --version
 - 2x HUB75 LED panels (64x32 each)
 - 5V 10A power supply
 - Wired according to [HUB75_WIRING.md](HUB75_WIRING.md)
+- Compatible timer device (SG Timer or Special Pie M1A2+ Timer)
 
 ---
 
@@ -108,25 +109,26 @@ ESP32-S3 DevKit-C Starting...
 **Goal**: Verify BLE hardware is working
 
 **Steps**:
-1. Keep SG Timer OFF initially
+1. Keep timer devices OFF initially
 2. Observe serial monitor
 
 **Expected serial output**:
 ```
+[SYSTEM] === SG Shot Timer BLE Bridge ===
+[SYSTEM] ESP32-S3 DevKit-C Starting...
+[DISPLAY] Initializing display...
 [BLE] ESP32-S3 BLE Client initialized
-[SCAN] Starting BLE scan for SG Shot Timer...
-[SCAN] Found device: Device_Name (RSSI: -45)
-[SCAN] Found device: Another_Device (RSSI: -67)
-...
-[SCAN] Scan completed. Found 5 devices
-[SCAN] SG Shot Timer not found. Will retry in 5 seconds...
+[SYSTEM] Ready to scan for timer devices (SG Timer or Special Pie Timer)
+[SYSTEM] Application initialized successfully
+[SYSTEM] Scanning for timer devices...
+[SYSTEM] No compatible timer devices found. Retrying...
 ```
 
 **Expected display**: Blank (waiting)
 
 ---
 
-### Test 3: BLE Connection
+### Test 3: BLE Connection (SG Timer)
 **Goal**: Connect to SG Timer
 
 **Steps**:
@@ -135,16 +137,44 @@ ESP32-S3 DevKit-C Starting...
 
 **Expected serial output**:
 ```
-[SCAN] Starting BLE scan for SG Shot Timer...
-[SCAN] Found device: SG-SST4A12345 (RSSI: -55)
-[SCAN] Found SG Shot Timer: SG-SST4A12345
-[BLE] Connecting to device at address: xx:xx:xx:xx:xx:xx
-[BLE] Connected to server, discovering services...
-[BLE] Found service, getting characteristic...
-[BLE] Found characteristic, setting up notifications...
-[BLE] Notification callback registered
-[BLE] === Ready to receive shot timer data ===
-[BLE] Connected to SG Shot Timer
+[SYSTEM] Scanning for timer devices...
+[SYSTEM] SG Timer found! Connecting...
+[SG-TIMER] Initializing SG Timer device interface
+[SG-TIMER] Attempting to connect to SG Timer...
+[SG-TIMER] Creating BLE client...
+[SG-TIMER] Connecting to device...
+[SG-TIMER] Connected! Discovering services...
+[SG-TIMER] Service discovered, getting characteristic...
+[SG-TIMER] Characteristic found, registering for notifications...
+[SG-TIMER] Successfully connected to SG Timer
+```
+
+**Expected display**: Still blank (waiting for session)
+
+---
+
+### Test 3B: BLE Connection (Special Pie Timer)
+**Goal**: Connect to Special Pie M1A2+ Timer
+
+**Steps**:
+1. Turn ON your Special Pie Timer
+2. Wait for auto-connection (~10 seconds max)
+
+**Expected serial output**:
+```
+[SYSTEM] Scanning for timer devices...
+[SYSTEM] Special Pie Timer found! Connecting...
+[SPECIAL-PIE] Initializing Special Pie Timer device interface
+Special Pie Timer found: M1A2+ (xx:xx:xx:xx:xx:xx)
+Waiting 2 seconds before connecting...
+Attempting connection...
+Connected to device!
+Service found
+FFF1 characteristic found
+Registering for notifications...
+SUCCESS: Registered for notifications!
+Listening for events indefinitely...
+[SYSTEM] Successfully connected to Special Pie Timer
 ```
 
 **Expected display**: Still blank (waiting for session)
@@ -155,15 +185,23 @@ ESP32-S3 DevKit-C Starting...
 **Goal**: Verify session start event handling
 
 **Steps**:
-1. Start a session on SG Timer (press START button)
+1. Start a session on timer device (press START button)
 2. Observe display and serial
 
-**Expected serial output**:
+**Expected serial output (SG Timer)**:
 ```
-[DATA] Received 8 bytes: 06 00 65 7a 8b 29 00 1e
-[PARSE] Event ID: 0 (0x00), Length: 6
-[TIMER] === SESSION STARTED === (ID: 1698012345, Delay: 3.0s)
+[DATA] Received notification: 06 00 65 7a 8b 29 00 1e
+[SG-TIMER] Event: SESSION_STARTED
+[TIMER] Session started: ID 1698012345
 [DISPLAY] Waiting for shots...
+```
+
+**Expected serial output (Special Pie Timer)**:
+```
+*** Notification received (6 bytes): F8 F9 34 03 F9 F8
+Message Type: 0x34 - SESSION_START
+  Session ID: 0x03
+[TIMER] Session started: ID 3
 ```
 
 **Expected display**:
@@ -189,17 +227,32 @@ ESP32-S3 DevKit-C Starting...
 1. Fire 3-5 shots into timer
 2. Watch display update in real-time
 
-**Expected serial output**:
+**Expected serial output (SG Timer)**:
 ```
-[DATA] Received 12 bytes: 0a 04 65 7a 8b 29 00 01 00 00 09 29
-[PARSE] Event ID: 4 (0x04), Length: 10
-[TIMER] SHOT: 1 - TIME: 2.345s | SPLIT: 0.000s
+[DATA] Received notification: 0a 04 65 7a 8b 29 00 01 00 00 09 29
+[SG-TIMER] Event: SHOT_DETECTED
+[SHOT] Shot #1 at 2.345s (split: 0.000s)
 [DISPLAY] Shot: 1, Time: 00:02.345
 
-[DATA] Received 12 bytes: 0a 04 65 7a 8b 29 00 02 00 00 10 1f
-[PARSE] Event ID: 4 (0x04), Length: 10
-[TIMER] SHOT: 2 - TIME: 4.127s | SPLIT: 1.782s
+[DATA] Received notification: 0a 04 65 7a 8b 29 00 02 00 00 10 1f
+[SG-TIMER] Event: SHOT_DETECTED
+[SHOT] Shot #2 at 4.127s (split: 1.782s)
 [DISPLAY] Shot: 2, Time: 00:04.127
+```
+
+**Expected serial output (Special Pie Timer)**:
+```
+*** Notification received (10 bytes): F8 F9 36 00 04 24 02 0C F9 F8
+Message Type: 0x36 - SHOT_DETECTED
+  Shot #2: 4.36
+  Split: 0.00
+[SHOT] Shot #2 at 4.360s (split: 0.000s)
+
+*** Notification received (10 bytes): F8 F9 36 00 2A 3B 05 0C F9 F8
+Message Type: 0x36 - SHOT_DETECTED
+  Shot #5: 42.59
+  Split: 38.23
+[SHOT] Shot #5 at 42.590s (split: 38.230s)
 ```
 
 **Expected display** (updates with each shot):
@@ -222,17 +275,17 @@ Shot 2:
 ---
 
 ### Test 6: Session End
-**Goal**: Verify session end and shot list retrieval
+**Goal**: Verify session end
 
 **Steps**:
-1. Stop the session on SG Timer (press STOP)
-2. Wait for shot list to download
+1. Stop the session on timer (press STOP)
+2. Observe serial output
 
-**Expected serial output**:
+**Expected serial output (SG Timer with shot list support)**:
 ```
-[DATA] Received 8 bytes: 06 03 65 7a 8b 29 00 05
-[PARSE] Event ID: 3 (0x03), Length: 6
-[TIMER] === SESSION STOPPED === (ID: 1698012345, Total Shots: 5)
+[DATA] Received notification: 06 03 65 7a 8b 29 00 05
+[SG-TIMER] Event: SESSION_STOPPED
+[TIMER] Session stopped: ID 1698012345
 [DISPLAY] Session End - Total Shots: 5
 [SHOT_LIST] Reading shots for session ID: 1698012345
 [SHOT_LIST] Shot details:
@@ -246,6 +299,14 @@ Shot 2:
 [SHOT_LIST] End of shot list
 ```
 
+**Expected serial output (Special Pie Timer - no shot list)**:
+```
+*** Notification received (6 bytes): F8 F9 18 0B F9 F8
+Message Type: 0x18 - SESSION_STOP
+  Session ID: 0x0B
+[TIMER] Session stopped: ID 11
+```
+
 **Expected display**:
 ```
 ┌────────────────────────────────┐
@@ -256,24 +317,37 @@ Shot 2:
 └────────────────────────────────┘
 ```
 
+**Note**: Special Pie Timer does not support remote shot list retrieval.
+
 ---
 
 ### Test 7: Reconnection
 **Goal**: Verify auto-reconnect functionality
 
 **Steps**:
-1. Turn OFF SG Timer
+1. Turn OFF timer device
 2. Wait for disconnect message
-3. Turn ON SG Timer after 10 seconds
+3. Turn ON timer after 10 seconds
 
 **Expected serial output**:
 ```
-[BLE] Disconnected from SG Shot Timer
-[BLE] Attempting to reconnect...
-[SCAN] Starting BLE scan for SG Shot Timer...
+!!! Connection lost !!!
+Will attempt to reconnect...
+[SYSTEM] Scanning for timer devices...
 ...
-[SCAN] Found SG Shot Timer: SG-SST4A12345
-[BLE] Connected to SG Shot Timer
+[SYSTEM] SG Timer found! Connecting...
+[SG-TIMER] Successfully connected to SG Timer
+```
+
+**OR**
+
+```
+!!! Connection lost !!!
+Will attempt to reconnect...
+[SYSTEM] Scanning for timer devices...
+...
+[SYSTEM] Special Pie Timer found! Connecting...
+[SYSTEM] Successfully connected to Special Pie Timer
 ```
 
 ---
@@ -317,9 +391,13 @@ mxconfig.driver = HUB75_I2S_CFG::SHIFTREG;  // Option 3
 
 #### Cannot Find Timer
 ```bash
-# Verify timer is on
+# Verify timer is on and nearby
 # Check timer battery level
 # Reduce distance (< 5 meters for testing)
+
+# Check which device you have:
+# - SG Timer: Look for hardcoded address in TimerApplication.cpp
+# - Special Pie: Should auto-detect by service UUID
 
 # Enable more verbose BLE logging:
 # Edit platformio.ini, add to build_flags:
@@ -336,12 +414,15 @@ mxconfig.driver = HUB75_I2S_CFG::SHIFTREG;  // Option 3
 
 #### No Events Received
 ```bash
-# Verify timer is in RO (Review Officer) mode
+# For SG Timer: Verify timer is in RO (Review Officer) mode
+# For Special Pie: Start a session and fire shots
+
 # Check notification setup in serial:
-[BLE] Notification callback registered  # Should see this
+[SG-TIMER] Successfully connected to SG Timer  # SG Timer
+SUCCESS: Registered for notifications!         # Special Pie
 
 # Manual notification test:
-# Trigger a shot - should see [DATA] Received... message
+# Trigger a shot - should see notification messages
 ```
 
 ---
@@ -429,15 +510,30 @@ pio device list
 
 ## Test Checklist
 
+### SG Timer
 - [ ] Display shows startup message
-- [ ] BLE scan finds nearby devices
+- [ ] BLE scan finds SG Timer by address
 - [ ] BLE connects to SG Timer automatically
-- [ ] "00:00" appears when session starts
+- [ ] "READY" and "00:00" appears when session starts
 - [ ] Display updates with each shot
 - [ ] Shot numbers increment correctly
 - [ ] Times display accurately (verify with timer)
 - [ ] Session end shows correct total
-- [ ] Shot list prints to serial
+- [ ] Shot list downloads to serial
+- [ ] Auto-reconnects after disconnect
+- [ ] No memory warnings in build
+- [ ] No crashes or reboots during session
+
+### Special Pie Timer
+- [ ] Display shows startup message
+- [ ] BLE scan finds Special Pie Timer by service UUID
+- [ ] BLE connects to Special Pie Timer automatically
+- [ ] Session start notification received (0x34)
+- [ ] Display updates with each shot
+- [ ] Shot numbers increment correctly
+- [ ] Times display accurately (verify with timer)
+- [ ] Split times calculated correctly
+- [ ] Session stop notification received (0x18)
 - [ ] Auto-reconnects after disconnect
 - [ ] No memory warnings in build
 - [ ] No crashes or reboots during session
@@ -459,20 +555,3 @@ Rebuild and monitor:
 ```bash
 pio run -t upload && pio device monitor
 ```
-
----
-
-## Success Criteria
-
-✅ **Minimum Viable Product**:
-- Connects to SG Timer
-- Shows shot number and time
-- Updates in real-time
-- Readable from 5 meters
-
-✅ **Production Ready**:
-- All tests pass
-- No display glitches
-- Reliable reconnection
-- Shot list downloads correctly
-- Runs for 8+ hours continuously
