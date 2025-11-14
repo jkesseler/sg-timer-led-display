@@ -8,10 +8,15 @@ BrightnessController::BrightnessController()
 }
 
 bool BrightnessController::initialize() {
-  pinMode(POTENTIOMETER_PIN, INPUT);
+  pinMode(POTENTIOMETER_PIN, INPUT_PULLDOWN); // Add internal pull-down resistor
   analogReadResolution(ADC_RESOLUTION);
+  analogSetAttenuation(ADC_11db);
 
   LOG_BRIGHTNESS("Potentiometer initialized on pin %d", POTENTIOMETER_PIN);
+
+  // Set initial brightness to DEFAULT_BRIGHTNESS
+  setCurrentBrightness(DEFAULT_BRIGHTNESS);
+
   return true;
 }
 
@@ -50,13 +55,22 @@ void BrightnessController::setCurrentBrightness(uint8_t brightness) {
 
 uint8_t BrightnessController::readPotentiometerValue() {
   int potValue = analogRead(POTENTIOMETER_PIN);
+
+  // Detect if potentiometer is not connected (pulled to ground by INPUT_PULLDOWN)
+  // If reading is very low (< 5% of max), assume no potentiometer and use default
+  const int NO_POTENTIOMETER_THRESHOLD = POTENTIOMETER_MAX_VALUE * 0.05;
+
+  if (potValue < NO_POTENTIOMETER_THRESHOLD) {
+    LOG_DEBUG("BRIGHTNESS", "No potentiometer detected (ADC: %d), using DEFAULT_BRIGHTNESS", potValue);
+    return DEFAULT_BRIGHTNESS;
+  }
+
   return mapToBrightness(potValue);
 }
 
 uint8_t BrightnessController::mapToBrightness(int potValue) {
   // Map potentiometer reading to brightness range
   // Ensure minimum brightness so display is always visible
-  uint8_t brightness = map(potValue, 0, POTENTIOMETER_MAX_VALUE,
-                          MIN_BRIGHTNESS, MAX_BRIGHTNESS);
+  uint8_t brightness = map(potValue, 0, POTENTIOMETER_MAX_VALUE, MIN_BRIGHTNESS, MAX_BRIGHTNESS);
   return brightness;
 }

@@ -8,8 +8,8 @@
 #include <ESP32-HUB75-MatrixPanel-I2S-DMA.h>
 
 // Panel Configuration
-#define PANEL_WIDTH 32
-#define PANEL_HEIGHT 16
+#define PANEL_WIDTH 64
+#define PANEL_HEIGHT 32
 #define PANEL_CHAIN 2
 
 // Total display dimensions
@@ -46,8 +46,8 @@ void setup() {
   );
 
   // Configure for ESP32-S3
-  mxconfig.gpio.e = 18;
-  mxconfig.driver = HUB75_I2S_CFG::FM6126A;
+  // mxconfig.gpio.e = 18;
+  // mxconfig.driver = HUB75_I2S_CFG::FM6126A;
 
   // Create display instance
   display = new MatrixPanel_I2S_DMA(mxconfig);
@@ -72,7 +72,7 @@ void setup() {
 
 void loop() {
   // Clear display
-  display->fillScreen(255); // White background
+  display->fillScreen(0); // Black background
 
   // Set text properties
   display->setTextSize(1);
@@ -102,7 +102,7 @@ void loop() {
   display->drawPixel(DISPLAY_WIDTH - 1, DISPLAY_HEIGHT - 1, COLOR_WHITE);
 
   // Center line
-  display->drawLine(0, DISPLAY_HEIGHT / 2, DISPLAY_WIDTH - 1, DISPLAY_HEIGHT / 2, 0x18E3); // Dark cyan
+  // display->drawLine(0, DISPLAY_HEIGHT / 2, DISPLAY_WIDTH - 1, DISPLAY_HEIGHT / 2, 0x18E3); // Dark cyan
 
   delay(30); // ~33 FPS
 }

@@ -160,6 +160,7 @@ void DisplayManager::showSessionEnd(const SessionData& sessionData, uint16_t las
 void DisplayManager::clearDisplay() {
   if (display) {
     display->clearScreen();
+    display->fillScreen(0); // Black background
   }
 }
 

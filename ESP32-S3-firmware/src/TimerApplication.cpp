@@ -43,11 +43,11 @@ bool TimerApplication::initialize() {
   });
 
   // Initialize button handler
-  buttonHandler = std::unique_ptr<ButtonHandler>(new ButtonHandler());
-  if (!buttonHandler || !buttonHandler->initialize()) {
-    LOG_ERROR("SYSTEM", "Failed to initialize button handler");
-    return false;
-  }
+  //     buttonHandler = std::unique_ptr<ButtonHandler>(new ButtonHandler());
+  // if (!buttonHandler || !buttonHandler->initialize()) {
+  //   LOG_ERROR("SYSTEM", "Failed to initialize button handler");
+  //   return false;
+  // }
 
   // Initialize BLE
   BLEDevice::init(BLE_DEVICE_NAME);
@@ -63,9 +63,9 @@ bool TimerApplication::initialize() {
 
 void TimerApplication::run() {
   // Check for button presses
-  if (buttonHandler && buttonHandler->checkButtonPress()) {
-    handleButtonPress();
-  }
+  // if (buttonHandler && buttonHandler->checkButtonPress()) {
+  //   handleButtonPress();
+  // }
 
   // If no device is connected, scan for available devices
   if (!timerDevice || !timerDevice->isConnected()) {
