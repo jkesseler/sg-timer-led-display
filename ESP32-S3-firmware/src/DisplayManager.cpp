@@ -16,7 +16,10 @@ DisplayManager::DisplayManager()
     currentState(DisplayState::STARTUP),
     lastUpdateTime(0),
     connectionState(DeviceConnectionState::DISCONNECTED),
-    deviceName(nullptr) {
+    deviceName(nullptr),
+    scrollOffset(0),
+    lastScrollUpdate(0),
+    textPixelWidth(0) {
   // Initialize data structures
   memset(&lastShotData, 0, sizeof(lastShotData));
   memset(&currentSessionData, 0, sizeof(currentSessionData));
@@ -44,7 +47,7 @@ bool DisplayManager::initialize() {
 
   // Uncomment if needed for specific panels
   // mxconfig.clkphase = false;
-  // mxconfig.latch_blanking = 4;
+  mxconfig.latch_blanking = 2;
   // mxconfig.i2sspeed = HUB75_I2S_CFG::HZ_10M;
 
   display = new MatrixPanel_I2S_DMA(mxconfig);
@@ -54,7 +57,6 @@ bool DisplayManager::initialize() {
   }
 
   display->begin();
-  display->setBrightness8(DEFAULT_BRIGHTNESS);
   clearDisplay();
 
   showStartup();
@@ -95,14 +97,6 @@ void DisplayManager::update() {
   }
 }
 
-void DisplayManager::setBrightness(uint8_t brightness) {
-  if (display) {
-    display->setBrightness8(brightness);
-    LOG_BRIGHTNESS("Display brightness set to %d (%.1f%%)",
-                   brightness, (brightness / 255.0) * 100);
-  }
-}
-
 void DisplayManager::showStartup() {
   currentState = DisplayState::STARTUP;
   lastUpdateTime = millis();
@@ -112,6 +106,11 @@ void DisplayManager::showStartup() {
 void DisplayManager::showConnectionState(DeviceConnectionState state, const char* name) {
   connectionState = state;
   deviceName = name;
+
+  // Reset scroll when state changes
+  scrollOffset = 0;
+  lastScrollUpdate = millis();
+  textPixelWidth = 0;
 
   switch (state) {
     case DeviceConnectionState::DISCONNECTED:
@@ -160,7 +159,7 @@ void DisplayManager::showSessionEnd(const SessionData& sessionData, uint16_t las
 void DisplayManager::clearDisplay() {
   if (display) {
     display->clearScreen();
-    display->fillScreen(0); // Black background
+    // display->fillScreen(0); // Black background
   }
 }
 
@@ -175,11 +174,11 @@ void DisplayManager::renderStartupMessage() {
   if (!display) return;
 
   clearDisplay();
-  display->setTextSize(1);
+  display->setTextSize(2);
   display->setTextColor(DisplayColors::GREEN);
-  display->setCursor(2, 2);
+  display->setCursor(2, 0);
   display->print("TIMER");
-  display->setCursor(2, 12);
+  display->setCursor(2, 16);
   display->print("READY");
 }
 
@@ -187,34 +186,86 @@ void DisplayManager::renderConnectionStatus() {
   if (!display) return;
 
   clearDisplay();
-  display->setTextSize(1);
+
+  // First line - status message
+  display->setTextSize(2);
   display->setCursor(2, 2);
+  display->setTextWrap(false);
+
+  const char* statusText = nullptr;
+  uint16_t statusColor = DisplayColors::WHITE;
 
   switch (connectionState) {
     case DeviceConnectionState::DISCONNECTED:
-      display->setTextColor(DisplayColors::RED);
-      display->print("DISCONNECTED");
+      statusColor = DisplayColors::RED;
+      statusText = "DISCONNECTED";
       break;
     case DeviceConnectionState::SCANNING:
-      display->setTextColor(DisplayColors::YELLOW);
-      display->print("SCANNING...");
+      statusColor = DisplayColors::YELLOW;
+      statusText = "SCANNING...";
       break;
     case DeviceConnectionState::CONNECTING:
-      display->setTextColor(DisplayColors::BLUE);
-      display->print("CONNECTING...");
+      statusColor = DisplayColors::BLUE;
+      statusText = "CONNECTING...";
       break;
     case DeviceConnectionState::CONNECTED:
-      display->setTextColor(DisplayColors::GREEN);
-      display->print("CONNECTED");
-      if (deviceName) {
-        display->setCursor(2, 12);
-        display->printf("Device: %s", deviceName);
-      }
+      statusColor = DisplayColors::GREEN;
+      statusText = "CONNECTED";
       break;
     case DeviceConnectionState::ERROR:
-      display->setTextColor(DisplayColors::RED);
-      display->print("CONNECTION ERROR");
+      statusColor = DisplayColors::RED;
+      statusText = "ERROR";
       break;
+  }
+
+  display->setTextColor(statusColor);
+  display->print(statusText);
+
+  // Second line - device name with marquee scrolling
+  if (deviceName && connectionState == DeviceConnectionState::CONNECTED) {
+    display->setTextSize(2);
+    display->setTextColor(DisplayColors::WHITE);
+
+    // Calculate text width if not already done
+    if (textPixelWidth == 0) {
+      textPixelWidth = strlen(deviceName) * 12;
+    }
+
+    const int16_t displayWidth = PANEL_WIDTH * PANEL_CHAIN; // 128 pixels
+    const int16_t lineY = 16;
+
+    // If text fits on screen, just display it normally
+    if (textPixelWidth <= displayWidth - 8) {
+      display->setCursor(2, lineY);
+      display->print(deviceName);
+    } else {
+      // Text is too long - implement marquee scrolling
+      unsigned long currentTime = millis();
+
+      // Update scroll position based on time
+      if (currentTime - lastScrollUpdate >= SCROLL_SPEED_MS) {
+        scrollOffset++;
+
+        // Reset when text has scrolled completely off screen
+        if (scrollOffset > textPixelWidth + 60) { // +60 for gap before repeat
+          scrollOffset = -displayWidth; // Start from right edge
+        }
+
+        lastScrollUpdate = currentTime;
+      }
+
+      // Draw text at scrolled position
+      int16_t xPos = displayWidth - scrollOffset;
+      display->setCursor(xPos, lineY);
+      display->print(deviceName);
+
+      // If we're near the end, draw another copy for seamless loop
+      if (scrollOffset > textPixelWidth) {
+        int16_t xPos2 = xPos + textPixelWidth + 60; // +60 pixel gap
+        display->setCursor(xPos2, lineY);
+        display->print(deviceName);
+      }
+    }
   }
 }
 
@@ -222,7 +273,7 @@ void DisplayManager::renderWaitingForShots() {
   if (!display) return;
 
   clearDisplay();
-  display->setTextSize(2);
+  display->setTextSize(1);
   display->setTextColor(DisplayColors::LIGHT_BLUE);
   display->setCursor(10, 2);
   display->print("READY");
@@ -238,19 +289,18 @@ void DisplayManager::renderShotData() {
 
   clearDisplay();
 
-  // Display shot number (top section)
-  display->setTextSize(2);
-  display->setTextColor(DisplayColors::YELLOW);
-  display->setCursor(2, 2);
-  display->printf("SHOT:%d", lastShotData.shotNumber);
-
   // Display time (bottom section)
   char timeBuffer[16];
   formatTime(lastShotData.absoluteTimeMs, timeBuffer, sizeof(timeBuffer));
 
-  display->setTextSize(2);
+  // Display shot number (top section)
+  display->setTextSize(1);
+  display->setTextColor(DisplayColors::YELLOW);
+  display->setCursor(2, 2);
+  display->printf("#:%d ", lastShotData.shotNumber);
+
+  display->setTextSize(3);
   display->setTextColor(DisplayColors::GREEN);
-  display->setCursor(2, 18);
   display->print(timeBuffer);
 }
 
@@ -262,20 +312,20 @@ void DisplayManager::renderSessionEnd() {
   // Display "SESSION END"
   display->setTextSize(1);
   display->setTextColor(DisplayColors::RED);
-  display->setCursor(15, 2);
+  display->setCursor(2, 2);
   display->print("SESSION END");
 
-  // Display total shots
-  display->setTextSize(2);
-  display->setTextColor(DisplayColors::YELLOW);
-  display->setCursor(5, 14);
-  display->printf("SHOTS: %d", currentSessionData.totalShots);
+  // // Display total shots
+  // display->setTextSize(2);
+  // display->setTextColor(DisplayColors::YELLOW);
+  // display->setCursor(5, 14);
+  // display->printf("Shots: %d", currentSessionData.totalShots);
 
   // Display last shot number if available
   if (lastShotData.shotNumber > 0) {
-    display->setTextSize(1);
+    display->setTextSize(3);
     display->setTextColor(DisplayColors::GREEN);
-    display->setCursor(5, 28);
+    display->setCursor(5, 16);
     display->printf("Last: #%d", lastShotData.shotNumber);
   }
 }

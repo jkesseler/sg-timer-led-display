@@ -30,24 +30,6 @@ bool TimerApplication::initialize() {
     return false;
   }
 
-  // Initialize brightness controller
-  brightnessController = std::unique_ptr<BrightnessController>(new BrightnessController());
-  if (!brightnessController->initialize()) {
-    LOG_ERROR("SYSTEM", "Failed to initialize brightness controller");
-    return false;
-  }
-
-  // Connect brightness controller to display manager
-  brightnessController->setBrightnessCallback([this](uint8_t brightness) {
-    displayManager->setBrightness(brightness);
-  });
-
-  // Initialize button handler
-  //     buttonHandler = std::unique_ptr<ButtonHandler>(new ButtonHandler());
-  // if (!buttonHandler || !buttonHandler->initialize()) {
-  //   LOG_ERROR("SYSTEM", "Failed to initialize button handler");
-  //   return false;
-  // }
 
   // Initialize BLE
   BLEDevice::init(BLE_DEVICE_NAME);
@@ -62,11 +44,6 @@ bool TimerApplication::initialize() {
 }
 
 void TimerApplication::run() {
-  // Check for button presses
-  // if (buttonHandler && buttonHandler->checkButtonPress()) {
-  //   handleButtonPress();
-  // }
-
   // If no device is connected, scan for available devices
   if (!timerDevice || !timerDevice->isConnected()) {
     scanForDevices();
@@ -77,10 +54,6 @@ void TimerApplication::run() {
     timerDevice->update();
   }
 
-  if (brightnessController) {
-    brightnessController->update();
-  }
-
   if (displayManager) {
     displayManager->update();
   }
@@ -88,7 +61,7 @@ void TimerApplication::run() {
   // Perform periodic health checks
   performHealthCheck();
 
-  delay(MAIN_LOOP_DELAY);
+  // delay(MAIN_LOOP_DELAY);
 }
 
 void TimerApplication::setupCallbacks() {
@@ -208,7 +181,6 @@ void TimerApplication::performHealthCheck() {
     // Check component health
     bool displayHealthy = displayManager && displayManager->isInitialized();
     bool timerHealthy = timerDevice != nullptr;
-    bool brightnessHealthy = brightnessController != nullptr;
 
     if (!displayHealthy) {
       LOG_ERROR("HEALTH", "Display manager is not healthy");
@@ -216,10 +188,6 @@ void TimerApplication::performHealthCheck() {
 
     if (!timerHealthy) {
       LOG_ERROR("HEALTH", "Timer device is not healthy");
-    }
-
-    if (!brightnessHealthy) {
-      LOG_ERROR("HEALTH", "Brightness controller is not healthy");
     }
 
     // Check for activity timeout (no BLE activity for too long)
@@ -241,10 +209,9 @@ void TimerApplication::updateActivityTime() {
 bool TimerApplication::isHealthy() const {
   bool displayHealthy = displayManager && displayManager->isInitialized();
   bool timerHealthy = timerDevice != nullptr;
-  bool brightnessHealthy = brightnessController != nullptr;
   bool activityHealthy = (millis() - lastActivityTime) < AppConfig::WATCHDOG_TIMEOUT_MS;
 
-  return displayHealthy && timerHealthy && brightnessHealthy && activityHealthy;
+  return displayHealthy && timerHealthy && activityHealthy;
 }
 
 unsigned long TimerApplication::getUptimeMs() const {
@@ -254,10 +221,9 @@ unsigned long TimerApplication::getUptimeMs() const {
 bool TimerApplication::isInitialized() const {
   bool displayHealthy = displayManager && displayManager->isInitialized();
   bool timerHealthy = timerDevice != nullptr;
-  bool brightnessHealthy = brightnessController != nullptr;
   bool buttonHealthy = buttonHandler != nullptr;
 
-  return displayHealthy && timerHealthy && brightnessHealthy && buttonHealthy;
+  return displayHealthy && timerHealthy && buttonHealthy;
 }
 
 void TimerApplication::handleButtonPress() {
@@ -302,8 +268,6 @@ void TimerApplication::scanForDevices() {
 
   // Check for SG Timer
   BLEUUID sgServiceUuid("7520FFFF-14D2-4CDA-8B6B-697C554C9311");
-  const char* sgTargetAddress = "dd:0e:9d:04:72:c3";
-
   // Check for Special Pie Timer
   BLEUUID specialPieServiceUuid("0000fff0-0000-1000-8000-00805f9b34fb");
 
@@ -313,7 +277,8 @@ void TimerApplication::scanForDevices() {
     BLEAdvertisedDevice device = foundDevices.getDevice(i);
 
     // Check for SG Timer (by address)
-    if (device.getAddress().toString() == sgTargetAddress) {
+    if (device.haveServiceUUID() && device.isAdvertisingService(sgServiceUuid))
+    {
       LOG_SYSTEM("SG Timer found! Connecting...");
 
       // Create SG Timer device

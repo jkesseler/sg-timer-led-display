@@ -39,6 +39,13 @@ private:
   DeviceConnectionState connectionState;
   const char* deviceName;
 
+  // Marquee scrolling state
+  int16_t scrollOffset;
+  unsigned long lastScrollUpdate;
+  int16_t textPixelWidth;
+  static const uint16_t SCROLL_SPEED_MS = 25;  // Update scroll every 50ms
+  static const uint16_t SCROLL_PAUSE_MS = 1000; // Pause at start/end
+
   // Internal display methods
   void renderStartupMessage();
   void renderConnectionStatus();
@@ -57,7 +64,6 @@ public:
 
   bool initialize();
   void update();
-  void setBrightness(uint8_t brightness);
 
   // State updates
   void showStartup();
