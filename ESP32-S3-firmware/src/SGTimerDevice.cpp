@@ -3,7 +3,6 @@
 #include "common.h"
 
 // Static constants - Service UUIDs for device discovery
-const char* SGTimerDevice::TARGET_DEVICE_ADDRESS = nullptr;
 const char* SGTimerDevice::SERVICE_UUID = "7520FFFF-14D2-4CDA-8B6B-697C554C9311";
 const char* SGTimerDevice::CHARACTERISTIC_UUID = "75200001-14D2-4CDA-8B6B-697C554C9311";
 const char* SGTimerDevice::SHOT_LIST_UUID = "75200004-14D2-4CDA-8B6B-697C554C9311";

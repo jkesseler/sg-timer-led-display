@@ -2,7 +2,6 @@
 
 #include "ITimerDevice.h"
 #include "DisplayManager.h"
-#include "ButtonHandler.h"
 #include "Logger.h"
 #include <memory>
 
@@ -16,7 +15,6 @@ class TimerApplication {
 private:
   std::unique_ptr<ITimerDevice> timerDevice;
   std::unique_ptr<DisplayManager> displayManager;
-  std::unique_ptr<ButtonHandler> buttonHandler;
 
   // Application state
   bool sessionActive;
@@ -44,7 +42,6 @@ private:
   void logShotData(const NormalizedShotData& shotData);
   void performHealthCheck();
   void updateActivityTime();
-  void handleButtonPress();
   void scanForDevices();
 
 public:

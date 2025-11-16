@@ -8,7 +8,6 @@ TimerApplication* app = nullptr;
 
 void setup() {
   Serial.begin(SERIAL_BAUD_RATE);
-  // delay(STARTUP_DELAY);
 
   // Set logging level
   Logger::setLevel(LogLevel::INFO);

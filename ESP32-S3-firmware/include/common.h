@@ -40,7 +40,6 @@
 
 #define BRIGHTNESS_UPDATE_INTERVAL 200  // Update brightness every 200ms (in milliseconds)
 #define MAIN_LOOP_DELAY 100             // Main loop delay in milliseconds
-#define STARTUP_DELAY 1000              // Initial startup delay
 #define STARTUP_MESSAGE_DELAY 2000      // How long to show startup message
 
 // =============================================================================

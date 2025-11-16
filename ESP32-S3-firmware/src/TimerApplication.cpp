@@ -1,7 +1,6 @@
 #include "TimerApplication.h"
 #include "SGTimerDevice.h"
 #include "SpecialPieTimerDevice.h"
-#include "ButtonHandler.h"
 #include "common.h"
 #include <BLEDevice.h>
 
@@ -221,30 +220,10 @@ unsigned long TimerApplication::getUptimeMs() const {
 bool TimerApplication::isInitialized() const {
   bool displayHealthy = displayManager && displayManager->isInitialized();
   bool timerHealthy = timerDevice != nullptr;
-  bool buttonHealthy = buttonHandler != nullptr;
 
-  return displayHealthy && timerHealthy && buttonHealthy;
+  return displayHealthy && timerHealthy;
 }
 
-void TimerApplication::handleButtonPress() {
-  LOG_SYSTEM("Button press detected - resetting");
-
-  // Disconnect from device if connected
-  if (timerDevice && timerDevice->isConnected()) {
-    timerDevice->disconnect();
-  }
-
-  // Clear the device to force re-scanning
-  timerDevice.reset();
-
-  // Reset application state
-  sessionActive = false;
-  lastShotNumber = 0;
-  lastShotTime = 0;
-  isScanning = false;
-
-  updateActivityTime();
-}
 
 void TimerApplication::scanForDevices() {
   unsigned long now = millis();
@@ -267,9 +246,9 @@ void TimerApplication::scanForDevices() {
   BLEScanResults foundDevices = pScan->start(10, false);
 
   // Check for SG Timer
-  BLEUUID sgServiceUuid("7520FFFF-14D2-4CDA-8B6B-697C554C9311");
+  BLEUUID sgServiceUuid(SGTimerDevice::SERVICE_UUID);
   // Check for Special Pie Timer
-  BLEUUID specialPieServiceUuid("0000fff0-0000-1000-8000-00805f9b34fb");
+  BLEUUID specialPieServiceUuid(SpecialPieTimerDevice::SERVICE_UUID);
 
   bool deviceFound = false;
 

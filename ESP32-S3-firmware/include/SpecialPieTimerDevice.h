@@ -9,7 +9,7 @@
 class SpecialPieTimerDevice : public ITimerDevice {
 private:
   // Special Pie Timer specific configuration
-  static const char* SERVICE_UUID;
+
   static const char* CHARACTERISTIC_UUID;
 
   // BLE components
@@ -57,6 +57,8 @@ private:
 public:
   SpecialPieTimerDevice();
   virtual ~SpecialPieTimerDevice();
+
+  static const char *SERVICE_UUID;
 
   // ITimerDevice interface implementation
   bool initialize() override;

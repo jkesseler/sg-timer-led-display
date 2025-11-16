@@ -9,8 +9,6 @@
 class SGTimerDevice : public ITimerDevice {
 private:
   // SG Timer specific configuration
-  static const char* TARGET_DEVICE_ADDRESS;  // Deprecated - kept for compatibility
-  static const char* SERVICE_UUID;
   static const char* CHARACTERISTIC_UUID;
   static const char* SHOT_LIST_UUID;
 
@@ -58,6 +56,8 @@ private:
 public:
   SGTimerDevice();
   virtual ~SGTimerDevice();
+
+  static const char *SERVICE_UUID;
 
   // ITimerDevice interface implementation
   bool initialize() override;
