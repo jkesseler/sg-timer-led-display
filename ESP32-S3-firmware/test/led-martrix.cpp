@@ -6,6 +6,9 @@
 
 #include <Arduino.h>
 #include <ESP32-HUB75-MatrixPanel-I2S-DMA.h>
+#include <U8g2_for_Adafruit_GFX.h>
+
+U8G2_FOR_ADAFRUIT_GFX u8g2_for_adafruit_gfx;
 
 // Panel Configuration
 #define PANEL_WIDTH 64
@@ -22,6 +25,8 @@
 #define COLOR_BLUE    0x001F
 #define COLOR_YELLOW  0xFFE0
 #define COLOR_WHITE   0xFFFF
+#define COLOR_LIGHT_BLUE 0x647F
+#define COLOR_GRAY    0x8410
 
 // Global display object
 MatrixPanel_I2S_DMA *display = nullptr;
@@ -32,7 +37,6 @@ const char* testText = "HUB75 TEST";
 
 void setup() {
   Serial.begin(115200);
-  delay(1000);
 
   Serial.println("=================================");
   Serial.println("HUB75 LED Matrix Test");
@@ -48,6 +52,9 @@ void setup() {
   // Configure for ESP32-S3
   // mxconfig.gpio.e = 18;
   // mxconfig.driver = HUB75_I2S_CFG::FM6126A;
+  // mxconfig.latch_blanking = 2;
+  // mxconfig.clkphase = false;
+  // mxconfig.i2sspeed = HUB75_I2S_CFG::HZ_20M;
 
   // Create display instance
   display = new MatrixPanel_I2S_DMA(mxconfig);
@@ -63,46 +70,34 @@ void setup() {
     return;
   }
 
-  display->setBrightness8(128); // Medium brightness
+  u8g2_for_adafruit_gfx.begin(*display);                 // connect u8g2 procedures to Adafruit GFX (dereference pointer)
+
+
+  display->setBrightness8(200); // Medium brightness
   display->clearScreen();
+  display->setTextWrap(false);
 
   Serial.println("Display initialized successfully!");
   Serial.printf("Display size: %d x %d pixels\n", DISPLAY_WIDTH, DISPLAY_HEIGHT);
 }
 
 void loop() {
-  // Clear display
-  display->fillScreen(0); // Black background
+  // Clear display and draw text
+  display->clearScreen();
 
-  // Set text properties
-  display->setTextSize(1);
-  display->setTextColor(COLOR_GREEN);
-  display->setTextWrap(false);
+  u8g2_for_adafruit_gfx.setFontMode(1);                // use u8g2 transparent mode (this is default)
+  u8g2_for_adafruit_gfx.setFontDirection(0);             // left to right (this is default)
+  u8g2_for_adafruit_gfx.setForegroundColor(COLOR_WHITE);     // apply Adafruit GFX color
 
-  // Draw scrolling text
-  display->setCursor(scrollX, 12);
-  display->print(testText);
+  u8g2_for_adafruit_gfx.setFont(u8g2_font_helvR10_tf); // select u8g2 font from here: https://github.com/olikraus/u8g2/wiki/fntlistall
+  u8g2_for_adafruit_gfx.setCursor(0, 12);              // start writing at this position
+  u8g2_for_adafruit_gfx.print(F("Shots: 12"));
+  u8g2_for_adafruit_gfx.setCursor(0, 28);              // start writing at this position
+  u8g2_for_adafruit_gfx.print(F("Split: 0:78"));       // UTF-8 string with german umlaut chars
 
-  // Update scroll position (scroll from right to left)
-  scrollX--;
+  u8g2_for_adafruit_gfx.setFont(u8g2_font_helvB18_tf);
+  u8g2_for_adafruit_gfx.setCursor(65, 25);
+  u8g2_for_adafruit_gfx.print(F("12:92"));
 
-  // Calculate approximate text width (6 pixels per char)
-  int16_t textWidth = strlen(testText) * 6;
-
-  // Reset when text scrolls off the left side
-  if (scrollX < -textWidth) {
-    scrollX = DISPLAY_WIDTH;
-  }
-
-  // Add some static elements for visual reference
-  // Corner markers
-  display->drawPixel(0, 0, COLOR_RED);
-  display->drawPixel(DISPLAY_WIDTH - 1, 0, COLOR_BLUE);
-  display->drawPixel(0, DISPLAY_HEIGHT - 1, COLOR_YELLOW);
-  display->drawPixel(DISPLAY_WIDTH - 1, DISPLAY_HEIGHT - 1, COLOR_WHITE);
-
-  // Center line
-  // display->drawLine(0, DISPLAY_HEIGHT / 2, DISPLAY_WIDTH - 1, DISPLAY_HEIGHT / 2, 0x18E3); // Dark cyan
-
-  delay(30); // ~33 FPS
+  delay(2000);
 }
