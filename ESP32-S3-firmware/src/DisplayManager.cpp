@@ -20,6 +20,11 @@ DisplayManager::DisplayManager()
     lastUpdateTime(0),
     connectionState(DeviceConnectionState::DISCONNECTED),
     deviceName(nullptr),
+    displayDirty(true),
+    needsClear(true),
+    cachedShotNumber(0xFFFF),
+    cachedAbsoluteTimeMs(0xFFFFFFFF),
+    cachedSplitTimeMs(0xFFFFFFFF),
     scrollOffset(0),
     lastScrollUpdate(0),
     textPixelWidth(0) {
@@ -74,12 +79,27 @@ bool DisplayManager::initialize() {
   return true;
 }
 
+void DisplayManager::markDirty(bool clearFirst) {
+  displayDirty = true;
+  needsClear = clearFirst;
+}
+
 void DisplayManager::update() {
   // Update display based on current state
   unsigned long currentTime = millis();
 
   switch (currentState) {
     case DisplayState::STARTUP:
+      // Render startup message if dirty
+      if (displayDirty) {
+        if (needsClear) {
+          clearDisplay();
+        }
+        renderStartupMessage();
+        displayDirty = false;
+        needsClear = false;
+      }
+
       // Auto-transition after startup delay
       if (currentTime - lastUpdateTime > STARTUP_MESSAGE_DELAY) {
         showConnectionState(connectionState, deviceName);
@@ -90,19 +110,48 @@ void DisplayManager::update() {
     case DisplayState::SCANNING:
     case DisplayState::CONNECTING:
     case DisplayState::CONNECTED:
-      renderConnectionStatus();
+      // Only render if display is dirty
+      if (displayDirty) {
+        if (needsClear) {
+          clearDisplay();
+        }
+        renderConnectionStatus();
+        displayDirty = false;
+        needsClear = false;
+      }
       break;
 
     case DisplayState::WAITING_FOR_SHOTS:
-      renderWaitingForShots();
+      if (displayDirty) {
+        if (needsClear) {
+          clearDisplay();
+        }
+        renderWaitingForShots();
+        displayDirty = false;
+        needsClear = false;
+      }
       break;
 
     case DisplayState::SHOWING_SHOT:
-      renderShotData();
+      if (displayDirty) {
+        if (needsClear) {
+          clearDisplay();
+        }
+        renderShotData();
+        displayDirty = false;
+        needsClear = false;
+      }
       break;
 
     case DisplayState::SESSION_ENDED:
-      renderSessionEnd();
+      if (displayDirty) {
+        if (needsClear) {
+          clearDisplay();
+        }
+        renderSessionEnd();
+        displayDirty = false;
+        needsClear = false;
+      }
       break;
   }
 }
@@ -110,7 +159,7 @@ void DisplayManager::update() {
 void DisplayManager::showStartup() {
   currentState = DisplayState::STARTUP;
   lastUpdateTime = millis();
-  renderStartupMessage();
+  markDirty(true);  // Signal display update needed with clear
 }
 
 void DisplayManager::showConnectionState(DeviceConnectionState state, const char* name) {
@@ -141,21 +190,35 @@ void DisplayManager::showConnectionState(DeviceConnectionState state, const char
   }
 
   lastUpdateTime = millis();
-  renderConnectionStatus();
+  markDirty(true);  // Signal display update needed with clear
 }
 
 void DisplayManager::showWaitingForShots(const SessionData& sessionData) {
   currentState = DisplayState::WAITING_FOR_SHOTS;
   currentSessionData = sessionData;
   lastUpdateTime = millis();
-  renderWaitingForShots();
+  markDirty(true);  // Signal display update needed with clear
 }
 
 void DisplayManager::showShotData(const NormalizedShotData& shotData) {
-  currentState = DisplayState::SHOWING_SHOT;
-  lastShotData = shotData;
-  lastUpdateTime = millis();
-  renderShotData();
+  // Check if data actually changed
+  bool dataChanged = (cachedShotNumber != shotData.shotNumber) ||
+                     (cachedAbsoluteTimeMs != shotData.absoluteTimeMs) ||
+                     (cachedSplitTimeMs != shotData.splitTimeMs);
+
+  // Only update if state is different or data changed
+  if (currentState != DisplayState::SHOWING_SHOT || dataChanged) {
+    currentState = DisplayState::SHOWING_SHOT;
+    lastShotData = shotData;
+    lastUpdateTime = millis();
+
+    // Update cached values
+    cachedShotNumber = shotData.shotNumber;
+    cachedAbsoluteTimeMs = shotData.absoluteTimeMs;
+    cachedSplitTimeMs = shotData.splitTimeMs;
+
+    markDirty(true);  // Signal display update needed with clear
+  }
 }
 
 void DisplayManager::showSessionEnd(const SessionData& sessionData, uint16_t lastShotNumber) {
@@ -163,7 +226,7 @@ void DisplayManager::showSessionEnd(const SessionData& sessionData, uint16_t las
   currentSessionData = sessionData;
   lastShotData.shotNumber = lastShotNumber; // Store for display
   lastUpdateTime = millis();
-  renderSessionEnd();
+  markDirty(true);  // Signal display update needed with clear
 }
 
 void DisplayManager::clearDisplay() {
@@ -183,7 +246,6 @@ uint16_t DisplayManager::color565(uint8_t r, uint8_t g, uint8_t b) {
 void DisplayManager::renderStartupMessage() {
   if (!display) return;
 
-  clearDisplay();
   u8g2_for_adafruit_gfx.setFontMode(1);
   u8g2_for_adafruit_gfx.setFontDirection(0);
   u8g2_for_adafruit_gfx.setForegroundColor(DisplayColors::GREEN);
@@ -195,8 +257,6 @@ void DisplayManager::renderStartupMessage() {
 
 void DisplayManager::renderConnectionStatus() {
   if (!display) return;
-
-  clearDisplay();
 
   const char* statusText = nullptr;
   uint16_t statusColor = DisplayColors::WHITE;
@@ -281,8 +341,6 @@ void DisplayManager::renderConnectionStatus() {
 void DisplayManager::renderWaitingForShots() {
   if (!display) return;
 
-  clearDisplay();
-
   u8g2_for_adafruit_gfx.setFontMode(1);
   u8g2_for_adafruit_gfx.setFontDirection(0);
   u8g2_for_adafruit_gfx.setForegroundColor(DisplayColors::WHITE);
@@ -300,8 +358,6 @@ void DisplayManager::renderWaitingForShots() {
 
 void DisplayManager::renderShotData() {
   if (!display) return;
-
-  clearDisplay();
 
   char timeBuffer[16];
   char splitBuffer[16];
@@ -327,8 +383,6 @@ void DisplayManager::renderShotData() {
 
 void DisplayManager::renderSessionEnd() {
   if (!display) return;
-
-  clearDisplay();
 
   char timeBuffer[16];
   formatTime(lastShotData.absoluteTimeMs, timeBuffer, sizeof(timeBuffer));
