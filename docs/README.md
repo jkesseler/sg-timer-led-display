@@ -37,17 +37,22 @@ This directory contains all documentation for the SG Timer LED Display project.
 ### Device Protocols
 
 - **[DEVICE_COMPARISON.md](DEVICE_COMPARISON.md)** - Comparison of supported timer devices ⭐
-  - Feature comparison table
+  - Feature comparison table (3 devices)
   - Protocol differences
   - Testing strategies
   - Implementation details
 
 - **[sg-timer-reference/](sg-timer-reference/)** - SG Timer BLE protocol documentation
-  - `sg_timer_public_bt_api_32.md` - Official BLE API specification
+  - `sg_timer_public_bt_api_32.md` - Official BLE API specification ✅
   - `sg_timer_public_bt_api-32.pdf` - PDF version
 
 - **[special-pie-timer-reference/](special-pie-timer-reference/)** - Special Pie Timer protocol
   - `BLE-Protocol-Analysis.md` - Validated protocol documentation ✅
+
+- **[amg-lab-commander-reference/](amg-lab-commander-reference/)** - AMG Lab Commander protocol
+  - `BLE-Protocol-Analysis.md` - Complete protocol documentation 📋
+  - `Quick-Reference.md` - Implementation quick start guide
+  - Reverse-engineered from Android app source
   - Message formats
   - Implementation examples
 
