@@ -2,48 +2,65 @@
 
 Multi-Device Shot Timer Bridge with LED Matrix Display
 
-A ESP32-based system that connects to Shooters Global Timer devices via Bluetooth and displays real-time timing data on HUB75 LED matrix panels.
+An ESP32-based system that connects to shot timer devices via Bluetooth and displays real-time timing data on HUB75 LED matrix panels.
 
 
 ## Motivation
-As a competitive shooter and software developer, I recognized the need for a reliable and visually engaging way to display shot timer data during training and competitions. Currently Shooters Global does not offer a visual display solution like Special Pie does. SG does offer a public API for their devices allow it to be integrated into custom solutions.
 
-This project also an experiment in AI assisted development to explore how AI tools can aid in building embedded systems.
+As a competitive shooter and software developer, I recognized the need for a reliable and visually engaging way to display shot timer data during training and competitions. While some manufacturers offer visual display solutions, this project provides an open, extensible platform that works with multiple timer brands through a unified interface.
+
+This project is also an experiment in AI-assisted development to explore how AI tools can aid in building embedded systems.
 
 
 ## Project Overview
 
-This project creates a bridge between SG Timer devices and visual display systems, providing real-time display capabilities for shooting sports applications through a device abstraction layer that can be extended to support additional timer brands in the future.
+This project creates a bridge between shot timer devices and visual display systems, providing real-time display capabilities for shooting sports applications through a device abstraction layer that supports multiple timer brands.
 
 ### Supported Devices
 
-Currently there is native support for SG Timer Sport and GO models.
+- **SG Timer** (Sport and GO models) - Full protocol support
+- **Special Pie M1A2+ Timer** - Validated protocol support
+
+Additional timer devices can be added through the `ITimerDevice` interface.
 
 ### Key Features
 
-- Real-Time Display Live shot data on 128x32 LED matrix panels
-- Stable connection management with auto-reconnect
-- Extensible architecture for future device support
-- Designed for competitive shooting environments
+- **Multi-Device Support**: Works with SG Timer and Special Pie Timer devices
+- **Real-Time Display**: Live shot data on 128x32 LED matrix panels
+- **Auto-Discovery**: Automatically detects and connects to compatible timers
+- **Stable Connection Management**: Auto-reconnect on disconnect
+- **Extensible Architecture**: Device abstraction layer for future timer support
+- **Designed for Competitive Shooting**: Optimized for match environments
 
 ## System Architecture
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │  Shot Timer Devices (BLE)                                   │
-│  ┌───────────────┐   ┌──────────────────┐                   │
-│  │  SG Timer GO  │   │  SG Timer Sport  │                   │
-│  │               │   │                  │                   │
-│  └────────┬──────┘   └─────────┬────────┘                   │
-└───────────┼────────────────────┼──────────────────-─────────┘
-            │                    │
-            ▼                    ▼
+│  ┌───────────────┐   ┌──────────────────┐   ┌─────────────┐ │
+│  │  SG Timer GO  │   │  SG Timer Sport  │   │ Special Pie │ │
+│  │               │   │                  │   │   M1A2+     │ │
+│  └────────┬──────┘   └─────────┬────────┘   └──────┬──────┘ │
+└───────────┼────────────────────┼───────────────────┼────────┘
+            │                    │                   │
+            ▼                    ▼                   ▼
 ┌─────────────────────────────────────────────────────────────┐
 │  ESP32-S3 Bridge Firmware                                   │
-│  ┌─────────────────-─┐  ┌──────────────────┐                │
-│  │ Device Drivers    │  │ Unified Facade   │                │
-│  │ (Protocol Parsing)│  │ (Data Normaliz.) │                │
-│  └────────┬─────────-┘  └─────────┬────────┘                │
+│  ┌──────────────────────────────────────────────────┐       │
+│  │         TimerApplication (Coordinator)           │       │
+│  └────────────────────┬─────────────────────────────┘       │
+│                       │                                     │
+│       ┌───────────────┼───────────────┐                     │
+│       ▼               ▼               ▼                     │
+│  ┌─────────┐   ┌─────────────┐  ┌────────────┐              │
+│  │ SG Timer│   │ Special Pie │  │   Future   │              │
+│  │ Device  │   │Timer Device │  │  Devices   │              │
+│  └────┬────┘   └──────┬──────┘  └─────┬──────┘              │
+│       └───────────────┼───────────────┘                     │
+│                       ▼                                     │
+│           ┌───────────────────────┐                         │
+│           │   ITimerDevice        │                         │
+│           │  (Unified Interface)  │                         │
 │           └───────────┬───────────┘                         │
 │                       ▼                                     │
 │           ┌───────────────────────┐                         │
@@ -117,24 +134,49 @@ pio device monitor
 ## Protocol Support
 
 ### SG Timer (Sport/GO)
-- Connection: BLE Events and Commands
-- Service UUID: `7520FFFF-14D2-4CDA-8B6B-697C554C9311`
-- API Version: BLE API 3.2
-- Data Format: Variable-length packets, millisecond resolution
-- Features: Full remote control, session management, saved sessions
+- **Connection**: BLE Events and Commands
+- **Service UUID**: `7520FFFF-14D2-4CDA-8B6B-697C554C9311`
+- **API Version**: BLE API 3.2
+- **Data Format**: Variable-length TLV packets, millisecond resolution
+- **Features**: Full remote control, session management, shot list retrieval
+- **Reference**: [`docs/sg-timer-reference/`](docs/sg-timer-reference/)
+
+### Special Pie M1A2+ Timer ✅
+- **Connection**: BLE Notifications
+- **Service UUID**: `0000FFF0-0000-1000-8000-00805F9B34FB`
+- **Characteristic**: `0000FFF1-0000-1000-8000-00805F9B34FB` (Timer events)
+- **Data Format**: Frame-based messages (F8 F9 ... F9 F8), centisecond resolution
+- **Features**: Shot detection, session start/stop notifications
+- **Reference**: [`docs/special-pie-timer-reference/BLE-Protocol-Analysis.md`](docs/special-pie-timer-reference/BLE-Protocol-Analysis.md)
+- **Status**: Protocol validated with working test implementation
+
+## Documentation
+
+All documentation is in the [`docs/`](docs/) directory:
+
+- **[docs/README.md](docs/README.md)** - Documentation index and navigation
+- **[docs/BUILD_AND_TEST.md](docs/BUILD_AND_TEST.md)** - Build and testing guide
+- **[docs/DEVICE_COMPARISON.md](docs/DEVICE_COMPARISON.md)** - Device comparison and testing strategies
+- **[docs/HUB75_WIRING.md](docs/HUB75_WIRING.md)** - LED panel wiring guide
+- **[docs/DISPLAY_SETUP.md](docs/DISPLAY_SETUP.md)** - Display configuration
+- **[docs/sg-timer-reference/](docs/sg-timer-reference/)** - SG Timer protocol reference
+- **[docs/special-pie-timer-reference/](docs/special-pie-timer-reference/)** - Special Pie protocol reference
 
 ## Planned Features
 
-### Phase 1: Core Implementation *(Current)*
-- [x] Device abstraction layer for future timer support
-- [x] Multi-device protocol support
+### Phase 1: Core Implementation ✅ *(Complete)*
+- [x] Device abstraction layer (`ITimerDevice` interface)
+- [x] Multi-device support (SG Timer and Special Pie Timer)
 - [x] Automatic device discovery and connection
 - [x] Real-time LED matrix display
+- [x] Protocol validation and testing
 
-### Phase 2: Enhanced Features
+### Phase 2: Enhanced Features *(In Progress)*
 - [ ] Additional timer device support
-- [ ] Support for multiple LED displays
+- [ ] Publish timer data over MQTT
+- [ ] Squads, online shooter, and current shooter display
 - [ ] Web interface for display on any device with a browser
+      Score logging, online / current shooter management
 
 
 
@@ -149,14 +191,16 @@ pio device monitor
 ## Architecture Details
 
 ### Device Abstraction Layer
-The system uses a Facade Pattern to abstract device-specific protocols:
+The system uses an interface pattern to abstract device-specific protocols:
 
 ```cpp
 // Unified interface for all timer devices
 class ITimerDevice {
   virtual bool connect(BLEAddress address) = 0;
-  virtual void onShotDetected(std::function<void(NormalizedShotData)> callback) = 0;
-  virtual bool supportsRemoteStart() = 0;
+  virtual void onShotDetected(std::function<void(const NormalizedShotData&)> callback) = 0;
+  virtual void onSessionStarted(std::function<void(const SessionData&)> callback) = 0;
+  virtual bool supportsRemoteStart() const = 0;
+  virtual bool supportsShotList() const = 0;
   // ... additional interface methods
 };
 
@@ -166,38 +210,57 @@ struct NormalizedShotData {
   uint16_t shotNumber;
   uint32_t absoluteTimeMs;    // Always in milliseconds
   uint32_t splitTimeMs;       // Time since previous shot
-  uint64_t timestampMs;       // System timestamp
-  const char* deviceModel;
+  uint32_t timestampMs;       // System timestamp
+  const char* deviceModel;    // "SG Timer" or "Special Pie Timer"
+  bool isFirstShot;           // True for first shot in session
 };
 ```
 
 ### Multi-Device Support
-- Auto-Detection: Identifies SG Timer devices from BLE advertisement
-- Protocol Normalization: Converts device-specific data to unified format
-- Automatic Connection: Connects to available SG Timer devices automatically
-- Connection Recovery: Automatically reconnects to the same device if connection is lost
+- **Auto-Detection**: Scans for SG Timer (by address) or Special Pie Timer (by service UUID)
+- **Protocol Normalization**: Converts device-specific data to unified format
+- **Automatic Connection**: Connects to first available compatible device
+- **Connection Recovery**: Automatically reconnects if connection is lost
+- **Feature Detection**: Capability queries for device-specific features
 
 ## Development
 
 ### Project Structure
 ```
 sg-timer-LED-display/
-├── platformio.ini              # PlatformIO configuration
-├── ESP32-S3-firmware/          # Main firmware source
-│   ├── src/main.cpp            # Application entry point
-│   ├── lib/                    # Custom libraries
-│   └── include/                # Header files
-├── docs/                       # Documentation
-│   ├── BUILD_AND_TEST.md       # Setup and testing guide
-│   ├── HUB75_WIRING.md         # Hardware wiring diagrams
-│   ├── DISPLAY_REFERENCE.md    # Display states reference
-│   └── sg-timer-reference/     # Timer protocol documentation
-└── memory-bank/                # Design analysis and architecture docs
-    ├── ScoreDisplay-Special-Pie-Timer-Analysis.md
-    └── build-options.md
+├── platformio.ini                      # PlatformIO configuration
+├── ESP32-S3-firmware/                  # Main firmware source
+│   ├── src/
+│   │   ├── main.cpp                    # Application entry point
+│   │   ├── TimerApplication.cpp        # Multi-device coordinator
+│   │   ├── SGTimerDevice.cpp           # SG Timer implementation
+│   │   ├── SpecialPieTimerDevice.cpp   # Special Pie implementation
+│   │   ├── DisplayManager.cpp          # LED display controller
+│   │   ├── BrightnessController.cpp    # Ambient light sensing
+│   │   └── ButtonHandler.cpp           # User input
+│   ├── include/
+│   │   ├── ITimerDevice.h              # Device interface
+│   │   ├── common.h                    # Shared definitions
+│   │   └── ...                         # Component headers
+│   └── test/
+│       ├── sg-timer.cpp                # SG Timer standalone test
+│       ├── special-pie-timer.cpp       # Special Pie test
+│       └── led-matrix.cpp              # Display test
+├── docs/                               # Documentation
+│   ├── README.md                       # Documentation index
+│   ├── BUILD_AND_TEST.md               # Build and test guide
+│   ├── DEVICE_COMPARISON.md            # Device comparison
+│   ├── HUB75_WIRING.md                 # Hardware wiring
+│   ├── sg-timer-reference/             # SG Timer protocol docs
+│   └── special-pie-timer-reference/    # Special Pie protocol docs
+└── memory-bank/                        # Design analysis and architecture
+    ├── Device-Implementation-Guide.md
+    ├── project-state-analysis.md
+    └── test-infrastructure-summary.md
 ```
 
 ### Build Configuration
+
 The project uses PlatformIO with ESP32-S3 target:
 
 ```ini
@@ -217,4 +280,11 @@ build_flags =
 
 ## License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+This project is licensed under the Apache License License - see the [LICENSE](LICENSE) file for details.
+
+
+# Use of AI
+
+Although I am a professional software developer, my expertise lies in web development and distributed systems, with a focus on medium- to large-scale e-commerce applications not in embedded programming with C++. This project is an experiment to explore how AI tools can assist with programming tasks. Most of the code in this repository was generated with AI support (GitHub Copilot and Claude Sonnet 4.5).
+
+For small greenfield projects like this, AI offers clear advantages by enabling rapid prototyping and exploration of different architectures and implementations. This contrasts with my usual work, where AI tools often struggle to provide meaningful value within complex, domain-specific systems that have established codebases—sometimes even proposing unnecessary or harmful refactors.
