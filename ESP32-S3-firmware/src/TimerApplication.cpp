@@ -60,7 +60,7 @@ void TimerApplication::run() {
   // Perform periodic health checks
   performHealthCheck();
 
-  // delay(MAIN_LOOP_DELAY);
+  delay(MAIN_LOOP_DELAY);
 }
 
 void TimerApplication::setupCallbacks() {
@@ -98,13 +98,12 @@ void TimerApplication::onShotDetected(const NormalizedShotData& shotData) {
   lastShotNumber = shotData.shotNumber;
   lastShotTime = shotData.absoluteTimeMs;
   updateActivityTime();
+  logShotData(shotData);
 
   // Update display if session is active
   if (sessionActive && displayManager) {
     displayManager->showShotData(shotData);
   }
-
-  logShotData(shotData);
 }
 
 void TimerApplication::onSessionStarted(const SessionData& sessionData) {

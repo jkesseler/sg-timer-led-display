@@ -1,6 +1,9 @@
 #include "DisplayManager.h"
 #include "Logger.h"
 #include <stdio.h>
+#include <U8g2_for_Adafruit_GFX.h>
+
+U8G2_FOR_ADAFRUIT_GFX u8g2_for_adafruit_gfx;
 
 // Define color constants
 const uint16_t DisplayColors::RED = 0xF800;        // 255, 0, 0
@@ -41,14 +44,17 @@ bool DisplayManager::initialize() {
     PANEL_CHAIN       // Number of panels chained
   );
 
-  // Configure for ESP32-S3
+  // Configure for ESP32-S3 to reduce scanlines
   mxconfig.gpio.e = 18;
   mxconfig.driver = HUB75_I2S_CFG::FM6126A;
 
-  // Uncomment if needed for specific panels
-  // mxconfig.clkphase = false;
-  mxconfig.latch_blanking = 2;
-  // mxconfig.i2sspeed = HUB75_I2S_CFG::HZ_10M;
+  // Increase color depth for smoother PWM and reduce visible scanlines
+  mxconfig.latch_blanking = 4;           // Higher blanking reduces ghosting
+  mxconfig.clkphase = false;
+  mxconfig.i2sspeed = HUB75_I2S_CFG::HZ_20M;  // Higher clock speed for better refresh
+
+  // Optimize for better refresh rate and color depth
+  mxconfig.min_refresh_rate = 120;       // Higher refresh rate reduces flicker/scanlines
 
   display = new MatrixPanel_I2S_DMA(mxconfig);
   if (!display) {
@@ -57,7 +63,11 @@ bool DisplayManager::initialize() {
   }
 
   display->begin();
-  clearDisplay();
+
+  display->setBrightness8(200); // Slightly lower brightness helps reduce scanlines
+  display->clearScreen();
+  display->setTextWrap(false);
+  u8g2_for_adafruit_gfx.begin(*display);
 
   showStartup();
   LOG_DISPLAY("HUB75 panels initialized successfully");
@@ -174,23 +184,19 @@ void DisplayManager::renderStartupMessage() {
   if (!display) return;
 
   clearDisplay();
-  display->setTextSize(2);
-  display->setTextColor(DisplayColors::GREEN);
-  display->setCursor(2, 0);
-  display->print("TIMER");
-  display->setCursor(2, 16);
-  display->print("READY");
+  u8g2_for_adafruit_gfx.setFontMode(1);
+  u8g2_for_adafruit_gfx.setFontDirection(0);
+  u8g2_for_adafruit_gfx.setForegroundColor(DisplayColors::GREEN);
+  u8g2_for_adafruit_gfx.setFont(u8g2_font_helvR10_tf);
+  u8g2_for_adafruit_gfx.setCursor(0, 12);
+  u8g2_for_adafruit_gfx.print(F("Timer Ready"));
+
 }
 
 void DisplayManager::renderConnectionStatus() {
   if (!display) return;
 
   clearDisplay();
-
-  // First line - status message
-  display->setTextSize(2);
-  display->setCursor(2, 2);
-  display->setTextWrap(false);
 
   const char* statusText = nullptr;
   uint16_t statusColor = DisplayColors::WHITE;
@@ -218,13 +224,16 @@ void DisplayManager::renderConnectionStatus() {
       break;
   }
 
-  display->setTextColor(statusColor);
-  display->print(statusText);
+  u8g2_for_adafruit_gfx.setFontMode(1);
+  u8g2_for_adafruit_gfx.setFontDirection(0);
+  u8g2_for_adafruit_gfx.setForegroundColor(statusColor);
+  u8g2_for_adafruit_gfx.setFont(u8g2_font_helvR10_tf);
+  u8g2_for_adafruit_gfx.setCursor(0, 12);
+  u8g2_for_adafruit_gfx.print(statusText);
 
   // Second line - device name with marquee scrolling
   if (deviceName && connectionState == DeviceConnectionState::CONNECTED) {
-    display->setTextSize(2);
-    display->setTextColor(DisplayColors::WHITE);
+    u8g2_for_adafruit_gfx.setForegroundColor(DisplayColors::WHITE);
 
     // Calculate text width if not already done
     if (textPixelWidth == 0) {
@@ -232,12 +241,12 @@ void DisplayManager::renderConnectionStatus() {
     }
 
     const int16_t displayWidth = PANEL_WIDTH * PANEL_CHAIN; // 128 pixels
-    const int16_t lineY = 16;
+    const int16_t lineY = 28;
 
     // If text fits on screen, just display it normally
     if (textPixelWidth <= displayWidth - 8) {
-      display->setCursor(2, lineY);
-      display->print(deviceName);
+      u8g2_for_adafruit_gfx.setCursor(2, lineY);
+      u8g2_for_adafruit_gfx.print(deviceName);
     } else {
       // Text is too long - implement marquee scrolling
       unsigned long currentTime = millis();
@@ -256,14 +265,14 @@ void DisplayManager::renderConnectionStatus() {
 
       // Draw text at scrolled position
       int16_t xPos = displayWidth - scrollOffset;
-      display->setCursor(xPos, lineY);
-      display->print(deviceName);
+      u8g2_for_adafruit_gfx.setCursor(xPos, lineY);
+      u8g2_for_adafruit_gfx.print(deviceName);
 
       // If we're near the end, draw another copy for seamless loop
       if (scrollOffset > textPixelWidth) {
         int16_t xPos2 = xPos + textPixelWidth + 60; // +60 pixel gap
-        display->setCursor(xPos2, lineY);
-        display->print(deviceName);
+        u8g2_for_adafruit_gfx.setCursor(xPos2, lineY);
+        u8g2_for_adafruit_gfx.print(deviceName);
       }
     }
   }
@@ -273,15 +282,20 @@ void DisplayManager::renderWaitingForShots() {
   if (!display) return;
 
   clearDisplay();
-  display->setTextSize(1);
-  display->setTextColor(DisplayColors::LIGHT_BLUE);
-  display->setCursor(10, 2);
-  display->print("READY");
 
-  display->setTextSize(3);
-  display->setTextColor(DisplayColors::WHITE);
-  display->setCursor(10, 18);
-  display->print("00:00");
+  u8g2_for_adafruit_gfx.setFontMode(1);
+  u8g2_for_adafruit_gfx.setFontDirection(0);
+  u8g2_for_adafruit_gfx.setForegroundColor(DisplayColors::WHITE);
+
+  u8g2_for_adafruit_gfx.setFont(u8g2_font_helvR10_tf);
+  u8g2_for_adafruit_gfx.setCursor(0, 12);
+  u8g2_for_adafruit_gfx.print(F("Shots: 0"));
+  u8g2_for_adafruit_gfx.setCursor(0, 28);
+  u8g2_for_adafruit_gfx.print(F("Split: 0:00"));
+
+  u8g2_for_adafruit_gfx.setFont(u8g2_font_helvB18_tf);
+  u8g2_for_adafruit_gfx.setCursor(65, 25);
+  u8g2_for_adafruit_gfx.print(F("00:00"));
 }
 
 void DisplayManager::renderShotData() {
@@ -289,19 +303,26 @@ void DisplayManager::renderShotData() {
 
   clearDisplay();
 
-  // Display time (bottom section)
   char timeBuffer[16];
+  char splitBuffer[16];
+  char shotBuffer[32];
   formatTime(lastShotData.absoluteTimeMs, timeBuffer, sizeof(timeBuffer));
+  formatSplitTime(lastShotData.splitTimeMs, splitBuffer, sizeof(splitBuffer));
 
-  // Display shot number (top section)
-  display->setTextSize(1);
-  display->setTextColor(DisplayColors::YELLOW);
-  display->setCursor(2, 2);
-  display->printf("#:%d ", lastShotData.shotNumber);
+  u8g2_for_adafruit_gfx.setFont(u8g2_font_helvR10_tf);
+  u8g2_for_adafruit_gfx.setForegroundColor(DisplayColors::YELLOW);
+  u8g2_for_adafruit_gfx.setCursor(0, 12);
+  snprintf(shotBuffer, sizeof(shotBuffer), "Shots: %d", lastShotData.shotNumber);
+  u8g2_for_adafruit_gfx.print(shotBuffer);
 
-  display->setTextSize(3);
-  display->setTextColor(DisplayColors::GREEN);
-  display->print(timeBuffer);
+  u8g2_for_adafruit_gfx.setCursor(0, 28);
+  u8g2_for_adafruit_gfx.print(F("Split: "));
+  u8g2_for_adafruit_gfx.print(splitBuffer);
+
+  u8g2_for_adafruit_gfx.setFont(u8g2_font_helvB18_tf);
+  u8g2_for_adafruit_gfx.setForegroundColor(DisplayColors::GREEN);
+  u8g2_for_adafruit_gfx.setCursor(65, 25);
+  u8g2_for_adafruit_gfx.print(timeBuffer);
 }
 
 void DisplayManager::renderSessionEnd() {
@@ -309,37 +330,38 @@ void DisplayManager::renderSessionEnd() {
 
   clearDisplay();
 
-  // Display "SESSION END"
-  display->setTextSize(1);
-  display->setTextColor(DisplayColors::RED);
-  display->setCursor(2, 2);
-  display->print("SESSION END");
+  char timeBuffer[16];
+  formatTime(lastShotData.absoluteTimeMs, timeBuffer, sizeof(timeBuffer));
 
-  // // Display total shots
-  // display->setTextSize(2);
-  // display->setTextColor(DisplayColors::YELLOW);
-  // display->setCursor(5, 14);
-  // display->printf("Shots: %d", currentSessionData.totalShots);
+  u8g2_for_adafruit_gfx.setFont(u8g2_font_helvB18_tf);
+  u8g2_for_adafruit_gfx.setForegroundColor(DisplayColors::RED);
+  u8g2_for_adafruit_gfx.setCursor(1, 25);
+  u8g2_for_adafruit_gfx.print(F("END:"));
 
-  // Display last shot number if available
-  if (lastShotData.shotNumber > 0) {
-    display->setTextSize(3);
-    display->setTextColor(DisplayColors::GREEN);
-    display->setCursor(5, 16);
-    display->printf("Last: #%d", lastShotData.shotNumber);
-  }
+  u8g2_for_adafruit_gfx.setFont(u8g2_font_helvB18_tf);
+  u8g2_for_adafruit_gfx.setForegroundColor(DisplayColors::RED);
+  u8g2_for_adafruit_gfx.setCursor(65, 25);
+  u8g2_for_adafruit_gfx.print(timeBuffer);
 }
 
 void DisplayManager::formatTime(uint32_t timeMs, char* buffer, size_t bufferSize) {
+  // Calculate total seconds and centiseconds (hundredths of a second)
   uint32_t totalSeconds = timeMs / 1000;
-  uint32_t minutes = totalSeconds / 60;
-  uint32_t seconds = totalSeconds % 60;
-  uint32_t milliseconds = timeMs % 1000;
+  uint32_t centiseconds = (timeMs % 1000) / 10;  // Get hundredths of a second (0-99)
 
-  if (minutes > 0) {
-    snprintf(buffer, bufferSize, "%02lu:%02lu.%01lu",
-             minutes, seconds, milliseconds / 100);
+  // Format as "ss:cc" where ss = seconds, cc = centiseconds (always 2 digits each)
+  snprintf(buffer, bufferSize, "%02lu:%02lu", totalSeconds, centiseconds);
+}
+
+void DisplayManager::formatSplitTime(uint32_t timeMs, char* buffer, size_t bufferSize) {
+  // Calculate total seconds and centiseconds (hundredths of a second)
+  uint32_t totalSeconds = timeMs / 1000;
+  uint32_t centiseconds = (timeMs % 1000) / 10;  // Get hundredths of a second (0-99)
+
+  // Format as "s:cc" when < 10 seconds, "ss:cc" when >= 10 seconds
+  if (totalSeconds < 10) {
+    snprintf(buffer, bufferSize, "%lu:%02lu", totalSeconds, centiseconds);
   } else {
-    snprintf(buffer, bufferSize, "%02lu.%03lu", seconds, milliseconds);
+    snprintf(buffer, bufferSize, "%02lu:%02lu", totalSeconds, centiseconds);
   }
 }
