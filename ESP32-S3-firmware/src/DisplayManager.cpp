@@ -312,7 +312,7 @@ void DisplayManager::renderShotData() {
   u8g2_for_adafruit_gfx.setFont(u8g2_font_helvR10_tf);
   u8g2_for_adafruit_gfx.setForegroundColor(DisplayColors::YELLOW);
   u8g2_for_adafruit_gfx.setCursor(0, 12);
-  snprintf(shotBuffer, sizeof(shotBuffer), "Shots: %d", lastShotData.shotNumber);
+  snprintf(shotBuffer, sizeof(shotBuffer), "Shots: %d", lastShotData.shotNumber + 1);
   u8g2_for_adafruit_gfx.print(shotBuffer);
 
   u8g2_for_adafruit_gfx.setCursor(0, 28);
