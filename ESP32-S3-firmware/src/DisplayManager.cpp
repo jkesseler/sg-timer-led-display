@@ -110,6 +110,23 @@ void DisplayManager::update() {
     case DisplayState::SCANNING:
     case DisplayState::CONNECTING:
     case DisplayState::CONNECTED:
+      // Update marquee scroll position if needed (only in CONNECTED state)
+      if (currentState == DisplayState::CONNECTED && deviceName && textPixelWidth > (PANEL_WIDTH * PANEL_CHAIN) - 8) {
+        // Text is too long and needs scrolling
+        if (currentTime - lastScrollUpdate >= SCROLL_SPEED_MS) {
+          scrollOffset++;
+
+          const int16_t displayWidth = PANEL_WIDTH * PANEL_CHAIN;
+          // Reset when text has scrolled completely off screen
+          if (scrollOffset > textPixelWidth + 60) { // +60 for gap before repeat
+            scrollOffset = -displayWidth; // Start from right edge
+          }
+
+          lastScrollUpdate = currentTime;
+          markDirty(false); // Mark dirty without clearing to update animation
+        }
+      }
+
       // Only render if display is dirty
       if (displayDirty) {
         if (needsClear) {
@@ -309,19 +326,7 @@ void DisplayManager::renderConnectionStatus() {
       u8g2_for_adafruit_gfx.print(deviceName);
     } else {
       // Text is too long - implement marquee scrolling
-      unsigned long currentTime = millis();
-
-      // Update scroll position based on time
-      if (currentTime - lastScrollUpdate >= SCROLL_SPEED_MS) {
-        scrollOffset++;
-
-        // Reset when text has scrolled completely off screen
-        if (scrollOffset > textPixelWidth + 60) { // +60 for gap before repeat
-          scrollOffset = -displayWidth; // Start from right edge
-        }
-
-        lastScrollUpdate = currentTime;
-      }
+      // (Scroll position is updated in update() method)
 
       // Draw text at scrolled position
       int16_t xPos = displayWidth - scrollOffset;
