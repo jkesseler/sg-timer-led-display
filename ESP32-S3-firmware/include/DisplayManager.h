@@ -52,7 +52,7 @@ private:
   int16_t scrollOffset;
   unsigned long lastScrollUpdate;
   int16_t textPixelWidth;
-  static const uint16_t SCROLL_SPEED_MS = 25;  // Update scroll every 50ms
+  static const uint16_t SCROLL_SPEED_MS = 25;  // Update scroll every 25ms
   static const uint16_t SCROLL_PAUSE_MS = 1000; // Pause at start/end
 
   // Signal that display needs to be redrawn
