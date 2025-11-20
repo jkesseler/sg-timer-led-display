@@ -22,9 +22,9 @@ DisplayManager::DisplayManager()
     deviceName(nullptr),
     displayDirty(true),
     needsClear(true),
-    cachedShotNumber(0xFFFF),
-    cachedAbsoluteTimeMs(0xFFFFFFFF),
-    cachedSplitTimeMs(0xFFFFFFFF),
+    cachedShotNumber(CACHE_INVALID_SHOT_NUMBER),
+    cachedAbsoluteTimeMs(CACHE_INVALID_TIME_MS),
+    cachedSplitTimeMs(CACHE_INVALID_TIME_MS),
     scrollOffset(0),
     lastScrollUpdate(0),
     textPixelWidth(0) {

@@ -48,6 +48,10 @@ private:
   uint32_t cachedAbsoluteTimeMs;
   uint32_t cachedSplitTimeMs;
 
+  // Cache sentinel values to indicate uninitialized state
+  static const uint16_t CACHE_INVALID_SHOT_NUMBER = 0xFFFF;
+  static const uint32_t CACHE_INVALID_TIME_MS = 0xFFFFFFFF;
+
   // Marquee scrolling state
   int16_t scrollOffset;
   unsigned long lastScrollUpdate;
