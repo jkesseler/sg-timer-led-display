@@ -186,7 +186,14 @@ void DisplayManager::showConnectionState(DeviceConnectionState state, const char
   // Reset scroll when state changes
   scrollOffset = 0;
   lastScrollUpdate = millis();
-  textPixelWidth = 0;
+  
+  // Calculate text width immediately when device name is set
+  // This ensures scrolling logic in update() works from the start
+  if (deviceName && state == DeviceConnectionState::CONNECTED) {
+    textPixelWidth = strlen(deviceName) * 12;
+  } else {
+    textPixelWidth = 0;
+  }
 
   switch (state) {
     case DeviceConnectionState::DISCONNECTED:
@@ -311,11 +318,6 @@ void DisplayManager::renderConnectionStatus() {
   // Second line - device name with marquee scrolling
   if (deviceName && connectionState == DeviceConnectionState::CONNECTED) {
     u8g2_for_adafruit_gfx.setForegroundColor(DisplayColors::WHITE);
-
-    // Calculate text width if not already done
-    if (textPixelWidth == 0) {
-      textPixelWidth = strlen(deviceName) * 12;
-    }
 
     const int16_t displayWidth = PANEL_WIDTH * PANEL_CHAIN; // 128 pixels
     const int16_t lineY = 28;
