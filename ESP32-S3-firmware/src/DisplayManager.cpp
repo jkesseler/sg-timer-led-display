@@ -334,6 +334,7 @@ void DisplayManager::renderStartupMessage() {
   u8g2_for_adafruit_gfx.setFont(u8g2_font_luRS18_tr);
 
   const char *startupText = "PewPewTimer By J.K.";
+  int16_t startupTextPixelWidth = u8g2_for_adafruit_gfx.getUTF8Width(startupText);
 
   // If text fits on screen, just display it normally
   if (startupTextPixelWidth <= displayWidth - 8) {
