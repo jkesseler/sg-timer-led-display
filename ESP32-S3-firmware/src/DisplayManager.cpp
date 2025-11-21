@@ -6,11 +6,20 @@
 U8G2_FOR_ADAFRUIT_GFX u8g2_for_adafruit_gfx;
 
 /*
- * Font data helvr10_tf
+ * u8g2_font_helvR10_tf
  * BBX Width: 14, Height: 17, Capital A 11
  *
  * u8g2_font_helvB18_tf
  * BBX Width: 24, Height: 29, Capital A 19
+ *
+ * u8g2_font_helvB10_tf
+ * BBX Width: 14, Height: 17, Capital A 11
+ *
+ * u8g2_font_luRS12_tr
+ * BBX Width: 28, Height: 19, Capital A 12
+ *
+ * u8g2_font_luRS18_tr
+ * BBX Width: 39, Height: 28, Capital A 18
  */
 
 // Define color constants
@@ -35,7 +44,10 @@ DisplayManager::DisplayManager()
     cachedSplitTimeMs(0xFFFFFFFF),
     scrollOffset(0),
     lastScrollUpdate(0),
-    textPixelWidth(0) {
+    textPixelWidth(0),
+    startupScrollOffset(0),
+    startupLastScrollUpdate(0),
+    startupTextPixelWidth(0) {
   // Initialize data structures
   memset(&lastShotData, 0, sizeof(lastShotData));
   memset(&currentSessionData, 0, sizeof(currentSessionData));
@@ -98,14 +110,28 @@ void DisplayManager::update() {
 
   switch (currentState) {
     case DisplayState::STARTUP:
+      // Update marquee scroll position for startup message
+      if (currentTime - startupLastScrollUpdate >= SCROLL_SPEED_MS) {
+        startupScrollOffset++;
+
+        const int16_t displayWidth = PANEL_WIDTH * PANEL_CHAIN;
+        // Reset when text has scrolled completely off screen
+        if (startupScrollOffset > startupTextPixelWidth + 60) { // +60 for gap before repeat
+          startupScrollOffset = 0; // Reset to start
+        }
+
+        startupLastScrollUpdate = currentTime;
+        markDirty(false); // Mark dirty WITHOUT full clear - we'll clear just the text area
+      }
+
       // Render startup message if dirty
       if (displayDirty) {
         if (needsClear) {
           clearDisplay();
+          needsClear = false;
         }
         renderStartupMessage();
         displayDirty = false;
-        needsClear = false;
       }
 
       // Auto-transition after startup delay
@@ -127,11 +153,12 @@ void DisplayManager::update() {
           const int16_t displayWidth = PANEL_WIDTH * PANEL_CHAIN;
           // Reset when text has scrolled completely off screen
           if (scrollOffset > textPixelWidth + 60) { // +60 for gap before repeat
-            scrollOffset = -displayWidth; // Start from right edge
+            scrollOffset = 0; // Reset to start
           }
 
           lastScrollUpdate = currentTime;
-          markDirty(false); // Mark dirty without clearing to update animation
+          displayDirty = true;
+          needsClear = false;
         }
       }
 
@@ -139,10 +166,10 @@ void DisplayManager::update() {
       if (displayDirty) {
         if (needsClear) {
           clearDisplay();
+          needsClear = false;
         }
         renderConnectionStatus();
         displayDirty = false;
-        needsClear = false;
       }
       break;
 
@@ -150,10 +177,10 @@ void DisplayManager::update() {
       if (displayDirty) {
         if (needsClear) {
           clearDisplay();
+          needsClear = false;
         }
         renderWaitingForShots();
         displayDirty = false;
-        needsClear = false;
       }
       break;
 
@@ -161,10 +188,10 @@ void DisplayManager::update() {
       if (displayDirty) {
         if (needsClear) {
           clearDisplay();
+          needsClear = false;
         }
         renderShotData();
         displayDirty = false;
-        needsClear = false;
       }
       break;
 
@@ -172,10 +199,10 @@ void DisplayManager::update() {
       if (displayDirty) {
         if (needsClear) {
           clearDisplay();
+          needsClear = false;
         }
         renderSessionEnd();
         displayDirty = false;
-        needsClear = false;
       }
       break;
   }
@@ -184,6 +211,19 @@ void DisplayManager::update() {
 void DisplayManager::showStartup() {
   currentState = DisplayState::STARTUP;
   lastUpdateTime = millis();
+
+  // Reset startup scroll state
+  // Start with text at left edge (offset 0)
+  startupScrollOffset = 0;
+  startupLastScrollUpdate = millis();
+
+  // Calculate text width for scrolling
+  const char* startupText = "Pew Pew Timer. By J.K.";
+  startupTextPixelWidth = strlen(startupText) * 15;  // u8g2_font_luRS18_tr: ~15px per char
+
+  LOG_DISPLAY("Startup text: \"%s\"", startupText);
+  LOG_DISPLAY("Text length: %d chars, calculated width: %d pixels", strlen(startupText), startupTextPixelWidth);
+
   markDirty(true);  // Signal display update needed with clear
 }
 
@@ -282,13 +322,39 @@ uint16_t DisplayManager::color565(uint8_t r, uint8_t g, uint8_t b) {
 void DisplayManager::renderStartupMessage() {
   if (!display) return;
 
+  // Clear only the text area to avoid full screen flicker
+  const int16_t lineY = 28;
+  const int16_t lineTop = 10;
+  const int16_t lineHeight = 22;
+  const int16_t displayWidth = PANEL_WIDTH * PANEL_CHAIN;
+  display->fillRect(0, lineTop, displayWidth, lineHeight, 0);
+
   u8g2_for_adafruit_gfx.setFontMode(1);
   u8g2_for_adafruit_gfx.setFontDirection(0);
   u8g2_for_adafruit_gfx.setForegroundColor(DisplayColors::GREEN);
-  u8g2_for_adafruit_gfx.setFont(u8g2_font_helvR10_tf);
-  u8g2_for_adafruit_gfx.setCursor(0, 12);
-  u8g2_for_adafruit_gfx.print(F("Timer Ready"));
+  u8g2_for_adafruit_gfx.setFont(u8g2_font_luRS18_tr);
 
+  const char *startupText = "PewPewTimer By J.K.";
+
+  // If text fits on screen, just display it normally
+  if (startupTextPixelWidth <= displayWidth - 8) {
+    u8g2_for_adafruit_gfx.setCursor(2, lineY);
+    u8g2_for_adafruit_gfx.print(startupText);
+  } else {
+    // Text is too long - implement marquee scrolling
+    // Text starts at left edge (x=0) and scrolls left
+    // As scrollOffset increases, text moves left (negative x)
+    int16_t xPos = -startupScrollOffset;
+
+    // Draw first copy of text
+    u8g2_for_adafruit_gfx.setCursor(xPos, lineY);
+    u8g2_for_adafruit_gfx.print(startupText);
+
+    // Draw second copy for seamless loop
+    int16_t xPos2 = xPos + startupTextPixelWidth + 60; // +60 pixel gap
+    u8g2_for_adafruit_gfx.setCursor(xPos2, lineY);
+    u8g2_for_adafruit_gfx.print(startupText);
+  }
 }
 
 void DisplayManager::renderConnectionStatus() {
@@ -327,43 +393,42 @@ void DisplayManager::renderConnectionStatus() {
   u8g2_for_adafruit_gfx.setCursor(0, 12);
   u8g2_for_adafruit_gfx.print(statusText);
 
-  if (connectionState != DeviceConnectionState::CONNECTED || !deviceName) {
-    u8g2_for_adafruit_gfx.setCursor(0, 28);
-    u8g2_for_adafruit_gfx.print(F("Timer display by J.K."));
-  }
+  // Second line - device name with marquee scrolling or default text
+  const int16_t displayWidth = PANEL_WIDTH * PANEL_CHAIN;
+  const int16_t lineY = 28;
 
-  // Second line - device name with marquee scrolling
   if (deviceName && connectionState == DeviceConnectionState::CONNECTED) {
+    // Clear only the device name line for scrolling
+    clearConnectionDetailLine();
+
     u8g2_for_adafruit_gfx.setForegroundColor(DisplayColors::WHITE);
-    clearConnectionDetailLine();  // Prevent scrolling artifacts from previous frame
 
     // Calculate text width if not already done
     if (textPixelWidth == 0) {
-      textPixelWidth = strlen(deviceName) * 12;
+      textPixelWidth = strlen(deviceName) * 10; // More accurate estimate for helvR10
     }
 
-    const int16_t displayWidth = PANEL_WIDTH * PANEL_CHAIN; // 128 pixels
-    const int16_t lineY = 28;
     // If text fits on screen, just display it normally
     if (textPixelWidth <= displayWidth - 8) {
       u8g2_for_adafruit_gfx.setCursor(2, lineY);
       u8g2_for_adafruit_gfx.print(deviceName);
     } else {
       // Text is too long - implement marquee scrolling
-      // (Scroll position is updated in update() method)
+      // Text starts at left and scrolls left
+      int16_t xPos = -scrollOffset;
 
-      // Draw text at scrolled position
-      int16_t xPos = displayWidth - scrollOffset;
+      // Draw first copy of text
       u8g2_for_adafruit_gfx.setCursor(xPos, lineY);
       u8g2_for_adafruit_gfx.print(deviceName);
 
-      // If we're near the end, draw another copy for seamless loop
-      if (scrollOffset > textPixelWidth) {
-        int16_t xPos2 = xPos + textPixelWidth + 60; // +60 pixel gap
-        u8g2_for_adafruit_gfx.setCursor(xPos2, lineY);
-        u8g2_for_adafruit_gfx.print(deviceName);
-      }
+      // Draw second copy for seamless loop
+      int16_t xPos2 = xPos + textPixelWidth + 60; // +60 pixel gap
+      u8g2_for_adafruit_gfx.setCursor(xPos2, lineY);
+      u8g2_for_adafruit_gfx.print(deviceName);
     }
+  } else {
+    u8g2_for_adafruit_gfx.setCursor(0, lineY);
+    u8g2_for_adafruit_gfx.print(F("PewPewTimer by J.K."));
   }
 }
 

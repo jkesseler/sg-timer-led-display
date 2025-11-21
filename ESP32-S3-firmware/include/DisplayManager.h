@@ -48,10 +48,16 @@ private:
   uint32_t cachedAbsoluteTimeMs;
   uint32_t cachedSplitTimeMs;
 
-  // Marquee scrolling state
+  // Marquee scrolling state (for device name in CONNECTED state)
   int16_t scrollOffset;
   unsigned long lastScrollUpdate;
   int16_t textPixelWidth;
+
+  // Marquee scrolling state for startup message
+  int16_t startupScrollOffset;
+  unsigned long startupLastScrollUpdate;
+  int16_t startupTextPixelWidth;
+
   static const uint16_t SCROLL_SPEED_MS = 25;  // Update scroll every 25ms
   static const uint16_t SCROLL_PAUSE_MS = 1000; // Pause at start/end
 

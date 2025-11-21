@@ -10,6 +10,7 @@ TimerApplication::TimerApplication()
     lastShotTime(0),
     lastScanAttempt(0),
     isScanning(false),
+    startupTime(0),
     lastHealthCheck(0),
     lastActivityTime(0) {
 }
@@ -38,6 +39,7 @@ bool TimerApplication::initialize() {
   LOG_SYSTEM("Ready to scan for timer devices (SG Timer or Special Pie Timer)");
 
   LOG_SYSTEM("Application initialized successfully");
+  startupTime = millis();
   lastActivityTime = millis();
   return true;
 }
@@ -226,6 +228,11 @@ bool TimerApplication::isInitialized() const {
 
 void TimerApplication::scanForDevices() {
   unsigned long now = millis();
+
+  // Don't scan during startup message display period
+  if (now - startupTime < STARTUP_MESSAGE_DELAY) {
+    return;
+  }
 
   // Throttle scan attempts
   if (isScanning || (now - lastScanAttempt < 5000)) {
