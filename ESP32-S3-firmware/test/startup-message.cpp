@@ -67,7 +67,7 @@ void setup() {
 
   // Calculate text width
   const char* startupText = "Pew Pew Timer. By J.K. technical solutions";
-  startupTextPixelWidth = strlen(startupText) * 15;  // Average 15px per character
+  startupTextPixelWidth = u8g2_for_adafruit_gfx.getUTF8Width(startupText);  // Accurate pixel width
 
   Serial.printf("Text: \"%s\"\n", startupText);
   Serial.printf("Text length: %d characters\n", strlen(startupText));
