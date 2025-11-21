@@ -114,7 +114,6 @@ void DisplayManager::update() {
       if (currentTime - startupLastScrollUpdate >= SCROLL_SPEED_MS) {
         startupScrollOffset++;
 
-        const int16_t displayWidth = PANEL_WIDTH * PANEL_CHAIN;
         // Reset when text has scrolled completely off screen
         if (startupScrollOffset > startupTextPixelWidth + 60) { // +60 for gap before repeat
           startupScrollOffset = 0; // Reset to start
