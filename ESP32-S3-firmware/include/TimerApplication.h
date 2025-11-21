@@ -24,6 +24,7 @@ private:
   // Device scanning state
   unsigned long lastScanAttempt;
   bool isScanning;
+  unsigned long startupTime;  // Track when app started for startup delay
 
   // Health monitoring
   unsigned long lastHealthCheck;

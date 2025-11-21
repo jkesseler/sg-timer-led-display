@@ -39,12 +39,30 @@ private:
   DeviceConnectionState connectionState;
   const char* deviceName;
 
-  // Marquee scrolling state
+  // Dirty flag pattern - signals when display needs update
+  bool displayDirty;
+  bool needsClear;  // Signals that display should be cleared before next render
+
+  // Cached display values for renderShotData to detect changes
+  uint16_t cachedShotNumber;
+  uint32_t cachedAbsoluteTimeMs;
+  uint32_t cachedSplitTimeMs;
+
+  // Marquee scrolling state (for device name in CONNECTED state)
   int16_t scrollOffset;
   unsigned long lastScrollUpdate;
   int16_t textPixelWidth;
-  static const uint16_t SCROLL_SPEED_MS = 25;  // Update scroll every 50ms
+
+  // Marquee scrolling state for startup message
+  int16_t startupScrollOffset;
+  unsigned long startupLastScrollUpdate;
+  int16_t startupTextPixelWidth;
+
+  static const uint16_t SCROLL_SPEED_MS = 25;  // Update scroll every 25ms
   static const uint16_t SCROLL_PAUSE_MS = 1000; // Pause at start/end
+
+  // Signal that display needs to be redrawn
+  void markDirty(bool clearFirst = true);
 
   // Internal display methods
   void renderStartupMessage();
@@ -53,6 +71,7 @@ private:
   void renderShotData();
   void renderSessionEnd();
   void clearDisplay();
+  void clearConnectionDetailLine();
 
   // Helper methods
   void formatTime(uint32_t timeMs, char* buffer, size_t bufferSize);

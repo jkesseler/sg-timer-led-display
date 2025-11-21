@@ -446,7 +446,7 @@ void SGTimerDevice::processTimerData(uint8_t* pData, size_t length) {
           // Create normalized shot data
           NormalizedShotData shotData;
           shotData.sessionId = sess_id;
-          shotData.shotNumber = shot_num;
+          shotData.shotNumber = shot_num + 1;  // SG Timer reports 0-based, convert to 1-based
           shotData.absoluteTimeMs = shot_time_ms;
           shotData.splitTimeMs = splitTime;
           shotData.timestampMs = millis();
