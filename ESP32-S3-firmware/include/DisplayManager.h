@@ -65,6 +65,7 @@ private:
   void renderShotData();
   void renderSessionEnd();
   void clearDisplay();
+  void clearConnectionDetailLine();
 
   // Helper methods
   void formatTime(uint32_t timeMs, char* buffer, size_t bufferSize);

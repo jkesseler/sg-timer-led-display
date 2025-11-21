@@ -5,6 +5,14 @@
 
 U8G2_FOR_ADAFRUIT_GFX u8g2_for_adafruit_gfx;
 
+/*
+ * Font data helvr10_tf
+ * BBX Width: 14, Height: 17, Capital A 11
+ *
+ * u8g2_font_helvB18_tf
+ * BBX Width: 24, Height: 29, Capital A 19
+ */
+
 // Define color constants
 const uint16_t DisplayColors::RED = 0xF800;        // 255, 0, 0
 const uint16_t DisplayColors::GREEN = 0x07E0;      // 0, 255, 0
@@ -253,6 +261,17 @@ void DisplayManager::clearDisplay() {
   }
 }
 
+void DisplayManager::clearConnectionDetailLine() {
+  if (!display) {
+    return;
+  }
+
+  const int16_t displayWidth = PANEL_WIDTH * PANEL_CHAIN;
+  const int16_t lineTop = 16;   // Covers baseline at y=28 for helvR10 font
+  const int16_t lineHeight = 16;
+  display->fillRect(0, lineTop, displayWidth, lineHeight, 0);
+}
+
 uint16_t DisplayManager::color565(uint8_t r, uint8_t g, uint8_t b) {
   if (display) {
     return display->color565(r, g, b);
@@ -308,9 +327,15 @@ void DisplayManager::renderConnectionStatus() {
   u8g2_for_adafruit_gfx.setCursor(0, 12);
   u8g2_for_adafruit_gfx.print(statusText);
 
+  if (connectionState != DeviceConnectionState::CONNECTED || !deviceName) {
+    u8g2_for_adafruit_gfx.setCursor(0, 28);
+    u8g2_for_adafruit_gfx.print(F("Timer display by J.K."));
+  }
+
   // Second line - device name with marquee scrolling
   if (deviceName && connectionState == DeviceConnectionState::CONNECTED) {
     u8g2_for_adafruit_gfx.setForegroundColor(DisplayColors::WHITE);
+    clearConnectionDetailLine();  // Prevent scrolling artifacts from previous frame
 
     // Calculate text width if not already done
     if (textPixelWidth == 0) {
@@ -319,7 +344,6 @@ void DisplayManager::renderConnectionStatus() {
 
     const int16_t displayWidth = PANEL_WIDTH * PANEL_CHAIN; // 128 pixels
     const int16_t lineY = 28;
-
     // If text fits on screen, just display it normally
     if (textPixelWidth <= displayWidth - 8) {
       u8g2_for_adafruit_gfx.setCursor(2, lineY);
@@ -353,6 +377,7 @@ void DisplayManager::renderWaitingForShots() {
   u8g2_for_adafruit_gfx.setFont(u8g2_font_helvR10_tf);
   u8g2_for_adafruit_gfx.setCursor(0, 12);
   u8g2_for_adafruit_gfx.print(F("Shots: 0"));
+
   u8g2_for_adafruit_gfx.setCursor(0, 28);
   u8g2_for_adafruit_gfx.print(F("Split: 0:00"));
 
@@ -373,7 +398,7 @@ void DisplayManager::renderShotData() {
   u8g2_for_adafruit_gfx.setFont(u8g2_font_helvR10_tf);
   u8g2_for_adafruit_gfx.setForegroundColor(DisplayColors::YELLOW);
   u8g2_for_adafruit_gfx.setCursor(0, 12);
-  snprintf(shotBuffer, sizeof(shotBuffer), "Shots: %d", lastShotData.shotNumber + 1);
+  snprintf(shotBuffer, sizeof(shotBuffer), "Shots: %d", lastShotData.shotNumber);
   u8g2_for_adafruit_gfx.print(shotBuffer);
 
   u8g2_for_adafruit_gfx.setCursor(0, 28);
@@ -390,12 +415,17 @@ void DisplayManager::renderSessionEnd() {
   if (!display) return;
 
   char timeBuffer[16];
+  char shotBuffer[32];
   formatTime(lastShotData.absoluteTimeMs, timeBuffer, sizeof(timeBuffer));
 
-  u8g2_for_adafruit_gfx.setFont(u8g2_font_helvB18_tf);
+  u8g2_for_adafruit_gfx.setFont(u8g2_font_helvR10_tf);
   u8g2_for_adafruit_gfx.setForegroundColor(DisplayColors::RED);
-  u8g2_for_adafruit_gfx.setCursor(1, 25);
-  u8g2_for_adafruit_gfx.print(F("END:"));
+  u8g2_for_adafruit_gfx.setCursor(0, 12);
+  u8g2_for_adafruit_gfx.print(F("ENDED"));
+
+  u8g2_for_adafruit_gfx.setCursor(0, 28);
+  snprintf(shotBuffer, sizeof(shotBuffer), "Shots: %d", lastShotData.shotNumber);
+  u8g2_for_adafruit_gfx.print(shotBuffer);
 
   u8g2_for_adafruit_gfx.setFont(u8g2_font_helvB18_tf);
   u8g2_for_adafruit_gfx.setForegroundColor(DisplayColors::RED);
