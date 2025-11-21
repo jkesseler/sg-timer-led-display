@@ -218,7 +218,7 @@ void DisplayManager::showStartup() {
 
   // Calculate text width for scrolling
   const char* startupText = "Pew Pew Timer. By J.K.";
-  startupTextPixelWidth = strlen(startupText) * 15;  // u8g2_font_luRS18_tr: ~15px per char
+  startupTextPixelWidth = u8g2_for_adafruit_gfx.getUTF8Width(startupText);  // Accurate pixel width for proportional font
 
   LOG_DISPLAY("Startup text: \"%s\"", startupText);
   LOG_DISPLAY("Text length: %d chars, calculated width: %d pixels", strlen(startupText), startupTextPixelWidth);
