@@ -232,7 +232,15 @@ void DisplayManager::showConnectionState(DeviceConnectionState state, const char
   // Reset scroll when state changes
   scrollOffset = 0;
   lastScrollUpdate = millis();
-  textPixelWidth = 0;
+  
+  // Calculate text width if device name is provided
+  // Must be done here so the marquee scroll logic in update() works correctly on first render
+  if (deviceName) {
+    u8g2_for_adafruit_gfx.setFont(u8g2_font_helvR10_tf);
+    textPixelWidth = u8g2_for_adafruit_gfx.getUTF8Width(deviceName);
+  } else {
+    textPixelWidth = 0;
+  }
 
   switch (state) {
     case DeviceConnectionState::DISCONNECTED:
@@ -401,11 +409,6 @@ void DisplayManager::renderConnectionStatus() {
     clearConnectionDetailLine();
 
     u8g2_for_adafruit_gfx.setForegroundColor(DisplayColors::WHITE);
-
-    // Calculate text width if not already done
-    if (textPixelWidth == 0) {
-      textPixelWidth = strlen(deviceName) * 10; // More accurate estimate for helvR10
-    }
 
     // If text fits on screen, just display it normally
     if (textPixelWidth <= displayWidth - 8) {
