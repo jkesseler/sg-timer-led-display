@@ -218,8 +218,8 @@ void DisplayManager::showStartup() {
   startupLastScrollUpdate = millis();
 
   // Calculate text width for scrolling
-  const char* startupText = "Pew Pew Timer. By J.K.";
-  startupTextPixelWidth = strlen(startupText) * 15;  // u8g2_font_luRS18_tr: ~15px per char
+  const char *startupText = STARTUP_TEXT;
+  startupTextPixelWidth = u8g2_for_adafruit_gfx.getUTF8Width(startupText);
 
   LOG_DISPLAY("Startup text: \"%s\"", startupText);
   LOG_DISPLAY("Text length: %d chars, calculated width: %d pixels", strlen(startupText), startupTextPixelWidth);
@@ -334,7 +334,7 @@ void DisplayManager::renderStartupMessage() {
   u8g2_for_adafruit_gfx.setForegroundColor(DisplayColors::GREEN);
   u8g2_for_adafruit_gfx.setFont(u8g2_font_luRS18_tr);
 
-  const char *startupText = "PewPewTimer By J.K.";
+  const char *startupText = STARTUP_TEXT;
 
   // If text fits on screen, just display it normally
   if (startupTextPixelWidth <= displayWidth - 8) {
@@ -405,7 +405,7 @@ void DisplayManager::renderConnectionStatus() {
 
     // Calculate text width if not already done
     if (textPixelWidth == 0) {
-      textPixelWidth = strlen(deviceName) * 10; // More accurate estimate for helvR10
+      textPixelWidth = u8g2_for_adafruit_gfx.getUTF8Width(deviceName);
     }
 
     // If text fits on screen, just display it normally
@@ -428,7 +428,7 @@ void DisplayManager::renderConnectionStatus() {
     }
   } else {
     u8g2_for_adafruit_gfx.setCursor(0, lineY);
-    u8g2_for_adafruit_gfx.print(F("PewPewTimer by J.K."));
+    u8g2_for_adafruit_gfx.print(F(STARTUP_TEXT));
   }
 }
 
