@@ -34,6 +34,7 @@ private:
   // Event handlers
   void onShotDetected(const NormalizedShotData& shotData);
   void onSessionStarted(const SessionData& sessionData);
+  void onCountdownComplete(const SessionData& sessionData);
   void onSessionStopped(const SessionData& sessionData);
   void onSessionSuspended(const SessionData& sessionData);
   void onSessionResumed(const SessionData& sessionData);

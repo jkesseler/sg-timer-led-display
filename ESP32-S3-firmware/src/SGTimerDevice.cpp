@@ -94,6 +94,10 @@ void SGTimerDevice::onSessionStarted(std::function<void(const SessionData&)> cal
   sessionStartedCallback = callback;
 }
 
+void SGTimerDevice::onCountdownComplete(std::function<void(const SessionData&)> callback) {
+  countdownCompleteCallback = callback;
+}
+
 void SGTimerDevice::onSessionStopped(std::function<void(const SessionData&)> callback) {
   sessionStoppedCallback = callback;
 }
@@ -452,7 +456,12 @@ void SGTimerDevice::processTimerData(uint8_t* pData, size_t length) {
       case SGTimerEvent::SESSION_SET_BEGIN:
         if (length >= 6) {
           uint32_t sess_id = (pData[2] << 24) | (pData[3] << 16) | (pData[4] << 8) | pData[5];
-          LOG_DEBUG("SG-TIMER", "SESSION_SET_BEGIN - ID: %u", sess_id);
+          LOG_TIMER("SESSION_SET_BEGIN - ID: %u (countdown complete)", sess_id);
+
+          // Notify callback that countdown has completed
+          if (countdownCompleteCallback) {
+            countdownCompleteCallback(currentSession);
+          }
         }
         break;
 

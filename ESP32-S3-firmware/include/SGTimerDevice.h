@@ -50,6 +50,7 @@ private:
   // Callbacks
   std::function<void(const NormalizedShotData&)> shotDetectedCallback;
   std::function<void(const SessionData&)> sessionStartedCallback;
+  std::function<void(const SessionData&)> countdownCompleteCallback;
   std::function<void(const SessionData&)> sessionStoppedCallback;
   std::function<void(const SessionData&)> sessionSuspendedCallback;
   std::function<void(const SessionData&)> sessionResumedCallback;
@@ -83,6 +84,7 @@ public:
 
   void onShotDetected(std::function<void(const NormalizedShotData&)> callback) override;
   void onSessionStarted(std::function<void(const SessionData&)> callback) override;
+  void onCountdownComplete(std::function<void(const SessionData&)> callback) override;
   void onSessionStopped(std::function<void(const SessionData&)> callback) override;
   void onSessionSuspended(std::function<void(const SessionData&)> callback) override;
   void onSessionResumed(std::function<void(const SessionData&)> callback) override;

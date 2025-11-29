@@ -37,6 +37,8 @@ DisplayManager::DisplayManager()
     lastUpdateTime(0),
     connectionState(DeviceConnectionState::DISCONNECTED),
     deviceName(nullptr),
+    countdownStartTime(0),
+    countdownDurationSeconds(0.0f),
     displayDirty(true),
     needsClear(true),
     cachedShotNumber(0xFFFF),
@@ -173,6 +175,19 @@ void DisplayManager::update() {
       }
       break;
 
+    case DisplayState::COUNTDOWN:
+      // Update countdown display frequently for smooth countdown
+      if (displayDirty || currentTime - lastUpdateTime >= 100) {  // Update every 100ms
+        if (needsClear) {
+          clearDisplay();
+          needsClear = false;
+        }
+        renderCountdown();
+        displayDirty = false;
+        lastUpdateTime = currentTime;
+      }
+      break;
+
     case DisplayState::WAITING_FOR_SHOTS:
       if (displayDirty) {
         if (needsClear) {
@@ -257,6 +272,16 @@ void DisplayManager::showConnectionState(DeviceConnectionState state, const char
 
   lastUpdateTime = millis();
   markDirty(true);  // Signal display update needed with clear
+}
+
+void DisplayManager::showCountdown(const SessionData& sessionData) {
+  currentState = DisplayState::COUNTDOWN;
+  currentSessionData = sessionData;
+  countdownStartTime = millis();
+  countdownDurationSeconds = sessionData.startDelaySeconds;
+  lastUpdateTime = millis();
+  markDirty(true);  // Signal display update needed with clear
+  LOG_DISPLAY("Starting countdown: %.1fs", countdownDurationSeconds);
 }
 
 void DisplayManager::showWaitingForShots(const SessionData& sessionData) {
@@ -436,6 +461,58 @@ void DisplayManager::renderConnectionStatus() {
     u8g2_for_adafruit_gfx.setCursor(0, lineY);
     u8g2_for_adafruit_gfx.print(F(STARTUP_TEXT));
   }
+}
+
+void DisplayManager::renderCountdown() {
+  if (!display) return;
+
+  // Calculate remaining time
+  unsigned long elapsedMs = millis() - countdownStartTime;
+  float elapsedSeconds = elapsedMs / 1000.0f;
+  float remainingSeconds = countdownDurationSeconds - elapsedSeconds;
+
+  // Ensure we don't show negative values
+  if (remainingSeconds < 0) {
+    remainingSeconds = 0;
+  }
+
+  u8g2_for_adafruit_gfx.setFontMode(1);
+  u8g2_for_adafruit_gfx.setFontDirection(0);
+
+  // Header text
+  u8g2_for_adafruit_gfx.setForegroundColor(DisplayColors::YELLOW);
+  u8g2_for_adafruit_gfx.setFont(u8g2_font_helvR10_tf);
+  u8g2_for_adafruit_gfx.setCursor(0, 12);
+  u8g2_for_adafruit_gfx.print(F("READY"));
+
+  // Large countdown timer
+  char timeBuffer[16];
+  if (remainingSeconds >= 10.0f) {
+    snprintf(timeBuffer, sizeof(timeBuffer), "%.1f", remainingSeconds);
+  } else {
+    snprintf(timeBuffer, sizeof(timeBuffer), "%.2f", remainingSeconds);
+  }
+
+  // Use large font for countdown - color changes based on time remaining
+  uint16_t countdownColor;
+  if (remainingSeconds > 3.0f) {
+    countdownColor = DisplayColors::GREEN;  // Green for most of countdown
+  } else if (remainingSeconds > 1.0f) {
+    countdownColor = DisplayColors::YELLOW; // Yellow for warning
+  } else {
+    countdownColor = DisplayColors::RED;    // Red for final second
+  }
+
+  u8g2_for_adafruit_gfx.setForegroundColor(countdownColor);
+  u8g2_for_adafruit_gfx.setFont(u8g2_font_luRS18_tr);
+
+  // Center the countdown number
+  int16_t textWidth = strlen(timeBuffer) * 18;  // Approximate width
+  int16_t xPos = (PANEL_WIDTH * PANEL_CHAIN - textWidth) / 2;
+  if (xPos < 0) xPos = 0;
+
+  u8g2_for_adafruit_gfx.setCursor(xPos, 30);
+  u8g2_for_adafruit_gfx.print(timeBuffer);
 }
 
 void DisplayManager::renderWaitingForShots() {

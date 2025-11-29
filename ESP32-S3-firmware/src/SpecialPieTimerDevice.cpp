@@ -93,6 +93,10 @@ void SpecialPieTimerDevice::onSessionStarted(std::function<void(const SessionDat
   sessionStartedCallback = callback;
 }
 
+void SpecialPieTimerDevice::onCountdownComplete(std::function<void(const SessionData&)> callback) {
+  countdownCompleteCallback = callback;
+}
+
 void SpecialPieTimerDevice::onSessionStopped(std::function<void(const SessionData&)> callback) {
   sessionStoppedCallback = callback;
 }
@@ -310,9 +314,14 @@ void SpecialPieTimerDevice::processTimerData(uint8_t* pData, size_t length) {
         previousTimeSeconds = 0;
         previousTimeCentiseconds = 0;
 
-        // Notify callback
+        // Notify callbacks
         if (sessionStartedCallback) {
           sessionStartedCallback(currentSession);
+        }
+
+        // Special Pie doesn't have a separate countdown - immediately signal ready
+        if (countdownCompleteCallback) {
+          countdownCompleteCallback(currentSession);
         }
       }
       break;

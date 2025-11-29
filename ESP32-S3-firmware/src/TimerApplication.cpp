@@ -80,6 +80,10 @@ void TimerApplication::setupCallbacks() {
     onSessionStarted(sessionData);
   });
 
+  device->onCountdownComplete([this](const SessionData& sessionData) {
+    onCountdownComplete(sessionData);
+  });
+
   device->onSessionStopped([this](const SessionData& sessionData) {
     onSessionStopped(sessionData);
   });
@@ -111,11 +115,24 @@ void TimerApplication::onShotDetected(const NormalizedShotData& shotData) {
 }
 
 void TimerApplication::onSessionStarted(const SessionData& sessionData) {
-  LOG_TIMER("Session started: ID %u", sessionData.sessionId);
+  LOG_TIMER("Session started: ID %u, Countdown: %.1fs", sessionData.sessionId, sessionData.startDelaySeconds);
 
   sessionActive = true;
   lastShotNumber = 0;
   lastShotTime = 0;
+
+  if (displayManager) {
+    // Show countdown if there's a delay, otherwise go straight to waiting
+    if (sessionData.startDelaySeconds > 0.0f) {
+      displayManager->showCountdown(sessionData);
+    } else {
+      displayManager->showWaitingForShots(sessionData);
+    }
+  }
+}
+
+void TimerApplication::onCountdownComplete(const SessionData& sessionData) {
+  LOG_TIMER("Countdown complete - ready for shots");
 
   if (displayManager) {
     displayManager->showWaitingForShots(sessionData);

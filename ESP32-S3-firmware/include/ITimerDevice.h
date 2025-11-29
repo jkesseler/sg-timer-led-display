@@ -54,6 +54,7 @@ public:
   // Callback registration
   virtual void onShotDetected(std::function<void(const NormalizedShotData&)> callback) = 0;
   virtual void onSessionStarted(std::function<void(const SessionData&)> callback) = 0;
+  virtual void onCountdownComplete(std::function<void(const SessionData&)> callback) = 0;  // Called when start delay countdown ends
   virtual void onSessionStopped(std::function<void(const SessionData&)> callback) = 0;
   virtual void onSessionSuspended(std::function<void(const SessionData&)> callback) = 0;
   virtual void onSessionResumed(std::function<void(const SessionData&)> callback) = 0;
