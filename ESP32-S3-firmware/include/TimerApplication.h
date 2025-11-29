@@ -29,6 +29,7 @@ private:
   // Health monitoring
   unsigned long lastHealthCheck;
   unsigned long lastActivityTime;
+  bool hadDeviceConnected;  // Track if we ever had a device to distinguish "no device" from "lost device"
 
   // Event handlers
   void onShotDetected(const NormalizedShotData& shotData);

@@ -12,7 +12,8 @@ TimerApplication::TimerApplication()
     isScanning(false),
     startupTime(0),
     lastHealthCheck(0),
-    lastActivityTime(0) {
+    lastActivityTime(0),
+    hadDeviceConnected(false) {
 }
 
 TimerApplication::~TimerApplication() {
@@ -153,6 +154,11 @@ void TimerApplication::onConnectionStateChanged(DeviceConnectionState state) {
   LOG_BLE("Connection state changed: %d", (int)state);
   updateActivityTime();
 
+  // Track successful connections
+  if (state == DeviceConnectionState::CONNECTED) {
+    hadDeviceConnected = true;
+  }
+
   // Update display based on connection state
   if (state == DeviceConnectionState::DISCONNECTED) {
     if (sessionActive) {
@@ -191,8 +197,10 @@ void TimerApplication::performHealthCheck() {
       LOG_ERROR("HEALTH", "Display manager is not healthy");
     }
 
-    if (!timerHealthy) {
-      LOG_ERROR("HEALTH", "Timer device is not healthy");
+    // Only log timer error if we had a device and lost it
+    // Don't log when we're just scanning for the first time
+    if (!timerHealthy && hadDeviceConnected) {
+      LOG_ERROR("HEALTH", "Timer device lost connection");
     }
 
     // Check for activity timeout (no BLE activity for too long)

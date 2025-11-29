@@ -6,6 +6,16 @@
 #include <BLEUtils.h>
 #include <BLEScan.h>
 
+// SG Timer Protocol Event IDs (from BLE API 3.2)
+enum class SGTimerEvent : uint8_t {
+  SESSION_STARTED = 0x00,
+  SESSION_SUSPENDED = 0x01,
+  SESSION_RESUMED = 0x02,
+  SESSION_STOPPED = 0x03,
+  SHOT_DETECTED = 0x04,
+  SESSION_SET_BEGIN = 0x05
+};
+
 class SGTimerDevice : public ITimerDevice {
 private:
   // SG Timer specific configuration

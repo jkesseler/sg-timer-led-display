@@ -148,12 +148,12 @@ void SpecialPieTimerDevice::update() {
     if (pClient && pClient->isConnected()) {
       // Print heartbeat every 30 seconds
       if (millis() - lastHeartbeat > 30000) {
-        Serial.printf("[SPECIAL-PIE] Connected - waiting for events...\n");
+        LOG_BLE("Special Pie Timer connected - waiting for events");
         lastHeartbeat = millis();
       }
     } else {
       // Connection lost
-      Serial.println("\n!!! Connection lost !!!");
+      LOG_WARN("SPECIAL-PIE", "Connection lost");
       isConnectedFlag = false;
       pService = nullptr;
       pNotifyCharacteristic = nullptr;
@@ -170,7 +170,7 @@ void SpecialPieTimerDevice::update() {
       // Reset session tracking
       currentSession = {};
 
-      Serial.println("Will attempt to reconnect...\n");
+      LOG_BLE("Will attempt to reconnect");
     }
   }
   // Note: Scanning is handled by TimerApplication for multi-device support
@@ -179,30 +179,30 @@ void SpecialPieTimerDevice::update() {
 bool SpecialPieTimerDevice::attemptConnection(BLEAdvertisedDevice* device) {
   if (!device) return false;
 
-  Serial.printf("Special Pie Timer found: %s (%s)\n",
-                device->getName().c_str(),
-                device->getAddress().toString().c_str());
+  LOG_BLE("Special Pie Timer found: %s (%s)",
+          device->getName().c_str(),
+          device->getAddress().toString().c_str());
 
   // Store device info
   deviceAddress = device->getAddress();
   deviceName = device->getName().c_str();
 
   // Wait before attempting connection
-  Serial.println("Waiting 2 seconds before connecting...");
+  LOG_BLE("Waiting 2 seconds before connecting");
   delay(2000);
 
   setConnectionState(DeviceConnectionState::CONNECTING);
   pClient = BLEDevice::createClient();
 
   if (!pClient) {
-    Serial.println("ERROR: Failed to create client");
+    LOG_ERROR("SPECIAL-PIE", "Failed to create BLE client");
     setConnectionState(DeviceConnectionState::ERROR);
     return false;
   }
 
-  Serial.println("Attempting connection...");
+  LOG_BLE("Attempting connection");
   if (pClient->connect(device)) {
-    Serial.println("Connected to device!");
+    LOG_BLE("Connected to device");
     BLEUUID serviceUuid(SERVICE_UUID);
     pService = pClient->getService(serviceUuid);
 
@@ -216,37 +216,36 @@ bool SpecialPieTimerDevice::attemptConnection(BLEAdvertisedDevice* device) {
 
         // Check if characteristic can notify
         if (pNotifyCharacteristic->canNotify()) {
-          Serial.println("Registering for notifications...");
+          LOG_BLE("Registering for notifications");
           pNotifyCharacteristic->registerForNotify(notifyCallback);
-          Serial.println("SUCCESS: Registered for notifications!");
-          Serial.println("Listening for events indefinitely...\n");
+          LOG_BLE("Successfully registered for notifications - listening for events");
           isConnectedFlag = true;
           lastHeartbeat = millis();
           setConnectionState(DeviceConnectionState::CONNECTED);
           return true;
         } else {
-          Serial.println("ERROR: Characteristic cannot notify");
+          LOG_ERROR("SPECIAL-PIE", "Characteristic cannot notify");
           pClient->disconnect();
           delete pClient;
           pClient = nullptr;
           setConnectionState(DeviceConnectionState::ERROR);
         }
       } else {
-        Serial.println("ERROR: FFF1 characteristic not found");
+        LOG_ERROR("SPECIAL-PIE", "FFF1 characteristic not found");
         pClient->disconnect();
         delete pClient;
         pClient = nullptr;
         setConnectionState(DeviceConnectionState::ERROR);
       }
     } else {
-      Serial.println("ERROR: Service not found");
+      LOG_ERROR("SPECIAL-PIE", "Service not found");
       pClient->disconnect();
       delete pClient;
       pClient = nullptr;
       setConnectionState(DeviceConnectionState::ERROR);
     }
   } else {
-    Serial.println("ERROR: Failed to connect");
+    LOG_ERROR("SPECIAL-PIE", "Failed to connect");
     delete pClient;
     pClient = nullptr;
     setConnectionState(DeviceConnectionState::ERROR);
@@ -273,11 +272,13 @@ void SpecialPieTimerDevice::notifyCallback(BLERemoteCharacteristic* pBLERemoteCh
 }
 
 void SpecialPieTimerDevice::processTimerData(uint8_t* pData, size_t length) {
-  Serial.printf("\n*** Notification received (%d bytes): ", length);
-  for (size_t i = 0; i < length; i++) {
-    Serial.printf("%02X ", pData[i]);
+  if (Logger::getLevel() <= LogLevel::DEBUG) {
+    LOG_DEBUG("SPECIAL-PIE", "Notification received (%d bytes)", length);
+    for (size_t i = 0; i < length; i++) {
+      Serial.printf("%02X ", pData[i]);
+    }
+    Serial.println();
   }
-  Serial.println();
 
   // Special Pie Timer Protocol:
   // [F8] [F9] [MESSAGE_TYPE] [DATA...] [F9] [F8]
@@ -285,20 +286,17 @@ void SpecialPieTimerDevice::processTimerData(uint8_t* pData, size_t length) {
   // Validate frame markers
   if (length < 6 || pData[0] != 0xF8 || pData[1] != 0xF9 ||
       pData[length - 2] != 0xF9 || pData[length - 1] != 0xF8) {
-    Serial.println("WARNING: Invalid frame markers");
+    LOG_WARN("SPECIAL-PIE", "Invalid frame markers");
     return;
   }
 
-  uint8_t messageType = pData[2];
-
-  Serial.printf("Message Type: 0x%02X - ", messageType);
+  SpecialPieMessageType messageType = static_cast<SpecialPieMessageType>(pData[2]);
 
   switch (messageType) {
-    case 0x34: // SESSION_START (52 decimal)
-      Serial.println("SESSION_START");
+    case SpecialPieMessageType::SESSION_START:
       if (length >= 6) {
         currentSessionId = pData[3];
-        Serial.printf("  Session ID: 0x%02X\n", currentSessionId);
+        LOG_TIMER("SESSION_START - ID: 0x%02X", currentSessionId);
 
         // Update session state
         currentSession.sessionId = currentSessionId;
@@ -319,11 +317,10 @@ void SpecialPieTimerDevice::processTimerData(uint8_t* pData, size_t length) {
       }
       break;
 
-    case 0x18: // SESSION_STOP (24 decimal)
-      Serial.println("SESSION_STOP");
+    case SpecialPieMessageType::SESSION_STOP:
       if (length >= 6) {
         uint8_t sessionId = pData[3];
-        Serial.printf("  Session ID: 0x%02X\n", sessionId);
+        LOG_TIMER("SESSION_STOP - ID: 0x%02X", sessionId);
 
         currentSession.isActive = false;
         sessionActiveFlag = false;
@@ -335,8 +332,7 @@ void SpecialPieTimerDevice::processTimerData(uint8_t* pData, size_t length) {
       }
       break;
 
-    case 0x36: // SHOT_DETECTED (54 decimal)
-      Serial.println("SHOT_DETECTED");
+    case SpecialPieMessageType::SHOT_DETECTED:
       if (length >= 10) {
         // Protocol format: F8 F9 36 00 [SEC] [CS] [SHOT#] [CHECKSUM?] F9 F8
         // Byte 4: Seconds
@@ -347,8 +343,7 @@ void SpecialPieTimerDevice::processTimerData(uint8_t* pData, size_t length) {
         uint32_t currentCentiseconds = pData[5];
         uint8_t shotNumber = pData[6];
 
-        // Format time as seconds.centiseconds
-        Serial.printf("  Shot #%u: %u.%02u\n", shotNumber, currentSeconds, currentCentiseconds);
+        LOG_DEBUG("SPECIAL-PIE", "SHOT_DETECTED #%u: %u.%02u", shotNumber, currentSeconds, currentCentiseconds);
 
         // Calculate split time if we have a previous shot
         uint32_t splitTimeMs = 0;
@@ -367,7 +362,7 @@ void SpecialPieTimerDevice::processTimerData(uint8_t* pData, size_t length) {
           // Convert to milliseconds (centiseconds = 10ms)
           splitTimeMs = (deltaSeconds * 1000) + (deltaCentiseconds * 10);
 
-          Serial.printf("  Split: %d.%02d\n", deltaSeconds, deltaCentiseconds);
+          LOG_DEBUG("SPECIAL-PIE", "Split: %d.%02d", deltaSeconds, deltaCentiseconds);
         }
 
         // Store current shot as previous for next split calculation
@@ -399,7 +394,7 @@ void SpecialPieTimerDevice::processTimerData(uint8_t* pData, size_t length) {
       break;
 
     default:
-      Serial.println("UNKNOWN");
+      LOG_WARN("SPECIAL-PIE", "Unknown message type: 0x%02X", static_cast<uint8_t>(messageType));
       break;
   }
 }

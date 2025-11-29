@@ -40,7 +40,13 @@
 
 #define BRIGHTNESS_UPDATE_INTERVAL 200  // Update brightness every 200ms (in milliseconds)
 #define MAIN_LOOP_DELAY 20             // Main loop delay in milliseconds
-#define STARTUP_MESSAGE_DELAY 20000      // How long to show startup message
+
+// Startup message delay - shorter for debug builds to speed up development
+#ifdef DEBUG_BUILD
+  #define STARTUP_MESSAGE_DELAY 2000   // 2 seconds for debug builds
+#else
+  #define STARTUP_MESSAGE_DELAY 20000  // 20 seconds for production builds
+#endif
 
 // =============================================================================
 // Serial Communication

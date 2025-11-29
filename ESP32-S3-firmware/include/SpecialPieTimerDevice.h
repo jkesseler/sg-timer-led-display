@@ -6,6 +6,13 @@
 #include <BLEUtils.h>
 #include <BLEScan.h>
 
+// Special Pie Timer Protocol Message Types
+enum class SpecialPieMessageType : uint8_t {
+  SESSION_STOP = 0x18,    // 24 decimal
+  SESSION_START = 0x34,   // 52 decimal
+  SHOT_DETECTED = 0x36    // 54 decimal
+};
+
 class SpecialPieTimerDevice : public ITimerDevice {
 private:
   // Special Pie Timer specific configuration
