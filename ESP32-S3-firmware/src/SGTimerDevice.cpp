@@ -326,7 +326,13 @@ void SGTimerDevice::processTimerData(uint8_t* pData, size_t length) {
 
   // Parse event based on API documentation
   if (length >= 2) {
+    // Validate packet length field (len = number of bytes after length byte)
     uint8_t len = pData[0];
+    if (len != length - 1) {
+      LOG_ERROR("SG-TIMER", "Length mismatch: len field = %u, actual = %u. Discarding packet.", len, length - 1);
+      return;
+    }
+
     SGTimerEvent event_id = static_cast<SGTimerEvent>(pData[1]);
 
     switch (event_id) {
