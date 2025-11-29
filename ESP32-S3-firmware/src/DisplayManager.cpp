@@ -218,11 +218,12 @@ void DisplayManager::showStartup() {
   startupLastScrollUpdate = millis();
 
   // Calculate text width for scrolling
+  // Uses character count estimate: ~15 pixels per char for u8g2_font_luRS18_tr
+  // This is reliable for embedded systems and avoids font metric overhead
   const char *startupText = STARTUP_TEXT;
-  startupTextPixelWidth = u8g2_for_adafruit_gfx.getUTF8Width(startupText);
-
+  startupTextPixelWidth = strlen(startupText) * 15;
   LOG_DISPLAY("Startup text: \"%s\"", startupText);
-  LOG_DISPLAY("Text length: %d chars, calculated width: %d pixels", strlen(startupText), startupTextPixelWidth);
+  LOG_DISPLAY("Text length: %d chars, estimated width: %d pixels", strlen(startupText), startupTextPixelWidth);
 
   markDirty(true);  // Signal display update needed with clear
 }
@@ -366,7 +367,7 @@ void DisplayManager::renderConnectionStatus() {
   switch (connectionState) {
     case DeviceConnectionState::DISCONNECTED:
       statusColor = DisplayColors::RED;
-      statusText = "DISCONNECTED";
+      statusText = "NO DEVICE";
       break;
     case DeviceConnectionState::SCANNING:
       statusColor = DisplayColors::YELLOW;
@@ -405,14 +406,19 @@ void DisplayManager::renderConnectionStatus() {
 
     // Calculate text width if not already done
     if (textPixelWidth == 0) {
-      textPixelWidth = u8g2_for_adafruit_gfx.getUTF8Width(deviceName);
+      // Uses character count estimate: ~10 pixels per char for u8g2_font_helvR10_tf
+      // This is reliable for embedded systems and avoids font metric overhead
+      textPixelWidth = strlen(deviceName) * 10;
     }
 
     // If text fits on screen, just display it normally
-    if (textPixelWidth <= displayWidth - 8) {
+    if (textPixelWidth <= displayWidth - 8)
+    {
       u8g2_for_adafruit_gfx.setCursor(2, lineY);
       u8g2_for_adafruit_gfx.print(deviceName);
-    } else {
+    }
+    else
+    {
       // Text is too long - implement marquee scrolling
       // Text starts at left and scrolls left
       int16_t xPos = -scrollOffset;
