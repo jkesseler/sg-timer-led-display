@@ -178,10 +178,9 @@ void DisplayManager::update() {
     case DisplayState::COUNTDOWN:
       // Update countdown display frequently for smooth countdown
       if (displayDirty || currentTime - lastUpdateTime >= 100) {  // Update every 100ms
-        if (needsClear) {
-          clearDisplay();
-          needsClear = false;
-        }
+        // Always clear for countdown to prevent text overlap artifacts
+        clearDisplay();
+        needsClear = false;
         renderCountdown();
         displayDirty = false;
         lastUpdateTime = currentTime;
