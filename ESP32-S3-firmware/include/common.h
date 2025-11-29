@@ -80,4 +80,6 @@
 #define MAX_SHOTS_PER_SESSION 100      // Maximum shots to read from shot list
 #define SHOT_LIST_READ_DELAY 10        // Delay between shot list reads in milliseconds
 
+#define STARTUP_TEXT "J.K. PewPew Timer"
+
 #endif // COMMON_H

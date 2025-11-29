@@ -45,8 +45,9 @@ bool TimerApplication::initialize() {
 }
 
 void TimerApplication::run() {
-  // If no device is connected, scan for available devices
-  if (!timerDevice || !timerDevice->isConnected()) {
+  // If no device exists, scan for available devices
+  // Don't scan if we have a device that's connecting/connected
+  if (!timerDevice) {
     scanForDevices();
   }
 
@@ -153,8 +154,12 @@ void TimerApplication::onConnectionStateChanged(DeviceConnectionState state) {
   updateActivityTime();
 
   // Update display based on connection state
-  if (state == DeviceConnectionState::DISCONNECTED && sessionActive) {
-    sessionActive = false;
+  if (state == DeviceConnectionState::DISCONNECTED) {
+    if (sessionActive) {
+      sessionActive = false;
+    }
+    // Clean up device so we can scan again
+    timerDevice.reset();
   }
 
   const char* deviceName = nullptr;
@@ -242,6 +247,10 @@ void TimerApplication::scanForDevices() {
   lastScanAttempt = now;
   isScanning = true;
 
+  if (displayManager) {
+    displayManager->showConnectionState(DeviceConnectionState::SCANNING, nullptr);
+  }
+
   LOG_SYSTEM("Scanning for timer devices...");
 
   BLEScan* pScan = BLEDevice::getScan();
@@ -273,6 +282,7 @@ void TimerApplication::scanForDevices() {
 
       if (timerDevice->initialize()) {
         // Attempt connection using SG Timer's connection logic
+        // Device will update state via callbacks (CONNECTING -> CONNECTED)
         sgDevice->attemptConnection();
         // Connection status will be checked in next update cycle
         deviceFound = true;
@@ -293,6 +303,7 @@ void TimerApplication::scanForDevices() {
 
       if (timerDevice->initialize()) {
         // Attempt connection
+        // Device will update state via callbacks (CONNECTING -> CONNECTED)
         if (specialPieDevice->attemptConnection(&device)) {
           LOG_SYSTEM("Successfully connected to Special Pie Timer");
           deviceFound = true;
