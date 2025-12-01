@@ -11,6 +11,7 @@ enum class DisplayState {
   SCANNING,
   CONNECTING,
   CONNECTED,
+  COUNTDOWN,           // Showing countdown before session starts
   WAITING_FOR_SHOTS,
   SHOWING_SHOT,
   SESSION_ENDED
@@ -38,6 +39,10 @@ private:
   SessionData currentSessionData;
   DeviceConnectionState connectionState;
   const char* deviceName;
+
+  // Countdown tracking
+  unsigned long countdownStartTime;
+  float countdownDurationSeconds;
 
   // Dirty flag pattern - signals when display needs update
   bool displayDirty;
@@ -67,6 +72,7 @@ private:
   // Internal display methods
   void renderStartupMessage();
   void renderConnectionStatus();
+  void renderCountdown();
   void renderWaitingForShots();
   void renderShotData();
   void renderSessionEnd();
@@ -88,6 +94,7 @@ public:
   // State updates
   void showStartup();
   void showConnectionState(DeviceConnectionState state, const char* deviceName = nullptr);
+  void showCountdown(const SessionData& sessionData);
   void showWaitingForShots(const SessionData& sessionData);
   void showShotData(const NormalizedShotData& shotData);
   void showSessionEnd(const SessionData& sessionData, uint16_t lastShotNumber);

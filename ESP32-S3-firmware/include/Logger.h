@@ -20,6 +20,7 @@ private:
 
 public:
   static void setLevel(LogLevel level);
+  static LogLevel getLevel();
   static void log(LogLevel level, const char* component, const char* format, ...);
 
   // Convenience macros will be defined below

@@ -29,10 +29,12 @@ private:
   // Health monitoring
   unsigned long lastHealthCheck;
   unsigned long lastActivityTime;
+  bool hadDeviceConnected;  // Track if we ever had a device to distinguish "no device" from "lost device"
 
   // Event handlers
   void onShotDetected(const NormalizedShotData& shotData);
   void onSessionStarted(const SessionData& sessionData);
+  void onCountdownComplete(const SessionData& sessionData);
   void onSessionStopped(const SessionData& sessionData);
   void onSessionSuspended(const SessionData& sessionData);
   void onSessionResumed(const SessionData& sessionData);

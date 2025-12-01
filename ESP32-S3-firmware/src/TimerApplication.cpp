@@ -12,7 +12,8 @@ TimerApplication::TimerApplication()
     isScanning(false),
     startupTime(0),
     lastHealthCheck(0),
-    lastActivityTime(0) {
+    lastActivityTime(0),
+    hadDeviceConnected(false) {
 }
 
 TimerApplication::~TimerApplication() {
@@ -79,6 +80,10 @@ void TimerApplication::setupCallbacks() {
     onSessionStarted(sessionData);
   });
 
+  device->onCountdownComplete([this](const SessionData& sessionData) {
+    onCountdownComplete(sessionData);
+  });
+
   device->onSessionStopped([this](const SessionData& sessionData) {
     onSessionStopped(sessionData);
   });
@@ -110,11 +115,24 @@ void TimerApplication::onShotDetected(const NormalizedShotData& shotData) {
 }
 
 void TimerApplication::onSessionStarted(const SessionData& sessionData) {
-  LOG_TIMER("Session started: ID %u", sessionData.sessionId);
+  LOG_TIMER("Session started: ID %u, Countdown: %.1fs", sessionData.sessionId, sessionData.startDelaySeconds);
 
   sessionActive = true;
   lastShotNumber = 0;
   lastShotTime = 0;
+
+  if (displayManager) {
+    // Show countdown if there's a delay, otherwise go straight to waiting
+    if (sessionData.startDelaySeconds > 0.0f) {
+      displayManager->showCountdown(sessionData);
+    } else {
+      displayManager->showWaitingForShots(sessionData);
+    }
+  }
+}
+
+void TimerApplication::onCountdownComplete(const SessionData& sessionData) {
+  LOG_TIMER("Countdown complete - ready for shots");
 
   if (displayManager) {
     displayManager->showWaitingForShots(sessionData);
@@ -152,6 +170,11 @@ void TimerApplication::onSessionResumed(const SessionData& sessionData) {
 void TimerApplication::onConnectionStateChanged(DeviceConnectionState state) {
   LOG_BLE("Connection state changed: %d", (int)state);
   updateActivityTime();
+
+  // Track successful connections
+  if (state == DeviceConnectionState::CONNECTED) {
+    hadDeviceConnected = true;
+  }
 
   // Update display based on connection state
   if (state == DeviceConnectionState::DISCONNECTED) {
@@ -191,8 +214,10 @@ void TimerApplication::performHealthCheck() {
       LOG_ERROR("HEALTH", "Display manager is not healthy");
     }
 
-    if (!timerHealthy) {
-      LOG_ERROR("HEALTH", "Timer device is not healthy");
+    // Only log timer error if we had a device and lost it
+    // Don't log when we're just scanning for the first time
+    if (!timerHealthy && hadDeviceConnected) {
+      LOG_ERROR("HEALTH", "Timer device lost connection");
     }
 
     // Check for activity timeout (no BLE activity for too long)

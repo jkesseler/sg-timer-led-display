@@ -94,6 +94,10 @@ void SGTimerDevice::onSessionStarted(std::function<void(const SessionData&)> cal
   sessionStartedCallback = callback;
 }
 
+void SGTimerDevice::onCountdownComplete(std::function<void(const SessionData&)> callback) {
+  countdownCompleteCallback = callback;
+}
+
 void SGTimerDevice::onSessionStopped(std::function<void(const SessionData&)> callback) {
   sessionStoppedCallback = callback;
 }
@@ -141,12 +145,12 @@ void SGTimerDevice::update() {
     if (pClient && pClient->isConnected()) {
       // Print heartbeat every 30 seconds
       if (millis() - lastHeartbeat > 30000) {
-        Serial.printf("[SG-TIMER] Connected - waiting for events...\n");
+        LOG_BLE("SG-TIMER connected - waiting for events");
         lastHeartbeat = millis();
       }
     } else {
       // Connection lost
-      Serial.println("\n!!! Connection lost !!!");
+      LOG_WARN("SG-TIMER", "Connection lost");
       isConnectedFlag = false;
       pService = nullptr;
       pEventCharacteristic = nullptr;
@@ -163,7 +167,7 @@ void SGTimerDevice::update() {
       previousShotTime = 0;
       currentSession = {};
 
-      Serial.println("Will attempt to reconnect...\n");
+      LOG_BLE("Will attempt to reconnect");
     }
   }
   // Note: Scanning is handled by TimerApplication for multi-device support
@@ -180,7 +184,7 @@ void SGTimerDevice::setConnectionState(DeviceConnectionState newState) {
 
 // Discover and connect to any SG Timer device by service UUID
 void SGTimerDevice::attemptConnection() {
-  Serial.println("\n--- Starting SG Timer device scan ---");
+  LOG_BLE("Starting SG Timer device scan");
   setConnectionState(DeviceConnectionState::SCANNING);
 
   BLEScan* pScan = BLEDevice::getScan();
@@ -188,7 +192,7 @@ void SGTimerDevice::attemptConnection() {
   pScan->setInterval(100);
   pScan->setWindow(99);
 
-  Serial.println("Scanning for SG Timer devices (10 seconds)...");
+  LOG_BLE("Scanning for SG Timer devices (10 seconds)");
   BLEScanResults foundDevices = pScan->start(10, false);
 
   BLEUUID serviceUuid(SERVICE_UUID);
@@ -200,11 +204,11 @@ void SGTimerDevice::attemptConnection() {
 
     // Check if device advertises the SG Timer service
     if (device.isAdvertisingService(serviceUuid)) {
-      Serial.printf("SG Timer found: %s", device.getAddress().toString().c_str());
       if (device.haveName()) {
-        Serial.printf(" (%s)", device.getName().c_str());
+        LOG_BLE("SG Timer found: %s (%s)", device.getAddress().toString().c_str(), device.getName().c_str());
+      } else {
+        LOG_BLE("SG Timer found: %s", device.getAddress().toString().c_str());
       }
-      Serial.println();
       deviceFound = true;
 
       // Store device information
@@ -227,63 +231,62 @@ void SGTimerDevice::attemptConnection() {
       }
 
       // Wait before attempting connection
-      Serial.println("Waiting 2 seconds before connecting...");
+      LOG_BLE("Waiting 2 seconds before connecting");
       delay(2000);
 
       setConnectionState(DeviceConnectionState::CONNECTING);
       pClient = BLEDevice::createClient();
 
       if (!pClient) {
-        Serial.println("ERROR: Failed to create client");
+        LOG_ERROR("SG-TIMER", "Failed to create BLE client");
         setConnectionState(DeviceConnectionState::ERROR);
         break;
       }
 
-      Serial.println("Attempting connection...");
+      LOG_BLE("Attempting connection");
       if (pClient->connect(&device)) {
-        Serial.println("Connected to device!");
+        LOG_BLE("Connected to device");
         pService = pClient->getService(serviceUuid);
 
         if (pService != nullptr) {
-          Serial.println("Service found");
+          LOG_BLE("Service found");
 
           pEventCharacteristic = pService->getCharacteristic(CHARACTERISTIC_UUID);
 
           if (pEventCharacteristic != nullptr) {
-            Serial.println("EVENT characteristic found");
+            LOG_BLE("EVENT characteristic found");
 
             // Check if characteristic can notify
             if (pEventCharacteristic->canNotify()) {
-              Serial.println("Registering for notifications...");
+              LOG_BLE("Registering for notifications");
               pEventCharacteristic->registerForNotify(notifyCallback);
-              Serial.println("SUCCESS: Registered for notifications!");
-              Serial.println("Listening for events indefinitely...\n");
+              LOG_BLE("Successfully registered for notifications - listening for events");
               isConnectedFlag = true;
               lastHeartbeat = millis();
               setConnectionState(DeviceConnectionState::CONNECTED);
             } else {
-              Serial.println("ERROR: Characteristic cannot notify");
+              LOG_ERROR("SG-TIMER", "Characteristic cannot notify");
               pClient->disconnect();
               delete pClient;
               pClient = nullptr;
               setConnectionState(DeviceConnectionState::ERROR);
             }
           } else {
-            Serial.println("ERROR: EVENT characteristic not found");
+            LOG_ERROR("SG-TIMER", "EVENT characteristic not found");
             pClient->disconnect();
             delete pClient;
             pClient = nullptr;
             setConnectionState(DeviceConnectionState::ERROR);
           }
         } else {
-          Serial.println("ERROR: Service not found");
+          LOG_ERROR("SG-TIMER", "Service not found");
           pClient->disconnect();
           delete pClient;
           pClient = nullptr;
           setConnectionState(DeviceConnectionState::ERROR);
         }
       } else {
-        Serial.println("ERROR: Failed to connect");
+        LOG_ERROR("SG-TIMER", "Failed to connect");
         delete pClient;
         pClient = nullptr;
         setConnectionState(DeviceConnectionState::ERROR);
@@ -296,10 +299,10 @@ void SGTimerDevice::attemptConnection() {
   pScan->clearResults();
 
   if (!deviceFound) {
-    Serial.println("No SG Timer devices found. Retrying in 5 seconds...");
+    LOG_BLE("No SG Timer devices found - retrying in 5 seconds");
     setConnectionState(DeviceConnectionState::DISCONNECTED);
   } else if (!isConnectedFlag) {
-    Serial.println("Connection failed. Retrying in 5 seconds...");
+    LOG_ERROR("SG-TIMER", "Connection failed - retrying in 5 seconds");
     setConnectionState(DeviceConnectionState::ERROR);
   }
 }
@@ -313,27 +316,31 @@ void SGTimerDevice::notifyCallback(BLERemoteCharacteristic* pBLERemoteCharacteri
 }
 
 void SGTimerDevice::processTimerData(uint8_t* pData, size_t length) {
-  Serial.printf("\n*** Notification received (%d bytes): ", length);
-  for (size_t i = 0; i < length; i++) {
-    Serial.printf("%02X ", pData[i]);
+  if (Logger::getLevel() <= LogLevel::DEBUG) {
+    LOG_DEBUG("SG-TIMER", "Notification received (%d bytes)", length);
+    for (size_t i = 0; i < length; i++) {
+      Serial.printf("%02X ", pData[i]);
+    }
+    Serial.println();
   }
-  Serial.println();
 
   // Parse event based on API documentation
   if (length >= 2) {
+    // Validate packet length field (len = number of bytes after length byte)
     uint8_t len = pData[0];
-    uint8_t event_id = pData[1];
+    if (len != length - 1) {
+      LOG_ERROR("SG-TIMER", "Length mismatch: len field = %u, actual = %u. Discarding packet.", len, length - 1);
+      return;
+    }
 
-    Serial.printf("Event ID: 0x%02X - ", event_id);
+    SGTimerEvent event_id = static_cast<SGTimerEvent>(pData[1]);
 
     switch (event_id) {
-      case 0x00: // SESSION_STARTED
-        Serial.println("SESSION_STARTED");
+      case SGTimerEvent::SESSION_STARTED:
         if (length >= 8) {
           uint32_t sess_id = (pData[2] << 24) | (pData[3] << 16) | (pData[4] << 8) | pData[5];
           uint16_t start_delay = (pData[6] << 8) | pData[7];
-          Serial.printf("  Session ID: %u\n", sess_id);
-          Serial.printf("  Start Delay: %.1f seconds\n", start_delay * 0.1);
+          LOG_TIMER("SESSION_STARTED - ID: %u, Delay: %.1fs", sess_id, start_delay * 0.1);
 
           // Update session state
           currentSession.sessionId = sess_id;
@@ -353,14 +360,11 @@ void SGTimerDevice::processTimerData(uint8_t* pData, size_t length) {
         }
         break;
 
-      case 0x01: // SESSION_SUSPENDED
-        Serial.println("SESSION_SUSPENDED");
+      case SGTimerEvent::SESSION_SUSPENDED:
         if (length >= 8) {
           uint32_t sess_id = (pData[2] << 24) | (pData[3] << 16) | (pData[4] << 8) | pData[5];
           uint16_t total_shots = (pData[6] << 8) | pData[7];
-          Serial.printf("  Session ID: %u\n", sess_id);
-          Serial.printf("  Total Shots: %u\n", total_shots);
-          Serial.println("  (Session suspended - shots may not be readable until stopped)");
+          LOG_TIMER("SESSION_SUSPENDED - ID: %u, Total shots: %u", sess_id, total_shots);
 
           currentSession.totalShots = total_shots;
           if (sessionSuspendedCallback) {
@@ -369,13 +373,11 @@ void SGTimerDevice::processTimerData(uint8_t* pData, size_t length) {
         }
         break;
 
-      case 0x02: // SESSION_RESUMED
-        Serial.println("SESSION_RESUMED");
+      case SGTimerEvent::SESSION_RESUMED:
         if (length >= 8) {
           uint32_t sess_id = (pData[2] << 24) | (pData[3] << 16) | (pData[4] << 8) | pData[5];
           uint16_t total_shots = (pData[6] << 8) | pData[7];
-          Serial.printf("  Session ID: %u\n", sess_id);
-          Serial.printf("  Total Shots: %u\n", total_shots);
+          LOG_TIMER("SESSION_RESUMED - ID: %u, Total shots: %u", sess_id, total_shots);
 
           currentSession.totalShots = total_shots;
           if (sessionResumedCallback) {
@@ -384,17 +386,15 @@ void SGTimerDevice::processTimerData(uint8_t* pData, size_t length) {
         }
         break;
 
-      case 0x03: // SESSION_STOPPED
-        Serial.println("SESSION_STOPPED");
+      case SGTimerEvent::SESSION_STOPPED:
         if (length >= 8) {
           uint32_t sess_id = (pData[2] << 24) | (pData[3] << 16) | (pData[4] << 8) | pData[5];
           uint16_t total_shots = (pData[6] << 8) | pData[7];
-          Serial.printf("  Session ID: %u\n", sess_id);
-          Serial.printf("  Total Shots: %u\n", total_shots);
-
-          // Display last shot if we have one
           if (hasLastShot) {
-            Serial.printf("  Last Shot: #%u: %u:%02u\n", lastShotNum + 1, lastShotSeconds, lastShotHundredths);
+            LOG_TIMER("SESSION_STOPPED - ID: %u, Total shots: %u, Last: #%u at %u:%02u",
+                     sess_id, total_shots, lastShotNum + 1, lastShotSeconds, lastShotHundredths);
+          } else {
+            LOG_TIMER("SESSION_STOPPED - ID: %u, Total shots: %u", sess_id, total_shots);
           }
 
           currentSession.isActive = false;
@@ -411,8 +411,7 @@ void SGTimerDevice::processTimerData(uint8_t* pData, size_t length) {
         }
         break;
 
-      case 0x04: // SHOT_DETECTED
-        Serial.println("SHOT_DETECTED");
+      case SGTimerEvent::SHOT_DETECTED:
         if (length >= 12) {
           uint32_t sess_id = (pData[2] << 24) | (pData[3] << 16) | (pData[4] << 8) | pData[5];
           uint16_t shot_num = (pData[6] << 8) | pData[7];
@@ -422,7 +421,7 @@ void SGTimerDevice::processTimerData(uint8_t* pData, size_t length) {
           uint32_t seconds = shot_time_ms / 1000;
           uint32_t hundredths = (shot_time_ms % 1000) / 10;
 
-          Serial.printf("  Shot #%u: %u:%02u\n", shot_num + 1, seconds, hundredths);
+          LOG_DEBUG("SG-TIMER", "SHOT_DETECTED #%u: %u:%02u", shot_num + 1, seconds, hundredths);
 
           // Store as last shot
           lastShotNum = shot_num;
@@ -460,16 +459,20 @@ void SGTimerDevice::processTimerData(uint8_t* pData, size_t length) {
         }
         break;
 
-      case 0x05: // SESSION_SET_BEGIN
-        Serial.println("SESSION_SET_BEGIN");
+      case SGTimerEvent::SESSION_SET_BEGIN:
         if (length >= 6) {
           uint32_t sess_id = (pData[2] << 24) | (pData[3] << 16) | (pData[4] << 8) | pData[5];
-          Serial.printf("  Session ID: %u\n", sess_id);
+          LOG_TIMER("SESSION_SET_BEGIN - ID: %u (countdown complete)", sess_id);
+
+          // Notify callback that countdown has completed
+          if (countdownCompleteCallback) {
+            countdownCompleteCallback(currentSession);
+          }
         }
         break;
 
       default:
-        Serial.println("UNKNOWN");
+        LOG_WARN("SG-TIMER", "Unknown event ID: 0x%02X", static_cast<uint8_t>(event_id));
         break;
     }
   }
