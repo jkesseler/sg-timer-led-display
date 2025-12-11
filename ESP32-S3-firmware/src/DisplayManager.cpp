@@ -477,10 +477,10 @@ void DisplayManager::renderCountdown() {
   u8g2_for_adafruit_gfx.setFontDirection(0);
 
   // Header text
-  u8g2_for_adafruit_gfx.setForegroundColor(DisplayColors::YELLOW);
-  u8g2_for_adafruit_gfx.setFont(u8g2_font_helvR10_tf);
-  u8g2_for_adafruit_gfx.setCursor(0, 12);
-  u8g2_for_adafruit_gfx.print(F("READY"));
+  // u8g2_for_adafruit_gfx.setForegroundColor(DisplayColors::YELLOW);
+  // u8g2_for_adafruit_gfx.setFont(u8g2_font_helvR10_tf);
+  // u8g2_for_adafruit_gfx.setCursor(0, 12);
+  // u8g2_for_adafruit_gfx.print(F("READY"));
 
   // Large countdown timer
   char timeBuffer[16];
@@ -508,7 +508,7 @@ void DisplayManager::renderCountdown() {
   int16_t xPos = (PANEL_WIDTH * PANEL_CHAIN - textWidth) / 2;
   if (xPos < 0) xPos = 0;
 
-  u8g2_for_adafruit_gfx.setCursor(xPos, 30);
+  u8g2_for_adafruit_gfx.setCursor(xPos, 24);
   u8g2_for_adafruit_gfx.print(timeBuffer);
 }
 

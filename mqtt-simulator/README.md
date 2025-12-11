@@ -24,6 +24,24 @@ npm install
 
 ## Quick Start
 
+### Test Display States Instantly
+
+Jump directly to any display state without going through the full connection sequence:
+
+```bash
+# Jump to shot display (shows shot #5 by default)
+npm run start state -- --state shot
+
+# Jump to session ended
+npm run start state -- --state ended
+
+# Jump to waiting for shots
+npm run start state -- --state waiting
+
+# Custom shot number
+npm run start state -- --state shot --shot-num 10
+```
+
 ### 1. Test MQTT Connection
 
 ```bash
@@ -68,6 +86,7 @@ npm run start [options] [mode]
 - **simple** (default) - Basic session with configured number of shots
 - **competitive** - Realistic competitive shooting stage
 - **continuous** - Run sessions continuously until stopped (Ctrl+C)
+- **state** - Jump directly to a specific display state (skip connection sequence)
 
 ### Options
 
@@ -79,6 +98,9 @@ npm run start [options] [mode]
 | `--interval <ms>` | Time between shots (ms) | `1500` |
 | `--device <name>` | Device name | `"Simulated SG Timer"` |
 | `--model <model>` | Device model (see below) | `simulated` |
+| `--state <state>` | Display state to jump to (state mode only) | - |
+| `--shot-num <number>` | Shot number for 'shot' state | `5` |
+| `--total-shots <number>` | Total shots for 'ended' state | `12` |
 
 ### Device Models
 
@@ -86,6 +108,13 @@ npm run start [options] [mode]
 - `sg-sport` - SG Timer Sport
 - `sg-go` - SG Timer GO
 - `special-pie` - Special Pie M1A2+
+
+### Display States (for `state` mode)
+
+- `connected` - Device connected, idle
+- `waiting` - Session started, waiting for first shot
+- `shot` - Actively showing shot data
+- `ended` - Session complete with statistics
 
 ## Examples
 
@@ -114,6 +143,21 @@ npm run start -- --model sg-sport --device "SG Timer Sport #123"
 ```bash
 # Runs stages continuously until stopped
 npm run start continuous
+```
+
+### Jump to Specific Display State
+```bash
+# Jump directly to showing shot #8 (skips connection sequence)
+npm run start state -- --state shot --shot-num 8
+
+# Jump to waiting for shots state
+npm run start state -- --state waiting
+
+# Jump to session ended with 15 shots
+npm run start state -- --state ended --total-shots 15
+
+# Jump to connected state only
+npm run start state -- --state connected
 ```
 
 ### Custom Broker

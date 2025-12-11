@@ -134,12 +134,6 @@ function App() {
         });
       }
       setDisplayState(DisplayState.SESSION_ENDED);
-
-      // Auto-clear after 10 seconds
-      setTimeout(() => {
-        setDisplayState(DisplayState.CONNECTED);
-        setShotData(null);
-      }, 10000);
     });
 
     // Device info

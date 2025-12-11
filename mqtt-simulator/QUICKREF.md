@@ -17,6 +17,25 @@ npm run test-connection ws://192.168.1.100:9001
 
 ## Run Simulations
 
+### State Mode (Jump to Specific Display State) ⚡ NEW
+```bash
+# Jump to shot display (shot #5 by default)
+npm run start state -- --state shot
+
+# Jump to specific shot number
+npm run start state -- --state shot --shot-num 10
+
+# Jump to waiting for shots
+npm run start state -- --state waiting
+
+# Jump to session ended
+npm run start state -- --state ended --total-shots 15
+
+# Jump to connected only
+npm run start state -- --state connected
+```
+**Available states:** `connected`, `waiting`, `shot`, `ended`
+
 ### Simple Mode (Default)
 ```bash
 npm run start

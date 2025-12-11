@@ -365,4 +365,112 @@ export class TimerSimulator {
   isSessionRunning(): boolean {
     return this.isRunning;
   }
+
+  /**
+   * Jump directly to CONNECTED state
+   * Skips scanning/connecting sequence
+   */
+  async jumpToConnected(): Promise<void> {
+    console.log('\n⚡ Jumping directly to CONNECTED state...\n');
+    this.publishConnectionState(ConnectionState.CONNECTED, this.config.deviceName);
+    await this.sleep(500);
+    this.publishDeviceInfo();
+  }
+
+  /**
+   * Jump directly to WAITING_FOR_SHOTS state
+   * Publishes: connected + session started + countdown complete
+   */
+  async jumpToWaitingForShots(): Promise<void> {
+    console.log('\n⚡ Jumping directly to WAITING_FOR_SHOTS state...\n');
+    this.sessionId++;
+
+    this.publishConnectionState(ConnectionState.CONNECTED, this.config.deviceName);
+    await this.sleep(300);
+    this.publishDeviceInfo();
+    await this.sleep(500);
+
+    this.publishSessionStarted(this.sessionId, this.config.startDelay);
+    await this.sleep(300);
+    this.publishCountdownComplete(this.sessionId);
+  }
+
+  /**
+   * Jump directly to SHOWING_SHOT state
+   * Publishes: connected + session + shots
+   */
+  async jumpToShowingShot(shotNumber: number = 5): Promise<void> {
+    console.log(`\n⚡ Jumping directly to SHOWING_SHOT state (shot #${shotNumber})...\n`);
+    this.sessionId++;
+
+    this.publishConnectionState(ConnectionState.CONNECTED, this.config.deviceName);
+    await this.sleep(300);
+    this.publishDeviceInfo();
+    await this.sleep(500);
+
+    this.publishSessionStarted(this.sessionId, this.config.startDelay);
+    await this.sleep(300);
+    this.publishCountdownComplete(this.sessionId);
+    await this.sleep(500);
+
+    // Publish shots up to shotNumber with realistic timing
+    let absoluteTime = 0;
+    for (let i = 1; i <= shotNumber; i++) {
+      const splitTime = i === 1 ? 0 : 200 + Math.random() * 150; // 0.2-0.35s splits
+      absoluteTime += splitTime;
+
+      this.publishShot(
+        this.sessionId,
+        i,
+        Math.round(absoluteTime),
+        Math.round(splitTime),
+        i === 1
+      );
+
+      // Only sleep for the last shot to get to current state quickly
+      if (i === shotNumber) {
+        await this.sleep(300);
+      }
+    }
+  }
+
+  /**
+   * Jump directly to SESSION_ENDED state
+   * Publishes: connected + complete session
+   */
+  async jumpToSessionEnded(totalShots: number = 12): Promise<void> {
+    console.log(`\n⚡ Jumping directly to SESSION_ENDED state (${totalShots} shots)...\n`);
+    this.sessionId++;
+
+    this.publishConnectionState(ConnectionState.CONNECTED, this.config.deviceName);
+    await this.sleep(300);
+    this.publishDeviceInfo();
+    await this.sleep(500);
+
+    this.publishSessionStarted(this.sessionId, this.config.startDelay);
+    await this.sleep(300);
+    this.publishCountdownComplete(this.sessionId);
+    await this.sleep(500);
+
+    // Publish all shots quickly
+    let absoluteTime = 0;
+    for (let i = 1; i <= totalShots; i++) {
+      const splitTime = i === 1 ? 0 : 200 + Math.random() * 150;
+      absoluteTime += splitTime;
+
+      this.publishShot(
+        this.sessionId,
+        i,
+        Math.round(absoluteTime),
+        Math.round(splitTime),
+        i === 1
+      );
+    }
+
+    await this.sleep(500);
+    this.publishSessionStopped(this.sessionId, totalShots);
+
+    const totalTime = (absoluteTime / 1000).toFixed(2);
+    console.log(`\n📊 Final time: ${totalTime}s for ${totalShots} shots\n`);
+  }
 }

@@ -67,6 +67,14 @@ export interface DeviceInfoMessage {
   timestamp: number;
 }
 
+// Display states that can be simulated directly
+export enum DisplayState {
+  CONNECTED = 'connected',
+  WAITING_FOR_SHOTS = 'waiting_for_shots',
+  SHOWING_SHOT = 'showing_shot',
+  SESSION_ENDED = 'session_ended'
+}
+
 // Configuration
 export interface SimulatorConfig {
   brokerUrl: string;

@@ -36,6 +36,7 @@ ${colors.bright}Modes:${colors.reset}
   simple       Simple session with configured shots (default)
   competitive  Realistic competitive shooting stage simulation
   continuous   Run sessions continuously with delays
+  state        Jump directly to a specific display state (use with --state)
 
 ${colors.bright}Options:${colors.reset}
   --broker <url>      MQTT broker URL (default: ws://localhost:9001)
@@ -44,6 +45,9 @@ ${colors.bright}Options:${colors.reset}
   --interval <ms>     Time between shots in ms (default: 1500)
   --device <name>     Device name (default: "Simulated SG Timer")
   --model <model>     Device model (sg-sport, sg-go, special-pie, simulated)
+  --state <state>     Display state to jump to (connected, waiting, shot, ended)
+  --shot-num <n>      Shot number for 'shot' state (default: 5)
+  --total-shots <n>   Total shots for 'ended' state (default: 12)
   --help, -h          Show this help
 
 ${colors.bright}Examples:${colors.reset}
@@ -61,6 +65,11 @@ ${colors.bright}Examples:${colors.reset}
 
   ${colors.green}# Continuous mode${colors.reset}
   bun run src/index.ts continuous
+
+  ${colors.green}# Jump to specific state (skip connection sequence)${colors.reset}
+  bun run src/index.ts state --state shot --shot-num 8
+  bun run src/index.ts state --state waiting
+  bun run src/index.ts state --state ended --total-shots 15
 `);
 }
 
@@ -82,6 +91,9 @@ function parseArgs() {
   };
 
   let mode = 'simple';
+  let targetState: string | null = null;
+  let shotNumber = 5;
+  let totalShots = 12;
 
   for (let i = 0; i < args.length; i++) {
     const arg = args[i];
@@ -134,6 +146,18 @@ function parseArgs() {
         }
         break;
 
+      case '--state':
+        targetState = args[++i];
+        break;
+
+      case '--shot-num':
+        shotNumber = parseInt(args[++i]);
+        break;
+
+      case '--total-shots':
+        totalShots = parseInt(args[++i]);
+        break;
+
       default:
         if (!arg.startsWith('--')) {
           mode = arg;
@@ -141,7 +165,7 @@ function parseArgs() {
     }
   }
 
-  return { config, mode };
+  return { config, mode, targetState, shotNumber, totalShots };
 }
 
 /**
@@ -150,7 +174,7 @@ function parseArgs() {
 async function main() {
   printBanner();
 
-  const { config, mode } = parseArgs();
+  const { config, mode, targetState, shotNumber, totalShots } = parseArgs();
   const simulator = new TimerSimulator(config);
 
   console.log(`${colors.bright}Configuration:${colors.reset}`);
@@ -172,27 +196,69 @@ async function main() {
     await simulator.connect();
     await sleep(500);
 
-    // Simulate device connection
-    await simulator.simulateConnection();
-    await sleep(2000);
-
     // Run based on mode
     switch (mode) {
       case 'simple':
+        // Simulate device connection
+        await simulator.simulateConnection();
+        await sleep(2000);
         await simulator.simulateSession();
         break;
 
       case 'competitive':
+        // Simulate device connection
+        await simulator.simulateConnection();
+        await sleep(2000);
         await simulator.simulateCompetitiveStage();
         break;
 
       case 'continuous':
         console.log(`${colors.yellow}Running in continuous mode. Press Ctrl+C to stop.${colors.reset}\n`);
+        // Simulate device connection once
+        await simulator.simulateConnection();
+        await sleep(2000);
         while (true) {
           await simulator.simulateCompetitiveStage();
           console.log('\n⏸️  Waiting 5 seconds before next session...\n');
           await sleep(5000);
         }
+        break;
+
+      case 'state':
+        // Jump directly to specified state (skip connection sequence)
+        if (!targetState) {
+          console.error('❌ --state option required for state mode');
+          console.log('   Available states: connected, waiting, shot, ended');
+          process.exit(1);
+        }
+
+        switch (targetState.toLowerCase()) {
+          case 'connected':
+            await simulator.jumpToConnected();
+            break;
+
+          case 'waiting':
+          case 'waiting_for_shots':
+            await simulator.jumpToWaitingForShots();
+            break;
+
+          case 'shot':
+          case 'showing_shot':
+            await simulator.jumpToShowingShot(shotNumber);
+            break;
+
+          case 'ended':
+          case 'session_ended':
+            await simulator.jumpToSessionEnded(totalShots);
+            break;
+
+          default:
+            console.error(`❌ Unknown state: ${targetState}`);
+            console.log('   Available states: connected, waiting, shot, ended');
+            process.exit(1);
+        }
+        console.log(`\n${colors.green}${colors.bright}✅ State set successfully!${colors.reset}`);
+        console.log(`${colors.yellow}Display should now show: ${targetState.toUpperCase()}${colors.reset}\n`);
         break;
 
       default:

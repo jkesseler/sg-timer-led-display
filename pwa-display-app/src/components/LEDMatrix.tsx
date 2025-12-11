@@ -33,23 +33,6 @@ const LEDMatrix: React.FC<LEDMatrixProps> = ({
 }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [scrollOffset, setScrollOffset] = useState<number>(0);
-  const [pixelSize, setPixelSize] = useState<number>(DisplayConfig.PIXEL_SIZE);
-
-  // Calculate responsive pixel size
-  useEffect(() => {
-    const updatePixelSize = () => {
-      const maxWidth = window.innerWidth * 0.9;
-      const maxHeight = window.innerHeight * 0.8;
-      const widthScale = maxWidth / DisplayConfig.TOTAL_WIDTH;
-      const heightScale = maxHeight / DisplayConfig.TOTAL_HEIGHT;
-      const newPixelSize = Math.floor(Math.min(widthScale, heightScale, 8));
-      setPixelSize(Math.max(2, newPixelSize)); // Minimum 2px per LED pixel
-    };
-
-    updatePixelSize();
-    window.addEventListener('resize', updatePixelSize);
-    return () => window.removeEventListener('resize', updatePixelSize);
-  }, []);
 
   // Scrolling text animation for long messages
   useEffect(() => {
@@ -121,8 +104,6 @@ const LEDMatrix: React.FC<LEDMatrixProps> = ({
 
   const canvasWidth = DisplayConfig.TOTAL_WIDTH;
   const canvasHeight = DisplayConfig.TOTAL_HEIGHT;
-  const displayWidth = canvasWidth * pixelSize;
-  const displayHeight = canvasHeight * pixelSize;
 
   return (
     <div className="led-matrix-container">
@@ -131,9 +112,10 @@ const LEDMatrix: React.FC<LEDMatrixProps> = ({
         width={canvasWidth}
         height={canvasHeight}
         style={{
-          width: `${displayWidth}px`,
-          height: `${displayHeight}px`,
-          imageRendering: 'pixelated',
+          width: `100vw`,
+          height: `auto`,
+          maxHeight: `100vh`,
+          imageRendering: 'crisp-edges',
           border: '2px solid #333'
         }}
       />
@@ -146,7 +128,7 @@ const LEDMatrix: React.FC<LEDMatrixProps> = ({
 function renderStartup(ctx: CanvasRenderingContext, width: number, height: number, scrollOffset: number): void {
   const text = DisplayConfig.STARTUP_TEXT;
   ctx.fillStyle = DisplayColors.GREEN;
-  ctx.font = 'bold 18px monospace';
+  ctx.font = 'bold 18px helvetica';
   ctx.textBaseline = 'middle';
 
   const textWidth = ctx.measureText(text).width;
@@ -165,21 +147,21 @@ function renderStartup(ctx: CanvasRenderingContext, width: number, height: numbe
 
 function renderDisconnected(ctx: CanvasRenderingContext, _width: number, _height: number): void {
   ctx.fillStyle = DisplayColors.RED;
-  ctx.font = 'bold 10px monospace';
+  ctx.font = 'bold 10px helvetica';
   ctx.textBaseline = 'top';
   ctx.fillText('NO DEVICE', 0, 4);
 }
 
 function renderScanning(ctx: CanvasRenderingContext, _width: number, _height: number): void {
   ctx.fillStyle = DisplayColors.YELLOW;
-  ctx.font = 'bold 10px monospace';
+  ctx.font = 'bold 10px helvetica';
   ctx.textBaseline = 'top';
   ctx.fillText('SCANNING...', 0, 4);
 }
 
 function renderConnecting(ctx: CanvasRenderingContext, _width: number, _height: number): void {
   ctx.fillStyle = DisplayColors.BLUE;
-  ctx.font = 'bold 10px monospace';
+  ctx.font = 'bold 10px helvetica';
   ctx.textBaseline = 'top';
   ctx.fillText('CONNECTING...', 0, 4);
 }
@@ -192,13 +174,13 @@ function renderConnected(
   scrollOffset: number
 ): void {
   ctx.fillStyle = DisplayColors.GREEN;
-  ctx.font = 'bold 10px monospace';
+  ctx.font = 'bold 10px helvetica';
   ctx.textBaseline = 'top';
   ctx.fillText('CONNECTED', 0, 4);
 
   if (deviceName) {
     ctx.fillStyle = DisplayColors.WHITE;
-    ctx.font = '10px monospace';
+    ctx.font = '10px helvetica';
     const textWidth = ctx.measureText(deviceName).width;
 
     if (textWidth <= width - 8) {
@@ -225,9 +207,8 @@ function renderCountdown(
   const remaining = Math.max(0, sessionData.startDelaySeconds - elapsed);
 
   ctx.fillStyle = DisplayColors.YELLOW;
-  ctx.font = 'bold 10px monospace';
+  ctx.font = 'bold 1px helvetica';
   ctx.textBaseline = 'top';
-  ctx.fillText('READY', 0, 4);
 
   // Color changes based on remaining time
   let countdownColor = DisplayColors.GREEN;
@@ -238,7 +219,7 @@ function renderCountdown(
   }
 
   ctx.fillStyle = countdownColor;
-  ctx.font = 'bold 18px monospace';
+  ctx.font = 'bold 18px helvetica';
   const countdownText = formatCountdown(remaining);
   const textWidth = ctx.measureText(countdownText).width;
   ctx.fillText(countdownText, (width - textWidth) / 2, 8);
@@ -246,13 +227,13 @@ function renderCountdown(
 
 function renderWaitingForShots(ctx: CanvasRenderingContext, _width: number, _height: number): void {
   ctx.fillStyle = DisplayColors.WHITE;
-  ctx.font = '10px monospace';
+  ctx.font = '12px helvetica';
   ctx.textBaseline = 'top';
   ctx.fillText('Shots: 0', 0, 4);
-  ctx.fillText('Split: 0:00', 0, 20);
+  ctx.fillText('Split: 0:00', 0, 18);
 
-  ctx.font = 'bold 18px monospace';
-  ctx.fillText('00:00', 65, 17);
+  ctx.font = 'bold 22px helvetica';
+  ctx.fillText('00:00', 68, 7);
 }
 
 function renderShotData(
@@ -269,17 +250,17 @@ function renderShotData(
 
   // Shot count (top left, yellow)
   ctx.fillStyle = DisplayColors.YELLOW;
-  ctx.font = '10px monospace';
+  ctx.font = '12px helvetica';
   ctx.textBaseline = 'top';
   ctx.fillText(`Shots: ${shotData.shotNumber}`, 0, 4);
 
   // Split time (middle left)
-  ctx.fillText(`Split: ${splitText}`, 0, 20);
+  ctx.fillText(`Split: ${splitText}`, 0, 18);
 
   // Absolute time (right side, green, large)
   ctx.fillStyle = DisplayColors.GREEN;
-  ctx.font = 'bold 18px monospace';
-  ctx.fillText(timeText, 65, 17);
+  ctx.font = 'bold 22px helvetica';
+  ctx.fillText(timeText, 68, 7);
 }
 
 function renderSessionEnd(
@@ -293,13 +274,13 @@ function renderSessionEnd(
   const shotCount = shotData ? shotData.shotNumber : (sessionData?.totalShots || 0);
 
   ctx.fillStyle = DisplayColors.RED;
-  ctx.font = '10px monospace';
+  ctx.font = '12px helvetica';
   ctx.textBaseline = 'top';
   ctx.fillText('ENDED', 0, 4);
-  ctx.fillText(`Shots: ${shotCount}`, 0, 20);
+  ctx.fillText(`Shots: ${shotCount}`, 0, 18);
 
-  ctx.font = 'bold 18px monospace';
-  ctx.fillText(timeText, 65, 17);
+  ctx.font = 'bold 22px helvetica';
+  ctx.fillText(timeText, 68, 7);
 }
 
 export default LEDMatrix;
