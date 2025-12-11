@@ -1,0 +1,33 @@
+.led-matrix-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: #000;
+}
+
+.led-matrix-container canvas {
+  box-shadow: 0 0 20px rgba(255, 255, 255, 0.1);
+  border-radius: 4px;
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+  -ms-interpolation-mode: nearest-neighbor;
+}
+
+/* Scanline effect (optional, can be toggled) */
+.led-matrix-container.scanlines canvas {
+  background:
+    repeating-linear-gradient(
+      0deg,
+      rgba(0, 0, 0, 0.15),
+      rgba(0, 0, 0, 0.15) 1px,
+      transparent 1px,
+      transparent 2px
+    );
+}
+
+/* Glow effect for LEDs */
+.led-matrix-container.glow canvas {
+  filter: blur(0.3px) contrast(1.1);
+}
