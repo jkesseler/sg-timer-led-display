@@ -12,6 +12,10 @@ unsigned long WiFiConfig::lastConnectionCheck = 0;
 static WiFiManager wifiManager;
 static bool wifiManagerInitialized = false;
 
+bool WiFiConfig::isInitialized() {
+  return wifiManagerInitialized;
+}
+
 void WiFiConfig::initialize() {
   if (wifiManagerInitialized) {
     return;
@@ -44,6 +48,15 @@ void WiFiConfig::initialize() {
   if (wifiConnected) {
     LOG_SYSTEM("WiFi already connected. IP: %s", WiFi.localIP().toString().c_str());
     WiFi.setTxPower((wifi_power_t)WIFI_TX_POWER);
+
+    // Log network diagnostics for debugging MQTT connection issues
+    LOG_SYSTEM("WiFi Network Info:");
+    LOG_SYSTEM("  SSID: %s", WiFi.SSID().c_str());
+    LOG_SYSTEM("  IP Address: %s", WiFi.localIP().toString().c_str());
+    LOG_SYSTEM("  Gateway: %s", WiFi.gatewayIP().toString().c_str());
+    LOG_SYSTEM("  DNS: %s", WiFi.dnsIP().toString().c_str());
+    LOG_SYSTEM("  Subnet: %s", WiFi.subnetMask().toString().c_str());
+    LOG_SYSTEM("  RSSI: %d dBm", WiFi.RSSI());
   }
 }
 
@@ -73,6 +86,14 @@ void WiFiConfig::update() {
     LOG_SYSTEM("WiFi connected. IP: %s", WiFi.localIP().toString().c_str());
     WiFi.setTxPower((wifi_power_t)WIFI_TX_POWER);
     LOG_SYSTEM("WiFi TX power set to minimize BLE interference");
+
+    // Log network diagnostics for debugging MQTT connection issues
+    LOG_SYSTEM("WiFi Network Info:");
+    LOG_SYSTEM("  SSID: %s", WiFi.SSID().c_str());
+    LOG_SYSTEM("  Gateway: %s", WiFi.gatewayIP().toString().c_str());
+    LOG_SYSTEM("  DNS: %s", WiFi.dnsIP().toString().c_str());
+    LOG_SYSTEM("  Subnet: %s", WiFi.subnetMask().toString().c_str());
+    LOG_SYSTEM("  RSSI: %d dBm", WiFi.RSSI());
   } else if (!isNowConnected && wifiConnected) {
     wifiConnected = false;
     LOG_SYSTEM("WiFi disconnected");

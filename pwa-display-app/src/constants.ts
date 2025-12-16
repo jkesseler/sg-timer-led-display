@@ -47,7 +47,7 @@ export const MqttTopics: IMqttTopics = {
 
 // Default MQTT settings
 export const DefaultMqttSettings = {
-  broker: 'ws://localhost:9001', // WebSocket port for MQTT
+  broker: 'ws://127.0.0.1:9001', // MQTT TCP port
   username: '',
   password: '',
   clientId: `pwa-display-${Math.random().toString(16).substring(2, 8)}`

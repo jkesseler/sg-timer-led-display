@@ -72,6 +72,7 @@ export interface SessionStartedMessage {
 export interface SessionStoppedMessage {
   sessionId: number;
   totalShots?: number;
+  lastShotTimeMs?: number;  // Final shot time in milliseconds
   timestamp: number;
 }
 

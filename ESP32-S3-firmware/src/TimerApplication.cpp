@@ -16,7 +16,8 @@ TimerApplication::TimerApplication()
     lastActivityTime(0),
     hadDeviceConnected(false),
     maxQueueDepth(0),
-    lastBleWindow(0) {
+    lastBleWindow(0),
+    lastMqttWarningTime(0) {
   coexistenceMetrics.shots_queued = 0;
   coexistenceMetrics.shots_published = 0;
   coexistenceMetrics.publish_failures = 0;
@@ -29,9 +30,6 @@ TimerApplication::~TimerApplication() {
 bool TimerApplication::initialize() {
   LOG_SYSTEM("=== SG Shot Timer BLE Bridge ===");
   LOG_SYSTEM("ESP32-S3 DevKit-C Starting...");
-
-  // Initialize WiFi Manager (non-blocking)
-  WiFiConfig::initialize();
 
   // Initialize display manager
   displayManager = std::unique_ptr<DisplayManager>(new DisplayManager());
@@ -212,9 +210,19 @@ void TimerApplication::onSessionStopped(const SessionData& sessionData) {
 
   sessionActive = false;
 
-  // Publish to MQTT
+  // CRITICAL: Clear any buffered shots when session ends
+  // We don't want stale shot events arriving after session completion
+  if (shotEventQueue.size() > 0) {
+    LOG_WARN("COEX", "Clearing %d queued shots on session end", shotEventQueue.size());
+    while (!shotEventQueue.empty()) {
+      shotEventQueue.pop();
+    }
+  }
+
+  // Publish session ended event immediately (not queued)
+  // Include last shot time so PWA display shows final result
   if (mqttManager) {
-    mqttManager->publishSessionStopped(sessionData.sessionId, sessionData.totalShots);
+    mqttManager->publishSessionStopped(sessionData.sessionId, sessionData.totalShots, lastShotTime);
   }
 
   if (displayManager) {
@@ -254,9 +262,15 @@ void TimerApplication::onConnectionStateChanged(DeviceConnectionState state) {
   LOG_BLE("Connection state changed: %d", (int)state);
   updateActivityTime();
 
-  // Track successful connections
+  // Track successful connections and initialize WiFi on first connection
   if (state == DeviceConnectionState::CONNECTED) {
     hadDeviceConnected = true;
+
+    // Initialize WiFi only after first BLE device connection
+    if (!WiFiConfig::isInitialized()) {
+      LOG_SYSTEM("BLE device connected - initializing WiFi now");
+      WiFiConfig::initialize();
+    }
   }
 
   // Publish connection state to MQTT
@@ -338,33 +352,59 @@ void TimerApplication::updateActivityTime() {
 void TimerApplication::publishQueuedEvents() {
   // Process queued shot events asynchronously
   // This runs in the main loop, outside the critical BLE window
-  unsigned int processed = 0;
 
-  while (!shotEventQueue.empty() && processed < 2) {
-    // Check if MQTT is healthy before publishing
-    if (!mqttManager || !mqttManager->isHealthy()) {
-      // WiFi/MQTT not available - keep events queued
-      // They will be published when connection recovers
+  if (shotEventQueue.empty()) {
+    return;
+  }
+
+  bool mqttHealthy = mqttManager && mqttManager->isHealthy();
+
+  // If queue is getting too full (>75% capacity), drain it regardless of MQTT status
+  // This prevents the queue from locking up when MQTT is temporarily unavailable
+  bool queueCritical = shotEventQueue.size() > (AppConfig::EVENT_QUEUE_MAX_SIZE * 3 / 4);
+
+  if (!mqttHealthy && !queueCritical) {
+    // MQTT unavailable and queue not critical - keep events buffered
+    // Throttle logging to avoid spam (only log every 2 seconds)
+    unsigned long now = millis();
+    if (now - lastMqttWarningTime >= 2000) {
+      LOG_WARN("COEX", "Event queue: %d waiting (MQTT unavailable, buffering)",
+               shotEventQueue.size());
+      lastMqttWarningTime = now;
+    }
+    return;
+  }
+
+  // Publish all queued events
+  // Process aggressively to prevent queue backup
+  unsigned int processed = 0;
+  while (!shotEventQueue.empty()) {
+    // If MQTT becomes unavailable during processing, stop
+    if (!mqttHealthy && processed > 0) {
       break;
     }
 
     NormalizedShotData shot = shotEventQueue.front();
 
-    // Publish the event (fire and forget - publishShotDetected returns void)
-    mqttManager->publishShotDetected(shot);
+    // Attempt to publish the event
+    if (mqttManager) {
+      mqttManager->publishShotDetected(shot);
+      LOG_DEBUG("COEX", "Published queued shot #%d", shot.shotNumber);
+    } else {
+      // No MQTT manager - discard old events if queue too full
+      if (queueCritical) {
+        LOG_DEBUG("COEX", "Discarding queued shot #%d (MQTT unavailable, queue full)", shot.shotNumber);
+      }
+    }
 
-    // Always remove from queue
     shotEventQueue.pop();
     coexistenceMetrics.shots_published++;
-    LOG_DEBUG("COEX", "Published queued shot #%d", shot.shotNumber);
-
     processed++;
   }
 
-  // Log queue status if depth exceeds threshold
-  if (shotEventQueue.size() > 5) {
-    LOG_WARN("COEX", "Event queue backup: %d events waiting (WiFi bandwidth saturated?)",
-             shotEventQueue.size());
+  // Log if we had to process multiple events (indicates congestion)
+  if (processed > 3) {
+    LOG_INFO("COEX", "Processed %d queued shots", processed);
   }
 }
 

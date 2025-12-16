@@ -133,6 +133,18 @@ function App() {
           totalShots: message.totalShots || sessionData.totalShots
         });
       }
+      // If session ended includes last shot time, update display with it
+      if (message.lastShotTimeMs !== undefined && message.lastShotTimeMs > 0) {
+        setShotData({
+          sessionId: message.sessionId,
+          shotNumber: sessionData?.totalShots || 0,
+          absoluteTimeMs: message.lastShotTimeMs,
+          splitTimeMs: 0,
+          deviceModel: 'Timer',
+          isFirstShot: false,
+          timestamp: message.timestamp
+        });
+      }
       setDisplayState(DisplayState.SESSION_ENDED);
     });
 

@@ -21,8 +21,14 @@ public:
   /**
    * @brief Initialize WiFi with WiFiManager
    * Non-blocking - returns immediately and manages connection in background
+   * Should only be called after a BLE device has successfully connected
    */
   static void initialize();
+
+  /**
+   * @brief Check if WiFi initialization has been started
+   */
+  static bool isInitialized();
 
   /**
    * @brief Update WiFi connection status

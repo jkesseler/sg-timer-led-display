@@ -11,7 +11,7 @@
 namespace AppConfig {
   constexpr uint32_t WATCHDOG_TIMEOUT_MS = 10000;  // 10 seconds
   constexpr uint32_t HEALTH_CHECK_INTERVAL_MS = 5000;  // 5 seconds
-  constexpr uint16_t EVENT_QUEUE_MAX_SIZE = 10;  // Max queued events before processing
+  constexpr uint16_t EVENT_QUEUE_MAX_SIZE = 30;  // Max queued events before processing
   constexpr uint32_t COEXISTENCE_BLE_WINDOW_MS = 5;  // BLE-only window after event
 }
 
@@ -47,6 +47,9 @@ private:
     uint32_t shots_published;
     uint32_t publish_failures;
   } coexistenceMetrics;
+
+  // MQTT availability tracking
+  unsigned long lastMqttWarningTime;  // Throttle logging of MQTT unavailable state
 
   // Event handlers
   void onShotDetected(const NormalizedShotData& shotData);

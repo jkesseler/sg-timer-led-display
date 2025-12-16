@@ -37,7 +37,7 @@ public:
   void publishConnectionState(DeviceConnectionState state, const char* deviceName, const char* deviceModel);
   void publishDeviceInfo(const char* deviceName, const char* deviceModel, const char* firmwareVersion);
   void publishSessionStarted(uint32_t sessionId, uint16_t startDelaySeconds);
-  void publishSessionStopped(uint32_t sessionId, uint16_t totalShots);
+  void publishSessionStopped(uint32_t sessionId, uint16_t totalShots, uint32_t lastShotTimeMs = 0);
   void publishSessionSuspended(uint32_t sessionId);
   void publishSessionResumed(uint32_t sessionId);
   void publishShotDetected(const NormalizedShotData& shotData);

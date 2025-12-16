@@ -69,6 +69,7 @@ bool MqttManager::initialize() {
   mqttClient.setServer(MQTT_BROKER_IP, MQTT_BROKER_PORT);
 
   LOG_SYSTEM("MQTT configured for %s:%d", MQTT_BROKER_IP, MQTT_BROKER_PORT);
+  LOG_SYSTEM("Note: MQTT will attempt connection after WiFi is available");
 
   // WiFi is managed by WiFiConfig (non-blocking)
   // MQTT will connect on-demand when WiFi becomes available
@@ -104,6 +105,10 @@ void MqttManager::ensureMqttConnected() {
     }
 
     LOG_BLE("Attempting MQTT connection to %s:%d", MQTT_BROKER_IP, MQTT_BROKER_PORT);
+    LOG_DEBUG("MQTT", "Local IP: %s, Gateway: %s", WiFiConfig::getLocalIP(), WiFi.gatewayIP().toString().c_str());
+
+    // Set socket timeout to prevent long hangs
+    mqttClient.setSocketTimeout(MQTT_SOCKET_TIMEOUT / 1000);  // Convert to seconds
 
     if (mqttClient.connect(MQTT_CLIENT_ID)) {
       isConnected = true;
@@ -114,7 +119,52 @@ void MqttManager::ensureMqttConnected() {
       // Note: Full status will be published on next event
     } else {
       isConnected = false;
-      LOG_ERROR("MQTT", "MQTT connection failed, error: %d", mqttClient.state());
+      int state = mqttClient.state();
+      LOG_ERROR("MQTT", "MQTT connection failed, state: %d", state);
+
+      // Diagnostic logging for common error states
+      switch (state) {
+        case -4:
+          LOG_ERROR("MQTT", "Connection timeout (state -4)");
+          LOG_ERROR("MQTT", "Broker unreachable at %s:%d", MQTT_BROKER_IP, MQTT_BROKER_PORT);
+          LOG_ERROR("MQTT", "Troubleshooting:");
+          LOG_ERROR("MQTT", "  - Verify broker IP and port are correct in common.h");
+          LOG_ERROR("MQTT", "  - Check ESP32 is on same WiFi network as broker");
+          LOG_ERROR("MQTT", "  - Ensure broker (Mosquitto) is running");
+          LOG_ERROR("MQTT", "  - Check firewall on broker machine (port 1883)");
+          LOG_ERROR("MQTT", "  - Try: mosquitto -v (to see if broker is listening)");
+          break;
+        case -2:
+          LOG_ERROR("MQTT", "Connection failed - TCP socket timeout (state -2)");
+          LOG_ERROR("MQTT", "Possible causes:");
+          LOG_ERROR("MQTT", "  1. Broker IP %s is incorrect or not reachable", MQTT_BROKER_IP);
+          LOG_ERROR("MQTT", "  2. Network routing issue - check with: ping %s", MQTT_BROKER_IP);
+          LOG_ERROR("MQTT", "  3. Broker not listening on port 1883");
+          LOG_ERROR("MQTT", "  4. Firewall blocking TCP port 1883");
+          LOG_ERROR("MQTT", "  5. WiFi network isolation - ESP32 can't reach broker machine");
+          LOG_ERROR("MQTT", "Test on broker: mosquitto_sub -h %s -t 'test' -p %d", MQTT_BROKER_IP, MQTT_BROKER_PORT);
+          break;
+        case -3:
+          LOG_ERROR("MQTT", "Connection lost");
+          break;
+        case 1:
+          LOG_ERROR("MQTT", "Bad protocol version");
+          break;
+        case 2:
+          LOG_ERROR("MQTT", "Bad client ID - try changing MQTT_CLIENT_ID in common.h");
+          break;
+        case 3:
+          LOG_ERROR("MQTT", "Broker unavailable");
+          break;
+        case 4:
+          LOG_ERROR("MQTT", "Bad credentials - check MQTT_USER and MQTT_PASSWORD in common.h");
+          break;
+        case 5:
+          LOG_ERROR("MQTT", "Not authorized - verify MQTT credentials");
+          break;
+        default:
+          LOG_ERROR("MQTT", "Unknown error state: %d - check broker IP/port in common.h", state);
+      }
     }
   } else {
     if (!isConnected) {
@@ -206,10 +256,13 @@ void MqttManager::publishSessionStarted(uint32_t sessionId, uint16_t startDelayS
   publishJson(Topics::SESSION_STARTED, buffer);
 }
 
-void MqttManager::publishSessionStopped(uint32_t sessionId, uint16_t totalShots) {
+void MqttManager::publishSessionStopped(uint32_t sessionId, uint16_t totalShots, uint32_t lastShotTimeMs) {
   JsonDocument doc;
   doc["sessionId"] = sessionId;
   doc["totalShots"] = totalShots;
+  if (lastShotTimeMs > 0) {
+    doc["lastShotTimeMs"] = lastShotTimeMs;
+  }
   doc["timestamp"] = millis();
 
   char buffer[128];

@@ -61,7 +61,7 @@
 // BLE Configuration
 // =============================================================================
 
-#define BLE_DEVICE_NAME "ESP32-S3 Shot Timer Bridge"
+#define BLE_DEVICE_NAME "J.K. PewPew Timer Bridge"
 
 // =============================================================================
 // System Configuration
@@ -97,6 +97,7 @@
 #define MQTT_CLIENT_ID "j.k.pewpew-timer-bridge"
 #define MQTT_CHECK_INTERVAL 5000        // Check MQTT connection every 5 seconds
 #define MQTT_RECONNECT_INTERVAL 5000   // Reconnection attempt interval in milliseconds
+#define MQTT_SOCKET_TIMEOUT 5000        // Socket connection timeout in milliseconds
 
 // Note: If your MQTT broker requires authentication, uncomment and set these:
 // #define MQTT_USER "username"
