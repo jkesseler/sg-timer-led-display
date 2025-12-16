@@ -1,6 +1,7 @@
 #include "TimerApplication.h"
 #include "SGTimerDevice.h"
 #include "SpecialPieTimerDevice.h"
+#include "WiFiConfig.h"
 #include "common.h"
 #include <BLEDevice.h>
 
@@ -13,7 +14,12 @@ TimerApplication::TimerApplication()
     startupTime(0),
     lastHealthCheck(0),
     lastActivityTime(0),
-    hadDeviceConnected(false) {
+    hadDeviceConnected(false),
+    maxQueueDepth(0),
+    lastBleWindow(0) {
+  coexistenceMetrics.shots_queued = 0;
+  coexistenceMetrics.shots_published = 0;
+  coexistenceMetrics.publish_failures = 0;
 }
 
 TimerApplication::~TimerApplication() {
@@ -24,6 +30,9 @@ bool TimerApplication::initialize() {
   LOG_SYSTEM("=== SG Shot Timer BLE Bridge ===");
   LOG_SYSTEM("ESP32-S3 DevKit-C Starting...");
 
+  // Initialize WiFi Manager (non-blocking)
+  WiFiConfig::initialize();
+
   // Initialize display manager
   displayManager = std::unique_ptr<DisplayManager>(new DisplayManager());
   if (!displayManager->initialize()) {
@@ -31,6 +40,12 @@ bool TimerApplication::initialize() {
     return false;
   }
 
+  // Initialize MQTT manager
+  mqttManager = std::unique_ptr<MqttManager>(new MqttManager());
+  if (!mqttManager->initialize()) {
+    LOG_ERROR("SYSTEM", "Failed to initialize MQTT manager");
+    // Non-fatal - continue without MQTT
+  }
 
   // Initialize BLE
   BLEDevice::init(BLE_DEVICE_NAME);
@@ -46,17 +61,39 @@ bool TimerApplication::initialize() {
 }
 
 void TimerApplication::run() {
+  // PHASE 0: WiFi Management (Non-blocking background)
+  // ==================================================
+  // WiFi connection is maintained in the background
+  WiFiConfig::update();
+
   // If no device exists, scan for available devices
   // Don't scan if we have a device that's connecting/connected
   if (!timerDevice) {
     scanForDevices();
   }
 
-  // Update all components
+  // PHASE 1: BLE Processing (CRITICAL - must not be blocked by WiFi)
+  // ================================================================
   if (timerDevice) {
     timerDevice->update();
   }
 
+  // Let BLE finish its processing/reception window
+  // This prevents WiFi from interfering with BLE radio window
+  lastBleWindow = millis();
+  delay(AppConfig::COEXISTENCE_BLE_WINDOW_MS);
+
+  // PHASE 2: WiFi & MQTT Operations (Safe - BLE window complete)
+  // ==============================================================
+  // Publish any queued events asynchronously
+  publishQueuedEvents();
+
+  if (mqttManager) {
+    mqttManager->update();
+  }
+
+  // PHASE 3: Display & Monitoring
+  // =============================
   if (displayManager) {
     displayManager->update();
   }
@@ -109,7 +146,26 @@ void TimerApplication::onShotDetected(const NormalizedShotData& shotData) {
   updateActivityTime();
   logShotData(shotData);
 
+  // CRITICAL: Queue event for async MQTT publishing
+  // This prevents WiFi operations from blocking BLE reception
+  if (shotEventQueue.size() < AppConfig::EVENT_QUEUE_MAX_SIZE) {
+    shotEventQueue.push(shotData);
+    coexistenceMetrics.shots_queued++;
+
+    // Track max queue depth for diagnostics
+    if (shotEventQueue.size() > maxQueueDepth) {
+      maxQueueDepth = shotEventQueue.size();
+      if (maxQueueDepth > 3) {
+        LOG_WARN("COEX", "Event queue depth: %d (potential radio conflicts)", maxQueueDepth);
+      }
+    }
+  } else {
+    // Queue is full - event will be lost if not processed
+    LOG_ERROR("COEX", "Event queue full! Shot %d may not be published", shotData.shotNumber);
+  }
+
   // Update display if session is active
+  // This happens immediately regardless of MQTT queue status
   if (sessionActive && displayManager) {
     displayManager->showShotData(shotData);
   }
@@ -121,6 +177,11 @@ void TimerApplication::onSessionStarted(const SessionData& sessionData) {
   sessionActive = true;
   lastShotNumber = 0;
   lastShotTime = 0;
+
+  // Publish to MQTT
+  if (mqttManager) {
+    mqttManager->publishSessionStarted(sessionData.sessionId, sessionData.startDelaySeconds);
+  }
 
   if (displayManager) {
     // Show countdown if there's a delay, otherwise go straight to waiting
@@ -135,6 +196,11 @@ void TimerApplication::onSessionStarted(const SessionData& sessionData) {
 void TimerApplication::onCountdownComplete(const SessionData& sessionData) {
   LOG_TIMER("Countdown complete - ready for shots");
 
+  // Publish to MQTT
+  if (mqttManager) {
+    mqttManager->publishCountdownComplete(sessionData.sessionId);
+  }
+
   if (displayManager) {
     displayManager->showWaitingForShots(sessionData);
   }
@@ -146,6 +212,11 @@ void TimerApplication::onSessionStopped(const SessionData& sessionData) {
 
   sessionActive = false;
 
+  // Publish to MQTT
+  if (mqttManager) {
+    mqttManager->publishSessionStopped(sessionData.sessionId, sessionData.totalShots);
+  }
+
   if (displayManager) {
     displayManager->showSessionEnd(sessionData, lastShotNumber);
   }
@@ -154,6 +225,12 @@ void TimerApplication::onSessionStopped(const SessionData& sessionData) {
 void TimerApplication::onSessionSuspended(const SessionData& sessionData) {
   LOG_TIMER("Session suspended: ID %u, Total shots: %d",
             sessionData.sessionId, sessionData.totalShots);
+
+  // Publish to MQTT
+  if (mqttManager) {
+    mqttManager->publishSessionSuspended(sessionData.sessionId);
+  }
+
   // Keep sessionActive true for suspended sessions
 }
 
@@ -162,6 +239,11 @@ void TimerApplication::onSessionResumed(const SessionData& sessionData) {
             sessionData.sessionId, sessionData.totalShots);
 
   sessionActive = true;
+
+  // Publish to MQTT
+  if (mqttManager) {
+    mqttManager->publishSessionResumed(sessionData.sessionId);
+  }
 
   if (displayManager) {
     displayManager->showWaitingForShots(sessionData);
@@ -177,6 +259,18 @@ void TimerApplication::onConnectionStateChanged(DeviceConnectionState state) {
     hadDeviceConnected = true;
   }
 
+  // Publish connection state to MQTT
+  const char* deviceName = nullptr;
+  const char* deviceModel = nullptr;
+  if (timerDevice) {
+    deviceName = timerDevice->getDeviceName();
+    deviceModel = timerDevice->getDeviceModel();
+  }
+
+  if (mqttManager) {
+    mqttManager->publishConnectionState(state, deviceName, deviceModel);
+  }
+
   // Update display based on connection state
   if (state == DeviceConnectionState::DISCONNECTED) {
     if (sessionActive) {
@@ -184,11 +278,6 @@ void TimerApplication::onConnectionStateChanged(DeviceConnectionState state) {
     }
     // Clean up device so we can scan again
     timerDevice.reset();
-  }
-
-  const char* deviceName = nullptr;
-  if (timerDevice) {
-    deviceName = timerDevice->getDeviceName();
   }
 
   if (displayManager) {
@@ -226,8 +315,17 @@ void TimerApplication::performHealthCheck() {
       LOG_WARN("HEALTH", "No BLE activity for %lu ms", currentTime - lastActivityTime);
     }
 
-    LOG_DEBUG("HEALTH", "System uptime: %lu ms, Free heap: %u bytes",
-              getUptimeMs(), ESP.getFreeHeap());
+    // Log radio coexistence metrics
+    if (shotEventQueue.size() > 0) {
+      LOG_DEBUG("COEX", "Queue depth: %d, Published: %lu, Failures: %lu, Max depth: %u",
+                shotEventQueue.size(),
+                coexistenceMetrics.shots_published,
+                coexistenceMetrics.publish_failures,
+                maxQueueDepth);
+    }
+
+    LOG_DEBUG("HEALTH", "System uptime: %lu ms, Free heap: %u bytes, Queue: %d events",
+              getUptimeMs(), ESP.getFreeHeap(), shotEventQueue.size());
 
     lastHealthCheck = currentTime;
   }
@@ -235,6 +333,39 @@ void TimerApplication::performHealthCheck() {
 
 void TimerApplication::updateActivityTime() {
   lastActivityTime = millis();
+}
+
+void TimerApplication::publishQueuedEvents() {
+  // Process queued shot events asynchronously
+  // This runs in the main loop, outside the critical BLE window
+  unsigned int processed = 0;
+
+  while (!shotEventQueue.empty() && processed < 2) {
+    // Check if MQTT is healthy before publishing
+    if (!mqttManager || !mqttManager->isHealthy()) {
+      // WiFi/MQTT not available - keep events queued
+      // They will be published when connection recovers
+      break;
+    }
+
+    NormalizedShotData shot = shotEventQueue.front();
+
+    // Publish the event (fire and forget - publishShotDetected returns void)
+    mqttManager->publishShotDetected(shot);
+
+    // Always remove from queue
+    shotEventQueue.pop();
+    coexistenceMetrics.shots_published++;
+    LOG_DEBUG("COEX", "Published queued shot #%d", shot.shotNumber);
+
+    processed++;
+  }
+
+  // Log queue status if depth exceeds threshold
+  if (shotEventQueue.size() > 5) {
+    LOG_WARN("COEX", "Event queue backup: %d events waiting (WiFi bandwidth saturated?)",
+             shotEventQueue.size());
+  }
 }
 
 bool TimerApplication::isHealthy() const {
