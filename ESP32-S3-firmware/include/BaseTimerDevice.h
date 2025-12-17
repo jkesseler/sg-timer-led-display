@@ -14,12 +14,14 @@
  * - Callback registration
  * - Connection state tracking
  * - Update loop with heartbeat logging
+ * - Connection lost handling with automatic cleanup
  *
  * Derived classes must implement:
- * - attemptConnectionInternal() - Device-specific connection logic
- * - processTimerData() - Protocol-specific data parsing
- * - getServiceUUID() - Return device-specific service UUID
- * - getCharacteristicUUID() - Return device-specific characteristic UUID
+ * - getLogTag() - Return a string tag for logging (e.g., "SG-TIMER", "SPECIAL-PIE")
+ *
+ * Derived classes typically implement:
+ * - attemptConnection(BLEAdvertisedDevice*) - Device-specific connection logic
+ * - processTimerData(uint8_t*, size_t) - BLE protocol-specific data parsing
  */
 class BaseTimerDevice : public ITimerDevice {
 protected:
@@ -98,7 +100,7 @@ public:
   }
 
   void disconnect() override {
-    if (pClient && isConnectedFlag) {
+    if (pClient) {
       pClient->disconnect();
       delete pClient;
       pClient = nullptr;

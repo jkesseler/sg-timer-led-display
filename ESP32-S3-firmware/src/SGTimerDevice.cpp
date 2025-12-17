@@ -39,6 +39,12 @@ void SGTimerDevice::attemptConnection(BLEAdvertisedDevice* device) {
     return;
   }
 
+  // Reset connection state to ensure clean slate for new connection attempt
+  // This prevents dangling pointers if connection is retried after a failure
+  pEventCharacteristic = nullptr;
+  pService = nullptr;
+  isConnectedFlag = false;
+
   if (device->haveName()) {
     LOG_BLE("SG Timer found: %s (%s)", device->getAddress().toString().c_str(), device->getName().c_str());
   } else {
