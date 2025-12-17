@@ -7,10 +7,6 @@ void Logger::setLevel(LogLevel level) {
   currentLevel = level;
 }
 
-LogLevel Logger::getLevel() {
-  return currentLevel;
-}
-
 const char* Logger::getLevelString(LogLevel level) {
   switch (level) {
     case LogLevel::DEBUG: return "DEBUG";

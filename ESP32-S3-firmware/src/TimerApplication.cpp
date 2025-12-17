@@ -64,7 +64,8 @@ void TimerApplication::run() {
   // Perform periodic health checks
   performHealthCheck();
 
-  delay(MAIN_LOOP_DELAY);
+  // Yield to FreeRTOS scheduler, while allowing BLE and DMA tasks to run efficiently
+  vTaskDelay(pdMS_TO_TICKS(MAIN_LOOP_DELAY));
 }
 
 void TimerApplication::setupCallbacks() {
@@ -265,7 +266,7 @@ void TimerApplication::scanForDevices() {
   }
 
   // Throttle scan attempts
-  if (isScanning || (now - lastScanAttempt < 5000)) {
+  if (isScanning || (now - lastScanAttempt < BLE_SCAN_RETRY_INTERVAL_MS)) {
     return;
   }
 
@@ -280,10 +281,11 @@ void TimerApplication::scanForDevices() {
 
   BLEScan* pScan = BLEDevice::getScan();
   pScan->setActiveScan(true);
-  pScan->setInterval(100);
-  pScan->setWindow(99);
+  pScan->setInterval(BLE_SCAN_INTERVAL);
+  pScan->setWindow(BLE_SCAN_WINDOW);
 
-  BLEScanResults foundDevices = pScan->start(10, false);
+  // Perform BLE scan - results contain copies of advertised device data
+  BLEScanResults foundDevices = pScan->start(BLE_SCAN_DURATION, false);
 
   // Check for SG Timer
   BLEUUID sgServiceUuid(SGTimerDevice::SERVICE_UUID);
@@ -308,10 +310,14 @@ void TimerApplication::scanForDevices() {
       if (timerDevice->initialize()) {
         // Attempt connection using SG Timer's connection logic
         // Device will update state via callbacks (CONNECTING -> CONNECTED)
-        sgDevice->attemptConnection();
-        // Connection status will be checked in next update cycle
-        deviceFound = true;
-        break;
+        if (sgDevice->attemptConnection(&device)) {
+          LOG_SYSTEM("Successfully connected to SG Timer");
+          deviceFound = true;
+          break;
+        } else {
+          LOG_ERROR("TIMER", "Failed to connect to SG Timer");
+          timerDevice.reset();
+        }
       } else {
         LOG_ERROR("TIMER", "Failed to initialize SG Timer");
         timerDevice.reset();
@@ -344,6 +350,8 @@ void TimerApplication::scanForDevices() {
     }
   }
 
+  // BLEScanResults contains copies of advertised device data
+  // clearResults() properly frees the internal storage after device loop completes
   pScan->clearResults();
 
   if (!deviceFound) {

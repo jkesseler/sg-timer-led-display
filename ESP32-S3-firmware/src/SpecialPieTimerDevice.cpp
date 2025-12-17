@@ -10,24 +10,14 @@ const char* SpecialPieTimerDevice::CHARACTERISTIC_UUID = "0000FFF1-0000-1000-800
 SpecialPieTimerDevice* SpecialPieTimerDevice::instance = nullptr;
 
 SpecialPieTimerDevice::SpecialPieTimerDevice() :
-  pClient(nullptr),
+  BaseTimerDevice("Special Pie Timer"),
   pNotifyCharacteristic(nullptr),
-  pService(nullptr),
-  connectionState(DeviceConnectionState::DISCONNECTED),
-  isConnectedFlag(false),
-  lastReconnectAttempt(0),
-  lastHeartbeat(0),
-  deviceAddress("00:00:00:00:00:00"),
-  deviceName(""),
-  deviceModel("Special Pie Timer"),
-  currentSessionId(0),
-  sessionActiveFlag(false),
   previousTimeSeconds(0),
   previousTimeCentiseconds(0),
-  hasPreviousShot(false)
-{
+  hasPreviousShot(false),
+  currentSessionId(0),
+  sessionActiveFlag(false) {
   instance = this;
-  currentSession = {};
 }
 
 SpecialPieTimerDevice::~SpecialPieTimerDevice() {
@@ -35,165 +25,33 @@ SpecialPieTimerDevice::~SpecialPieTimerDevice() {
   instance = nullptr;
 }
 
-bool SpecialPieTimerDevice::initialize() {
-  LOG_INFO("SPECIAL-PIE", "Initializing Special Pie Timer device interface");
-  setConnectionState(DeviceConnectionState::DISCONNECTED);
-  return true;
-}
-
-bool SpecialPieTimerDevice::startScanning() {
-  LOG_INFO("SPECIAL-PIE", "Will start scanning for Special Pie Timer devices");
-  setConnectionState(DeviceConnectionState::SCANNING);
-  return true;
-}
-
-bool SpecialPieTimerDevice::connect(BLEAddress address) {
-  // Store the target address
-  deviceAddress = address;
-  return true;
-}
-
-void SpecialPieTimerDevice::disconnect() {
-  if (pClient && isConnectedFlag) {
-    pClient->disconnect();
-    delete pClient;
-    pClient = nullptr;
-  }
-  isConnectedFlag = false;
-  pNotifyCharacteristic = nullptr;
-  pService = nullptr;
-  setConnectionState(DeviceConnectionState::DISCONNECTED);
-}
-
-DeviceConnectionState SpecialPieTimerDevice::getConnectionState() const {
-  return connectionState;
-}
-
-bool SpecialPieTimerDevice::isConnected() const {
-  return isConnectedFlag;
-}
-
-const char* SpecialPieTimerDevice::getDeviceModel() const {
-  return deviceModel.c_str();
-}
-
-const char* SpecialPieTimerDevice::getDeviceName() const {
-  return deviceName.c_str();
-}
-
-BLEAddress SpecialPieTimerDevice::getDeviceAddress() const {
-  return deviceAddress;
-}
-
-void SpecialPieTimerDevice::onShotDetected(std::function<void(const NormalizedShotData&)> callback) {
-  shotDetectedCallback = callback;
-}
-
-void SpecialPieTimerDevice::onSessionStarted(std::function<void(const SessionData&)> callback) {
-  sessionStartedCallback = callback;
-}
-
-void SpecialPieTimerDevice::onCountdownComplete(std::function<void(const SessionData&)> callback) {
-  countdownCompleteCallback = callback;
-}
-
-void SpecialPieTimerDevice::onSessionStopped(std::function<void(const SessionData&)> callback) {
-  sessionStoppedCallback = callback;
-}
-
-void SpecialPieTimerDevice::onSessionSuspended(std::function<void(const SessionData&)> callback) {
-  sessionSuspendedCallback = callback;
-}
-
-void SpecialPieTimerDevice::onSessionResumed(std::function<void(const SessionData&)> callback) {
-  sessionResumedCallback = callback;
-}
-
-void SpecialPieTimerDevice::onConnectionStateChanged(std::function<void(DeviceConnectionState)> callback) {
-  connectionStateCallback = callback;
-}
-
-bool SpecialPieTimerDevice::supportsRemoteStart() const {
-  return false;
-}
-
-bool SpecialPieTimerDevice::supportsShotList() const {
-  return false;
-}
-
-bool SpecialPieTimerDevice::supportsSessionControl() const {
-  return false;
-}
-
-bool SpecialPieTimerDevice::requestShotList(uint32_t sessionId) {
-  return false;
-}
-
-bool SpecialPieTimerDevice::startSession() {
-  return false;
-}
-
-bool SpecialPieTimerDevice::stopSession() {
-  return false;
-}
-
-// Static helper to check if a device is a Special Pie Timer
-bool SpecialPieTimerDevice::isSpecialPieTimer(BLEAdvertisedDevice* device) {
-  if (!device) return false;
-
-  BLEUUID serviceUuid(SERVICE_UUID);
-  return device->haveServiceUUID() && device->isAdvertisingService(serviceUuid);
-}
-
-// Main update loop
-void SpecialPieTimerDevice::update() {
-  // If connected, check connection status
-  if (isConnectedFlag) {
-    if (pClient && pClient->isConnected()) {
-      // Print heartbeat every 30 seconds
-      if (millis() - lastHeartbeat > 30000) {
-        LOG_BLE("Special Pie Timer connected - waiting for events");
-        lastHeartbeat = millis();
-      }
-    } else {
-      // Connection lost
-      LOG_WARN("SPECIAL-PIE", "Connection lost");
-      isConnectedFlag = false;
-      pService = nullptr;
-      pNotifyCharacteristic = nullptr;
-      sessionActiveFlag = false;
-      hasPreviousShot = false;
-
-      if (pClient) {
-        delete pClient;
-        pClient = nullptr;
-      }
-
-      setConnectionState(DeviceConnectionState::DISCONNECTED);
-
-      // Reset session tracking
-      currentSession = {};
-
-      LOG_BLE("Will attempt to reconnect");
-    }
-  }
-  // Note: Scanning is handled by TimerApplication for multi-device support
+const char* SpecialPieTimerDevice::getLogTag() const {
+  return "SPECIAL-PIE";
 }
 
 bool SpecialPieTimerDevice::attemptConnection(BLEAdvertisedDevice* device) {
   if (!device) return false;
 
-  LOG_BLE("Special Pie Timer found: %s (%s)",
-          device->getName().c_str(),
-          device->getAddress().toString().c_str());
+  if (device->haveName()) {
+    LOG_BLE("Special Pie Timer found: %s (%s)",
+            device->getName().c_str(),
+            device->getAddress().toString().c_str());
+  } else {
+    LOG_BLE("Special Pie Timer found: %s", device->getAddress().toString().c_str());
+  }
 
   // Store device info
   deviceAddress = device->getAddress();
-  deviceName = device->getName().c_str();
+  if (device->haveName()) {
+    deviceName = device->getName().c_str();
+  } else {
+    deviceName = device->getAddress().toString().c_str();
+  }
 
-  // Wait before attempting connection
-  LOG_BLE("Waiting 2 seconds before connecting");
-  delay(2000);
+  // Brief delay before connection attempt to allow BLE stack to stabilize
+  // Note: This blocking delay is acceptable during initial connection setup
+  LOG_BLE("Waiting %dms before connecting", BLE_CONNECTION_DELAY_MS);
+  delay(BLE_CONNECTION_DELAY_MS);
 
   setConnectionState(DeviceConnectionState::CONNECTING);
   pClient = BLEDevice::createClient();
@@ -211,12 +69,12 @@ bool SpecialPieTimerDevice::attemptConnection(BLEAdvertisedDevice* device) {
     pService = pClient->getService(serviceUuid);
 
     if (pService != nullptr) {
-      Serial.println("Service found");
+      LOG_BLE("Special Pie Timer service found");
 
       pNotifyCharacteristic = pService->getCharacteristic(CHARACTERISTIC_UUID);
 
       if (pNotifyCharacteristic != nullptr) {
-        Serial.println("FFF1 characteristic found");
+        LOG_BLE("FFF1 characteristic found");
 
         // Check if characteristic can notify
         if (pNotifyCharacteristic->canNotify()) {
@@ -258,24 +116,20 @@ bool SpecialPieTimerDevice::attemptConnection(BLEAdvertisedDevice* device) {
   return false;
 }
 
-void SpecialPieTimerDevice::setConnectionState(DeviceConnectionState newState) {
-  if (connectionState != newState) {
-    connectionState = newState;
-    if (connectionStateCallback) {
-      connectionStateCallback(newState);
-    }
-  }
-}
-
 // Static notification callback
 void SpecialPieTimerDevice::notifyCallback(BLERemoteCharacteristic* pBLERemoteCharacteristic,
                                           uint8_t* pData, size_t length, bool isNotify) {
-  if (instance) {
+  if (instance && pData && length > 0) {
     instance->processTimerData(pData, length);
   }
 }
 
 void SpecialPieTimerDevice::processTimerData(uint8_t* pData, size_t length) {
+  if (!pData || length == 0) {
+    LOG_WARN("SPECIAL-PIE", "Invalid data received (null or empty)");
+    return;
+  }
+
   if (Logger::getLevel() <= LogLevel::DEBUG) {
     LOG_DEBUG("SPECIAL-PIE", "Notification received (%d bytes)", length);
     for (size_t i = 0; i < length; i++) {

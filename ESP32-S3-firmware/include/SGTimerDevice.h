@@ -1,6 +1,6 @@
 #pragma once
 
-#include "ITimerDevice.h"
+#include "BaseTimerDevice.h"
 #include <BLEDevice.h>
 #include <BLEClient.h>
 #include <BLEUtils.h>
@@ -16,30 +16,16 @@ enum class SGTimerEvent : uint8_t {
   SESSION_SET_BEGIN = 0x05
 };
 
-class SGTimerDevice : public ITimerDevice {
+class SGTimerDevice : public BaseTimerDevice {
 private:
   // SG Timer specific configuration
   static const char* CHARACTERISTIC_UUID;
   static const char* SHOT_LIST_UUID;
 
   // BLE components (simplified)
-  BLEClient* pClient;
   BLERemoteCharacteristic* pEventCharacteristic;
-  BLERemoteService* pService;
 
-  // Connection state
-  DeviceConnectionState connectionState;
-  bool isConnectedFlag;
-  unsigned long lastReconnectAttempt;
-  unsigned long lastHeartbeat;
-
-  // Device information
-  String deviceModel;
-  String deviceName;
-  BLEAddress deviceAddress;
-
-  // Session tracking
-  SessionData currentSession;
+  // Shot tracking state
   uint32_t previousShotTime;
   bool hasFirstShot;
   uint16_t lastShotNum;
@@ -47,18 +33,9 @@ private:
   uint32_t lastShotHundredths;
   bool hasLastShot;
 
-  // Callbacks
-  std::function<void(const NormalizedShotData&)> shotDetectedCallback;
-  std::function<void(const SessionData&)> sessionStartedCallback;
-  std::function<void(const SessionData&)> countdownCompleteCallback;
-  std::function<void(const SessionData&)> sessionStoppedCallback;
-  std::function<void(const SessionData&)> sessionSuspendedCallback;
-  std::function<void(const SessionData&)> sessionResumedCallback;
-  std::function<void(DeviceConnectionState)> connectionStateCallback;
-
-  // Internal methods (simplified)
+  // Internal methods
   void processTimerData(uint8_t* data, size_t length);
-  void setConnectionState(DeviceConnectionState newState);
+  const char* getLogTag() const override;
 
   // Static callback for BLE notifications
   static void notifyCallback(BLERemoteCharacteristic* pBLERemoteCharacteristic,
@@ -70,39 +47,9 @@ public:
 
   static const char *SERVICE_UUID;
 
-  // ITimerDevice interface implementation
-  bool initialize() override;
-  bool startScanning() override;
-  bool connect(BLEAddress address) override;
-  void disconnect() override;
-  DeviceConnectionState getConnectionState() const override;
-  bool isConnected() const override;
-
-  const char* getDeviceModel() const override;
-  const char* getDeviceName() const override;
-  BLEAddress getDeviceAddress() const override;
-
-  void onShotDetected(std::function<void(const NormalizedShotData&)> callback) override;
-  void onSessionStarted(std::function<void(const SessionData&)> callback) override;
-  void onCountdownComplete(std::function<void(const SessionData&)> callback) override;
-  void onSessionStopped(std::function<void(const SessionData&)> callback) override;
-  void onSessionSuspended(std::function<void(const SessionData&)> callback) override;
-  void onSessionResumed(std::function<void(const SessionData&)> callback) override;
-  void onConnectionStateChanged(std::function<void(DeviceConnectionState)> callback) override;
-
-  bool supportsRemoteStart() const override;
-  bool supportsShotList() const override;
-  bool supportsSessionControl() const override;
-
-  bool requestShotList(uint32_t sessionId) override;
-  bool startSession() override;
-  bool stopSession() override;
-
-  void update() override;
+  // Public connection method for TimerApplication
+  bool attemptConnection(BLEAdvertisedDevice* device);
 
   // Static instance for callbacks
   static SGTimerDevice* instance;
-
-  // Public connection method for TimerApplication
-  void attemptConnection();
 };
