@@ -49,10 +49,10 @@ DisplayManager::DisplayManager()
     textPixelWidth(0),
     startupScrollOffset(0),
     startupLastScrollUpdate(0),
-    startupTextPixelWidth(0) {
-  // Initialize data structures
-  memset(&lastShotData, 0, sizeof(lastShotData));
-  memset(&currentSessionData, 0, sizeof(currentSessionData));
+    startupTextPixelWidth(0),
+    lastShotData{},
+    currentSessionData{} {
+  // Structs now have default member initializers - no memset needed
 }
 
 DisplayManager::~DisplayManager() {
@@ -116,9 +116,8 @@ void DisplayManager::update() {
       if (currentTime - startupLastScrollUpdate >= SCROLL_SPEED_MS) {
         startupScrollOffset++;
 
-        const int16_t displayWidth = PANEL_WIDTH * PANEL_CHAIN;
         // Reset when text has scrolled completely off screen
-        if (startupScrollOffset > startupTextPixelWidth + 60) { // +60 for gap before repeat
+        if (startupScrollOffset > startupTextPixelWidth + MARQUEE_SCROLL_GAP_PIXELS) {
           startupScrollOffset = 0; // Reset to start
         }
 
@@ -152,9 +151,8 @@ void DisplayManager::update() {
         if (currentTime - lastScrollUpdate >= SCROLL_SPEED_MS) {
           scrollOffset++;
 
-          const int16_t displayWidth = PANEL_WIDTH * PANEL_CHAIN;
           // Reset when text has scrolled completely off screen
-          if (scrollOffset > textPixelWidth + 60) { // +60 for gap before repeat
+          if (scrollOffset > textPixelWidth + MARQUEE_SCROLL_GAP_PIXELS) {
             scrollOffset = 0; // Reset to start
           }
 
@@ -337,7 +335,7 @@ void DisplayManager::clearConnectionDetailLine() {
   display->fillRect(0, lineTop, displayWidth, lineHeight, 0);
 }
 
-uint16_t DisplayManager::color565(uint8_t r, uint8_t g, uint8_t b) {
+uint16_t DisplayManager::color565(uint8_t r, uint8_t g, uint8_t b) const {
   if (display) {
     return display->color565(r, g, b);
   }
@@ -376,7 +374,7 @@ void DisplayManager::renderStartupMessage() {
     u8g2_for_adafruit_gfx.print(startupText);
 
     // Draw second copy for seamless loop
-    int16_t xPos2 = xPos + startupTextPixelWidth + 60; // +60 pixel gap
+    int16_t xPos2 = xPos + startupTextPixelWidth + MARQUEE_SCROLL_GAP_PIXELS;
     u8g2_for_adafruit_gfx.setCursor(xPos2, lineY);
     u8g2_for_adafruit_gfx.print(startupText);
   }
@@ -452,7 +450,7 @@ void DisplayManager::renderConnectionStatus() {
       u8g2_for_adafruit_gfx.print(deviceName);
 
       // Draw second copy for seamless loop
-      int16_t xPos2 = xPos + textPixelWidth + 60; // +60 pixel gap
+      int16_t xPos2 = xPos + textPixelWidth + MARQUEE_SCROLL_GAP_PIXELS;
       u8g2_for_adafruit_gfx.setCursor(xPos2, lineY);
       u8g2_for_adafruit_gfx.print(deviceName);
     }
@@ -582,8 +580,8 @@ void DisplayManager::renderSessionEnd() {
 
 void DisplayManager::formatTime(uint32_t timeMs, char* buffer, size_t bufferSize) {
   // Calculate total seconds and centiseconds (hundredths of a second)
-  uint32_t totalSeconds = timeMs / 1000;
-  uint32_t centiseconds = (timeMs % 1000) / 10;  // Get hundredths of a second (0-99)
+  const uint32_t totalSeconds = timeMs / 1000;
+  const uint32_t centiseconds = (timeMs % 1000) / 10;  // Get hundredths of a second (0-99)
 
   // Format as "ss:cc" where ss = seconds, cc = centiseconds (always 2 digits each)
   snprintf(buffer, bufferSize, "%02lu:%02lu", totalSeconds, centiseconds);
@@ -591,8 +589,8 @@ void DisplayManager::formatTime(uint32_t timeMs, char* buffer, size_t bufferSize
 
 void DisplayManager::formatSplitTime(uint32_t timeMs, char* buffer, size_t bufferSize) {
   // Calculate total seconds and centiseconds (hundredths of a second)
-  uint32_t totalSeconds = timeMs / 1000;
-  uint32_t centiseconds = (timeMs % 1000) / 10;  // Get hundredths of a second (0-99)
+  const uint32_t totalSeconds = timeMs / 1000;
+  const uint32_t centiseconds = (timeMs % 1000) / 10;  // Get hundredths of a second (0-99)
 
   // Format as "s:cc" when < 10 seconds, "ss:cc" when >= 10 seconds
   if (totalSeconds < 10) {

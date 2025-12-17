@@ -80,9 +80,9 @@ private:
   void clearConnectionDetailLine();
 
   // Helper methods
-  void formatTime(uint32_t timeMs, char* buffer, size_t bufferSize);
-  void formatSplitTime(uint32_t timeMs, char* buffer, size_t bufferSize);
-  uint16_t color565(uint8_t r, uint8_t g, uint8_t b);
+  static void formatTime(uint32_t timeMs, char* buffer, size_t bufferSize);
+  static void formatSplitTime(uint32_t timeMs, char* buffer, size_t bufferSize);
+  uint16_t color565(uint8_t r, uint8_t g, uint8_t b) const;
 
 public:
   DisplayManager();

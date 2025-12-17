@@ -3,7 +3,7 @@
 #include <Arduino.h>
 
 // Logging levels
-enum class LogLevel {
+enum class LogLevel : uint8_t {
   DEBUG = 0,
   INFO = 1,
   WARN = 2,
@@ -20,7 +20,7 @@ private:
 
 public:
   static void setLevel(LogLevel level);
-  static LogLevel getLevel();
+  static inline LogLevel getLevel() { return currentLevel; }
   static void log(LogLevel level, const char* component, const char* format, ...);
 
   // Convenience macros will be defined below

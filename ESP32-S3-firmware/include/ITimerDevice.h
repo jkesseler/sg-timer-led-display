@@ -6,22 +6,22 @@
 
 // Unified shot data structure for all timer devices
 struct NormalizedShotData {
-  uint32_t sessionId;
-  uint16_t shotNumber;
-  uint32_t absoluteTimeMs;    // Always in milliseconds
-  uint32_t splitTimeMs;       // Time since previous shot
-  uint64_t timestampMs;       // System timestamp when shot was detected
-  const char* deviceModel;
-  bool isFirstShot;           // True if this is the first shot in session
+  uint32_t sessionId = 0;
+  uint16_t shotNumber = 0;
+  uint32_t absoluteTimeMs = 0;    // Always in milliseconds
+  uint32_t splitTimeMs = 0;       // Time since previous shot
+  uint64_t timestampMs = 0;       // System timestamp when shot was detected
+  const char* deviceModel = nullptr;
+  bool isFirstShot = false;       // True if this is the first shot in session
 };
 
 // Session state information
 struct SessionData {
-  uint32_t sessionId;
-  bool isActive;
-  uint16_t totalShots;
-  uint32_t startTimestamp;
-  float startDelaySeconds;
+  uint32_t sessionId = 0;
+  bool isActive = false;
+  uint16_t totalShots = 0;
+  uint32_t startTimestamp = 0;
+  float startDelaySeconds = 0.0f;
 };
 
 // Device connection state

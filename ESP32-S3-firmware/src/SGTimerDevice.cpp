@@ -143,8 +143,8 @@ void SGTimerDevice::update() {
   // If connected, check connection status
   if (isConnectedFlag) {
     if (pClient && pClient->isConnected()) {
-      // Print heartbeat every 30 seconds
-      if (millis() - lastHeartbeat > 30000) {
+      // Print heartbeat at regular intervals
+      if (millis() - lastHeartbeat > BLE_HEARTBEAT_INTERVAL_MS) {
         LOG_BLE("SG-TIMER connected - waiting for events");
         lastHeartbeat = millis();
       }
@@ -215,9 +215,10 @@ void SGTimerDevice::attemptConnection(BLEAdvertisedDevice* device) {
     deviceName = device->getAddress().toString().c_str();
   }
 
-  // Wait before attempting connection
-  LOG_BLE("Waiting 2 seconds before connecting");
-  delay(2000);
+  // Brief delay before connection attempt to allow BLE stack to stabilize
+  // Note: This blocking delay is acceptable during initial connection setup
+  LOG_BLE("Waiting %dms before connecting", BLE_CONNECTION_DELAY_MS);
+  delay(BLE_CONNECTION_DELAY_MS);
 
   setConnectionState(DeviceConnectionState::CONNECTING);
   pClient = BLEDevice::createClient();
@@ -282,12 +283,17 @@ void SGTimerDevice::attemptConnection(BLEAdvertisedDevice* device) {
 // Static notification callback
 void SGTimerDevice::notifyCallback(BLERemoteCharacteristic* pBLERemoteCharacteristic,
                                   uint8_t* pData, size_t length, bool isNotify) {
-  if (instance) {
+  if (instance && pData && length > 0) {
     instance->processTimerData(pData, length);
   }
 }
 
 void SGTimerDevice::processTimerData(uint8_t* pData, size_t length) {
+  if (!pData || length == 0) {
+    LOG_WARN("SG-TIMER", "Invalid data received (null or empty)");
+    return;
+  }
+
   if (Logger::getLevel() <= LogLevel::DEBUG) {
     LOG_DEBUG("SG-TIMER", "Notification received (%d bytes)", length);
     for (size_t i = 0; i < length; i++) {

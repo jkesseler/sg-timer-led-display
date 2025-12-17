@@ -267,7 +267,7 @@ void TimerApplication::scanForDevices() {
   }
 
   // Throttle scan attempts
-  if (isScanning || (now - lastScanAttempt < 5000)) {
+  if (isScanning || (now - lastScanAttempt < BLE_SCAN_RETRY_INTERVAL_MS)) {
     return;
   }
 
@@ -282,10 +282,12 @@ void TimerApplication::scanForDevices() {
 
   BLEScan* pScan = BLEDevice::getScan();
   pScan->setActiveScan(true);
-  pScan->setInterval(100);
-  pScan->setWindow(99);
+  pScan->setInterval(BLE_SCAN_INTERVAL);
+  pScan->setWindow(BLE_SCAN_WINDOW);
 
-  BLEScanResults foundDevices = pScan->start(10, false);
+  // Note: BLEScanResults contains copies of advertised device data
+  // The pScan->clearResults() at end properly frees internal storage
+  BLEScanResults foundDevices = pScan->start(BLE_SCAN_DURATION, false);
 
   // Check for SG Timer
   BLEUUID sgServiceUuid(SGTimerDevice::SERVICE_UUID);

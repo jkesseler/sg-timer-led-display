@@ -150,8 +150,8 @@ void SpecialPieTimerDevice::update() {
   // If connected, check connection status
   if (isConnectedFlag) {
     if (pClient && pClient->isConnected()) {
-      // Print heartbeat every 30 seconds
-      if (millis() - lastHeartbeat > 30000) {
+      // Print heartbeat at regular intervals
+      if (millis() - lastHeartbeat > BLE_HEARTBEAT_INTERVAL_MS) {
         LOG_BLE("Special Pie Timer connected - waiting for events");
         lastHeartbeat = millis();
       }
@@ -191,9 +191,10 @@ bool SpecialPieTimerDevice::attemptConnection(BLEAdvertisedDevice* device) {
   deviceAddress = device->getAddress();
   deviceName = device->getName().c_str();
 
-  // Wait before attempting connection
-  LOG_BLE("Waiting 2 seconds before connecting");
-  delay(2000);
+  // Brief delay before connection attempt to allow BLE stack to stabilize
+  // Note: This blocking delay is acceptable during initial connection setup
+  LOG_BLE("Waiting %dms before connecting", BLE_CONNECTION_DELAY_MS);
+  delay(BLE_CONNECTION_DELAY_MS);
 
   setConnectionState(DeviceConnectionState::CONNECTING);
   pClient = BLEDevice::createClient();
@@ -211,12 +212,12 @@ bool SpecialPieTimerDevice::attemptConnection(BLEAdvertisedDevice* device) {
     pService = pClient->getService(serviceUuid);
 
     if (pService != nullptr) {
-      Serial.println("Service found");
+      LOG_BLE("Special Pie Timer service found");
 
       pNotifyCharacteristic = pService->getCharacteristic(CHARACTERISTIC_UUID);
 
       if (pNotifyCharacteristic != nullptr) {
-        Serial.println("FFF1 characteristic found");
+        LOG_BLE("FFF1 characteristic found");
 
         // Check if characteristic can notify
         if (pNotifyCharacteristic->canNotify()) {
@@ -270,12 +271,17 @@ void SpecialPieTimerDevice::setConnectionState(DeviceConnectionState newState) {
 // Static notification callback
 void SpecialPieTimerDevice::notifyCallback(BLERemoteCharacteristic* pBLERemoteCharacteristic,
                                           uint8_t* pData, size_t length, bool isNotify) {
-  if (instance) {
+  if (instance && pData && length > 0) {
     instance->processTimerData(pData, length);
   }
 }
 
 void SpecialPieTimerDevice::processTimerData(uint8_t* pData, size_t length) {
+  if (!pData || length == 0) {
+    LOG_WARN("SPECIAL-PIE", "Invalid data received (null or empty)");
+    return;
+  }
+
   if (Logger::getLevel() <= LogLevel::DEBUG) {
     LOG_DEBUG("SPECIAL-PIE", "Notification received (%d bytes)", length);
     for (size_t i = 0; i < length; i++) {

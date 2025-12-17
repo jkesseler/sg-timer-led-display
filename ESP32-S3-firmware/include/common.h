@@ -34,6 +34,9 @@
 #define MIN_BRIGHTNESS 10            // Minimum brightness to ensure display is always visible
 #define MAX_BRIGHTNESS 255           // Maximum brightness
 
+// Display scrolling settings
+#define MARQUEE_SCROLL_GAP_PIXELS 60 // Gap between repeated text in marquee scroll
+
 // =============================================================================
 // Timing Configuration
 // =============================================================================
@@ -78,6 +81,9 @@
 #define BLE_RECONNECT_INTERVAL 5000    // Reconnection attempt interval in milliseconds
 #define BLE_SCAN_INTERVAL 1349         // BLE scan interval
 #define BLE_SCAN_WINDOW 449            // BLE scan window
+#define BLE_CONNECTION_DELAY_MS 2000   // Delay before connection attempt to stabilize BLE stack
+#define BLE_HEARTBEAT_INTERVAL_MS 30000 // Heartbeat log interval in milliseconds
+#define BLE_SCAN_RETRY_INTERVAL_MS 5000 // Minimum interval between scan attempts
 
 // =============================================================================
 // Protocol Constants
