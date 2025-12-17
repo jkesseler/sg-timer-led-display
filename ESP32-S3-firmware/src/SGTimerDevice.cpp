@@ -39,8 +39,11 @@ bool SGTimerDevice::attemptConnection(BLEAdvertisedDevice* device) {
     return false;
   }
 
+  // Disconnect any existing connection and clean up resources before attempting new connection
+  // This prevents memory leaks if this method is called multiple times (retry scenarios)
+  disconnect();
+
   // Reset connection state to ensure clean slate for new connection attempt
-  // This prevents dangling pointers if connection is retried after a failure
   pEventCharacteristic = nullptr;
   pService = nullptr;
   isConnectedFlag = false;
