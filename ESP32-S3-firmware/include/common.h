@@ -42,7 +42,7 @@
 // =============================================================================
 
 #define BRIGHTNESS_UPDATE_INTERVAL 200  // Update brightness every 200ms (in milliseconds)
-#define MAIN_LOOP_DELAY 20             // Main loop delay in milliseconds
+#define MAIN_LOOP_DELAY 10              // Main loop delay in milliseconds
 
 // Startup message delay - shorter for debug builds to speed up development
 #ifdef DEBUG_BUILD

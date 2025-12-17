@@ -64,9 +64,8 @@ void TimerApplication::run() {
   // Perform periodic health checks
   performHealthCheck();
 
-  // Yield to FreeRTOS scheduler - 10ms loop rate provides smooth display scrolling
-  // while allowing BLE and DMA tasks to run efficiently
-  vTaskDelay(pdMS_TO_TICKS(10));
+  // Yield to FreeRTOS scheduler, while allowing BLE and DMA tasks to run efficiently
+  vTaskDelay(pdMS_TO_TICKS(MAIN_LOOP_DELAY));
 }
 
 void TimerApplication::setupCallbacks() {
@@ -285,8 +284,7 @@ void TimerApplication::scanForDevices() {
   pScan->setInterval(BLE_SCAN_INTERVAL);
   pScan->setWindow(BLE_SCAN_WINDOW);
 
-  // Note: BLEScanResults contains copies of advertised device data
-  // The pScan->clearResults() at end properly frees internal storage
+  // Perform BLE scan - results contain copies of advertised device data
   BLEScanResults foundDevices = pScan->start(BLE_SCAN_DURATION, false);
 
   // Check for SG Timer
@@ -348,6 +346,8 @@ void TimerApplication::scanForDevices() {
     }
   }
 
+  // BLEScanResults contains copies of advertised device data
+  // clearResults() properly frees the internal storage after device loop completes
   pScan->clearResults();
 
   if (!deviceFound) {

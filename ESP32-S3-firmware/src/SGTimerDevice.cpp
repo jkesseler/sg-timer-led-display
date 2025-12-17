@@ -11,25 +11,15 @@ const char* SGTimerDevice::SHOT_LIST_UUID = "75200004-14D2-4CDA-8B6B-697C554C931
 SGTimerDevice* SGTimerDevice::instance = nullptr;
 
 SGTimerDevice::SGTimerDevice() :
-  pClient(nullptr),
+  BaseTimerDevice("SG Timer"),
   pEventCharacteristic(nullptr),
-  pService(nullptr),
-  connectionState(DeviceConnectionState::DISCONNECTED),
-  isConnectedFlag(false),
-  lastReconnectAttempt(0),
-  lastHeartbeat(0),
-  deviceModel("SG Timer"),
-  deviceName(""),
-  deviceAddress("00:00:00:00:00:00"),
   previousShotTime(0),
   hasFirstShot(false),
   lastShotNum(0),
   lastShotSeconds(0),
   lastShotHundredths(0),
-  hasLastShot(false)
-{
+  hasLastShot(false) {
   instance = this;
-  currentSession = {};
 }
 
 SGTimerDevice::~SGTimerDevice() {
@@ -37,149 +27,8 @@ SGTimerDevice::~SGTimerDevice() {
   instance = nullptr;
 }
 
-bool SGTimerDevice::initialize() {
-  LOG_INFO("SG-TIMER", "Initializing SG Timer device interface");
-  setConnectionState(DeviceConnectionState::DISCONNECTED);
-  return true;
-}
-
-bool SGTimerDevice::startScanning() {
-  LOG_INFO("SG-TIMER", "Will start scanning for target device");
-  setConnectionState(DeviceConnectionState::SCANNING);
-  return true;
-}
-
-bool SGTimerDevice::connect(BLEAddress address) {
-  // Not used in simplified version - we target specific device
-  return false;
-}
-
-void SGTimerDevice::disconnect() {
-  if (pClient && isConnectedFlag) {
-    pClient->disconnect();
-    delete pClient;
-    pClient = nullptr;
-  }
-  isConnectedFlag = false;
-  pEventCharacteristic = nullptr;
-  pService = nullptr;
-  setConnectionState(DeviceConnectionState::DISCONNECTED);
-}
-
-DeviceConnectionState SGTimerDevice::getConnectionState() const {
-  return connectionState;
-}
-
-bool SGTimerDevice::isConnected() const {
-  return isConnectedFlag;
-}
-
-const char* SGTimerDevice::getDeviceModel() const {
-  return deviceModel.c_str();
-}
-
-const char* SGTimerDevice::getDeviceName() const {
-  return deviceName.c_str();
-}
-
-BLEAddress SGTimerDevice::getDeviceAddress() const {
-  return deviceAddress;
-}
-
-void SGTimerDevice::onShotDetected(std::function<void(const NormalizedShotData&)> callback) {
-  shotDetectedCallback = callback;
-}
-
-void SGTimerDevice::onSessionStarted(std::function<void(const SessionData&)> callback) {
-  sessionStartedCallback = callback;
-}
-
-void SGTimerDevice::onCountdownComplete(std::function<void(const SessionData&)> callback) {
-  countdownCompleteCallback = callback;
-}
-
-void SGTimerDevice::onSessionStopped(std::function<void(const SessionData&)> callback) {
-  sessionStoppedCallback = callback;
-}
-
-void SGTimerDevice::onSessionSuspended(std::function<void(const SessionData&)> callback) {
-  sessionSuspendedCallback = callback;
-}
-
-void SGTimerDevice::onSessionResumed(std::function<void(const SessionData&)> callback) {
-  sessionResumedCallback = callback;
-}
-
-void SGTimerDevice::onConnectionStateChanged(std::function<void(DeviceConnectionState)> callback) {
-  connectionStateCallback = callback;
-}
-
-bool SGTimerDevice::supportsRemoteStart() const {
-  return false;
-}
-
-bool SGTimerDevice::supportsShotList() const {
-  return false;  // Simplified for now
-}
-
-bool SGTimerDevice::supportsSessionControl() const {
-  return false;
-}
-
-bool SGTimerDevice::requestShotList(uint32_t sessionId) {
-  return false;  // Simplified for now
-}
-
-bool SGTimerDevice::startSession() {
-  return false;
-}
-
-bool SGTimerDevice::stopSession() {
-  return false;
-}
-
-// Main update loop - check connection health
-void SGTimerDevice::update() {
-  // If connected, check connection status
-  if (isConnectedFlag) {
-    if (pClient && pClient->isConnected()) {
-      // Print heartbeat at regular intervals
-      if (millis() - lastHeartbeat > BLE_HEARTBEAT_INTERVAL_MS) {
-        LOG_BLE("SG-TIMER connected - waiting for events");
-        lastHeartbeat = millis();
-      }
-    } else {
-      // Connection lost
-      LOG_WARN("SG-TIMER", "Connection lost");
-      isConnectedFlag = false;
-      pService = nullptr;
-      pEventCharacteristic = nullptr;
-
-      if (pClient) {
-        delete pClient;
-        pClient = nullptr;
-      }
-
-      setConnectionState(DeviceConnectionState::DISCONNECTED);
-
-      // Reset session tracking
-      hasFirstShot = false;
-      previousShotTime = 0;
-      currentSession = {};
-
-      LOG_BLE("Will attempt to reconnect");
-    }
-  }
-  // Note: Scanning is handled by TimerApplication for multi-device support
-}
-
-void SGTimerDevice::setConnectionState(DeviceConnectionState newState) {
-  if (connectionState != newState) {
-    connectionState = newState;
-    if (connectionStateCallback) {
-      connectionStateCallback(newState);
-    }
-  }
+const char* SGTimerDevice::getLogTag() const {
+  return "SG-TIMER";
 }
 
 // Connect to the already-discovered SG Timer device
@@ -201,7 +50,7 @@ void SGTimerDevice::attemptConnection(BLEAdvertisedDevice* device) {
   if (device->haveName()) {
     deviceName = device->getName().c_str();
     // Extract model from name (SG-SST4XYYYYY where X is model identifier)
-    if (deviceName.startsWith("SG-SST4")) {
+    if (deviceName.startsWith("SG-SST4") && deviceName.length() > 7) {
       char modelId = deviceName.charAt(7);
       if (modelId == 'A') {
         deviceModel = "SG Timer Sport";
