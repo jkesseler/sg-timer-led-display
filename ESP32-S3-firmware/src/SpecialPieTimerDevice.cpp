@@ -32,13 +32,21 @@ const char* SpecialPieTimerDevice::getLogTag() const {
 bool SpecialPieTimerDevice::attemptConnection(BLEAdvertisedDevice* device) {
   if (!device) return false;
 
-  LOG_BLE("Special Pie Timer found: %s (%s)",
-          device->getName().c_str(),
-          device->getAddress().toString().c_str());
+  if (device->haveName()) {
+    LOG_BLE("Special Pie Timer found: %s (%s)",
+            device->getName().c_str(),
+            device->getAddress().toString().c_str());
+  } else {
+    LOG_BLE("Special Pie Timer found: %s", device->getAddress().toString().c_str());
+  }
 
   // Store device info
   deviceAddress = device->getAddress();
-  deviceName = device->getName().c_str();
+  if (device->haveName()) {
+    deviceName = device->getName().c_str();
+  } else {
+    deviceName = device->getAddress().toString().c_str();
+  }
 
   // Brief delay before connection attempt to allow BLE stack to stabilize
   // Note: This blocking delay is acceptable during initial connection setup
