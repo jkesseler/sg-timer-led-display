@@ -190,7 +190,9 @@ protected:
     pService = nullptr;
 
     if (pClient) {
-      pClient->disconnect();
+      if (pClient->isConnected()) {
+        pClient->disconnect();
+      }
       delete pClient;
       pClient = nullptr;
     }
