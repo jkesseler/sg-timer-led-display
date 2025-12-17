@@ -182,127 +182,99 @@ void SGTimerDevice::setConnectionState(DeviceConnectionState newState) {
   }
 }
 
-// Discover and connect to any SG Timer device by service UUID
-void SGTimerDevice::attemptConnection() {
-  LOG_BLE("Starting SG Timer device scan");
-  setConnectionState(DeviceConnectionState::SCANNING);
+// Connect to the already-discovered SG Timer device
+void SGTimerDevice::attemptConnection(BLEAdvertisedDevice* device) {
+  if (!device) {
+    LOG_ERROR("SG-TIMER", "Null device pointer passed to attemptConnection");
+    setConnectionState(DeviceConnectionState::ERROR);
+    return;
+  }
 
-  BLEScan* pScan = BLEDevice::getScan();
-  pScan->setActiveScan(true);
-  pScan->setInterval(100);
-  pScan->setWindow(99);
+  if (device->haveName()) {
+    LOG_BLE("SG Timer found: %s (%s)", device->getAddress().toString().c_str(), device->getName().c_str());
+  } else {
+    LOG_BLE("SG Timer found: %s", device->getAddress().toString().c_str());
+  }
 
-  LOG_BLE("Scanning for SG Timer devices (10 seconds)");
-  BLEScanResults foundDevices = pScan->start(10, false);
-
-  BLEUUID serviceUuid(SERVICE_UUID);
-  bool deviceFound = false;
-
-  // Look for any device advertising the SG Timer service UUID
-  for (int i = 0; i < foundDevices.getCount(); i++) {
-    BLEAdvertisedDevice device = foundDevices.getDevice(i);
-
-    // Check if device advertises the SG Timer service
-    if (device.isAdvertisingService(serviceUuid)) {
-      if (device.haveName()) {
-        LOG_BLE("SG Timer found: %s (%s)", device.getAddress().toString().c_str(), device.getName().c_str());
+  // Store device information
+  deviceAddress = device->getAddress();
+  if (device->haveName()) {
+    deviceName = device->getName().c_str();
+    // Extract model from name (SG-SST4XYYYYY where X is model identifier)
+    if (deviceName.startsWith("SG-SST4")) {
+      char modelId = deviceName.charAt(7);
+      if (modelId == 'A') {
+        deviceModel = "SG Timer Sport";
+      } else if (modelId == 'B') {
+        deviceModel = "SG Timer GO";
       } else {
-        LOG_BLE("SG Timer found: %s", device.getAddress().toString().c_str());
+        deviceModel = "SG Timer";
       }
-      deviceFound = true;
+    }
+  } else {
+    deviceName = device->getAddress().toString().c_str();
+  }
 
-      // Store device information
-      deviceAddress = device.getAddress();
-      if (device.haveName()) {
-        deviceName = device.getName().c_str();
-        // Extract model from name (SG-SST4XYYYYY where X is model identifier)
-        if (deviceName.startsWith("SG-SST4")) {
-          char modelId = deviceName.charAt(7);
-          if (modelId == 'A') {
-            deviceModel = "SG Timer Sport";
-          } else if (modelId == 'B') {
-            deviceModel = "SG Timer GO";
-          } else {
-            deviceModel = "SG Timer";
-          }
-        }
-      } else {
-        deviceName = device.getAddress().toString().c_str();
-      }
+  // Wait before attempting connection
+  LOG_BLE("Waiting 2 seconds before connecting");
+  delay(2000);
 
-      // Wait before attempting connection
-      LOG_BLE("Waiting 2 seconds before connecting");
-      delay(2000);
+  setConnectionState(DeviceConnectionState::CONNECTING);
+  pClient = BLEDevice::createClient();
 
-      setConnectionState(DeviceConnectionState::CONNECTING);
-      pClient = BLEDevice::createClient();
+  if (!pClient) {
+    LOG_ERROR("SG-TIMER", "Failed to create BLE client");
+    setConnectionState(DeviceConnectionState::ERROR);
+    return;
+  }
 
-      if (!pClient) {
-        LOG_ERROR("SG-TIMER", "Failed to create BLE client");
-        setConnectionState(DeviceConnectionState::ERROR);
-        break;
-      }
+  LOG_BLE("Attempting connection");
+  if (pClient->connect(device)) {
+    LOG_BLE("Connected to device");
+    BLEUUID serviceUuid(SERVICE_UUID);
+    pService = pClient->getService(serviceUuid);
 
-      LOG_BLE("Attempting connection");
-      if (pClient->connect(&device)) {
-        LOG_BLE("Connected to device");
-        pService = pClient->getService(serviceUuid);
+    if (pService != nullptr) {
+      LOG_BLE("Service found");
 
-        if (pService != nullptr) {
-          LOG_BLE("Service found");
+      pEventCharacteristic = pService->getCharacteristic(CHARACTERISTIC_UUID);
 
-          pEventCharacteristic = pService->getCharacteristic(CHARACTERISTIC_UUID);
+      if (pEventCharacteristic != nullptr) {
+        LOG_BLE("EVENT characteristic found");
 
-          if (pEventCharacteristic != nullptr) {
-            LOG_BLE("EVENT characteristic found");
-
-            // Check if characteristic can notify
-            if (pEventCharacteristic->canNotify()) {
-              LOG_BLE("Registering for notifications");
-              pEventCharacteristic->registerForNotify(notifyCallback);
-              LOG_BLE("Successfully registered for notifications - listening for events");
-              isConnectedFlag = true;
-              lastHeartbeat = millis();
-              setConnectionState(DeviceConnectionState::CONNECTED);
-            } else {
-              LOG_ERROR("SG-TIMER", "Characteristic cannot notify");
-              pClient->disconnect();
-              delete pClient;
-              pClient = nullptr;
-              setConnectionState(DeviceConnectionState::ERROR);
-            }
-          } else {
-            LOG_ERROR("SG-TIMER", "EVENT characteristic not found");
-            pClient->disconnect();
-            delete pClient;
-            pClient = nullptr;
-            setConnectionState(DeviceConnectionState::ERROR);
-          }
+        // Check if characteristic can notify
+        if (pEventCharacteristic->canNotify()) {
+          LOG_BLE("Registering for notifications");
+          pEventCharacteristic->registerForNotify(notifyCallback);
+          LOG_BLE("Successfully registered for notifications - listening for events");
+          isConnectedFlag = true;
+          lastHeartbeat = millis();
+          setConnectionState(DeviceConnectionState::CONNECTED);
         } else {
-          LOG_ERROR("SG-TIMER", "Service not found");
+          LOG_ERROR("SG-TIMER", "Characteristic cannot notify");
           pClient->disconnect();
           delete pClient;
           pClient = nullptr;
           setConnectionState(DeviceConnectionState::ERROR);
         }
       } else {
-        LOG_ERROR("SG-TIMER", "Failed to connect");
+        LOG_ERROR("SG-TIMER", "EVENT characteristic not found");
+        pClient->disconnect();
         delete pClient;
         pClient = nullptr;
         setConnectionState(DeviceConnectionState::ERROR);
       }
-
-      break;
+    } else {
+      LOG_ERROR("SG-TIMER", "Service not found");
+      pClient->disconnect();
+      delete pClient;
+      pClient = nullptr;
+      setConnectionState(DeviceConnectionState::ERROR);
     }
-  }
-
-  pScan->clearResults();
-
-  if (!deviceFound) {
-    LOG_BLE("No SG Timer devices found - retrying in 5 seconds");
-    setConnectionState(DeviceConnectionState::DISCONNECTED);
-  } else if (!isConnectedFlag) {
-    LOG_ERROR("SG-TIMER", "Connection failed - retrying in 5 seconds");
+  } else {
+    LOG_ERROR("SG-TIMER", "Failed to connect");
+    delete pClient;
+    pClient = nullptr;
     setConnectionState(DeviceConnectionState::ERROR);
   }
 }

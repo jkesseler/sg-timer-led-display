@@ -64,7 +64,9 @@ void TimerApplication::run() {
   // Perform periodic health checks
   performHealthCheck();
 
-  delay(MAIN_LOOP_DELAY);
+  // Yield to FreeRTOS scheduler - 10ms loop rate provides smooth display scrolling
+  // while allowing BLE and DMA tasks to run efficiently
+  vTaskDelay(pdMS_TO_TICKS(10));
 }
 
 void TimerApplication::setupCallbacks() {
@@ -308,7 +310,7 @@ void TimerApplication::scanForDevices() {
       if (timerDevice->initialize()) {
         // Attempt connection using SG Timer's connection logic
         // Device will update state via callbacks (CONNECTING -> CONNECTED)
-        sgDevice->attemptConnection();
+        sgDevice->attemptConnection(&device);
         // Connection status will be checked in next update cycle
         deviceFound = true;
         break;

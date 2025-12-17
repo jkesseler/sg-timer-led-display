@@ -104,5 +104,5 @@ public:
   static SGTimerDevice* instance;
 
   // Public connection method for TimerApplication
-  void attemptConnection();
+  void attemptConnection(BLEAdvertisedDevice* device);
 };
