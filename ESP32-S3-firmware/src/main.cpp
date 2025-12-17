@@ -4,8 +4,8 @@
 #include "common.h"
 #include <memory>
 
-// Global application instance - using unique_ptr for proper lifecycle management
-// Note: std::make_unique requires C++14, using reset() pattern for C++11 compatibility
+// Global application instance - using std::unique_ptr for proper lifecycle management
+// Note: std::make_unique is a C++14 feature; we use the reset(new ...) pattern here to remain C++11-compatible
 static std::unique_ptr<TimerApplication> app;
 
 void setup() {
