@@ -310,10 +310,14 @@ void TimerApplication::scanForDevices() {
       if (timerDevice->initialize()) {
         // Attempt connection using SG Timer's connection logic
         // Device will update state via callbacks (CONNECTING -> CONNECTED)
-        sgDevice->attemptConnection(&device);
-        // Connection status will be checked in next update cycle
-        deviceFound = true;
-        break;
+        if (sgDevice->attemptConnection(&device)) {
+          LOG_SYSTEM("Successfully connected to SG Timer");
+          deviceFound = true;
+          break;
+        } else {
+          LOG_ERROR("TIMER", "Failed to connect to SG Timer");
+          timerDevice.reset();
+        }
       } else {
         LOG_ERROR("TIMER", "Failed to initialize SG Timer");
         timerDevice.reset();

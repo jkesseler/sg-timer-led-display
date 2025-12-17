@@ -48,7 +48,7 @@ public:
   static const char *SERVICE_UUID;
 
   // Public connection method for TimerApplication
-  void attemptConnection(BLEAdvertisedDevice* device);
+  bool attemptConnection(BLEAdvertisedDevice* device);
 
   // Static instance for callbacks
   static SGTimerDevice* instance;

@@ -74,7 +74,6 @@ public:
       deviceAddress("00:00:00:00:00:00"),
       deviceName(""),
       deviceModel(model) {
-    currentSession = {};
   }
 
   virtual ~BaseTimerDevice() {
@@ -191,6 +190,7 @@ protected:
     pService = nullptr;
 
     if (pClient) {
+      pClient->disconnect();
       delete pClient;
       pClient = nullptr;
     }

@@ -32,11 +32,11 @@ const char* SGTimerDevice::getLogTag() const {
 }
 
 // Connect to the already-discovered SG Timer device
-void SGTimerDevice::attemptConnection(BLEAdvertisedDevice* device) {
+bool SGTimerDevice::attemptConnection(BLEAdvertisedDevice* device) {
   if (!device) {
     LOG_ERROR("SG-TIMER", "Null device pointer passed to attemptConnection");
     setConnectionState(DeviceConnectionState::ERROR);
-    return;
+    return false;
   }
 
   // Reset connection state to ensure clean slate for new connection attempt
@@ -81,7 +81,7 @@ void SGTimerDevice::attemptConnection(BLEAdvertisedDevice* device) {
   if (!pClient) {
     LOG_ERROR("SG-TIMER", "Failed to create BLE client");
     setConnectionState(DeviceConnectionState::ERROR);
-    return;
+    return false;
   }
 
   LOG_BLE("Attempting connection");
@@ -106,12 +106,14 @@ void SGTimerDevice::attemptConnection(BLEAdvertisedDevice* device) {
           isConnectedFlag = true;
           lastHeartbeat = millis();
           setConnectionState(DeviceConnectionState::CONNECTED);
+          return true;
         } else {
           LOG_ERROR("SG-TIMER", "Characteristic cannot notify");
           pClient->disconnect();
           delete pClient;
           pClient = nullptr;
           setConnectionState(DeviceConnectionState::ERROR);
+          return false;
         }
       } else {
         LOG_ERROR("SG-TIMER", "EVENT characteristic not found");
@@ -119,6 +121,7 @@ void SGTimerDevice::attemptConnection(BLEAdvertisedDevice* device) {
         delete pClient;
         pClient = nullptr;
         setConnectionState(DeviceConnectionState::ERROR);
+        return false;
       }
     } else {
       LOG_ERROR("SG-TIMER", "Service not found");
@@ -126,12 +129,14 @@ void SGTimerDevice::attemptConnection(BLEAdvertisedDevice* device) {
       delete pClient;
       pClient = nullptr;
       setConnectionState(DeviceConnectionState::ERROR);
+      return false;
     }
   } else {
     LOG_ERROR("SG-TIMER", "Failed to connect");
     delete pClient;
     pClient = nullptr;
     setConnectionState(DeviceConnectionState::ERROR);
+    return false;
   }
 }
 
