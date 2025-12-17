@@ -5,14 +5,20 @@
 #include "MqttManager.h"
 #include "Logger.h"
 #include <memory>
-#include <queue>
 
 // Application configuration
 namespace AppConfig {
   constexpr uint32_t WATCHDOG_TIMEOUT_MS = 10000;  // 10 seconds
   constexpr uint32_t HEALTH_CHECK_INTERVAL_MS = 5000;  // 5 seconds
-  constexpr uint16_t EVENT_QUEUE_MAX_SIZE = 30;  // Max queued events before processing
-  constexpr uint32_t COEXISTENCE_BLE_WINDOW_MS = 5;  // BLE-only window after event
+
+  // Ring buffer configuration for shot events
+  // Using power-of-2 size enables fast modulo via bitwise AND
+  constexpr uint16_t EVENT_QUEUE_SIZE = 32;  // Must be power of 2
+  constexpr uint16_t EVENT_QUEUE_MASK = EVENT_QUEUE_SIZE - 1;
+  constexpr uint16_t QUEUE_DEPTH_WARN_THRESHOLD = EVENT_QUEUE_SIZE / 8;  // Warn at ~12.5% capacity
+
+  // Batch processing configuration
+  constexpr uint16_t MAX_SHOTS_PER_PUBLISH_CYCLE = 8;  // Max shots to publish per loop iteration
 }
 
 class TimerApplication {
@@ -26,30 +32,43 @@ private:
   uint16_t lastShotNumber;
   uint32_t lastShotTime;
 
-  // Event queue for radio coexistence (BLE/WiFi)
-  std::queue<NormalizedShotData> shotEventQueue;
-  uint16_t maxQueueDepth;  // Monitor max queue depth for diagnostics
-  unsigned long lastBleWindow;  // Track BLE-only window timing
+  // Lock-free ring buffer for shot events (faster than std::queue)
+  // Allows BLE callback to enqueue without blocking MQTT publishing
+  NormalizedShotData shotEventBuffer[AppConfig::EVENT_QUEUE_SIZE];
+  volatile uint16_t queueHead;  // Write position (BLE callback writes here)
+  volatile uint16_t queueTail;  // Read position (main loop reads here)
+
+  // Diagnostics
+  uint16_t maxQueueDepth;
+  uint32_t totalShotsQueued;
+  uint32_t totalShotsPublished;
+  uint32_t publishFailures;
 
   // Device scanning state
   unsigned long lastScanAttempt;
   bool isScanning;
-  unsigned long startupTime;  // Track when app started for startup delay
+  unsigned long startupTime;
 
   // Health monitoring
   unsigned long lastHealthCheck;
   unsigned long lastActivityTime;
-  bool hadDeviceConnected;  // Track if we ever had a device to distinguish "no device" from "lost device"
+  bool hadDeviceConnected;
 
-  // Coexistence metrics
-  struct {
-    uint32_t shots_queued;
-    uint32_t shots_published;
-    uint32_t publish_failures;
-  } coexistenceMetrics;
+  // MQTT warning throttle
+  unsigned long lastMqttWarningTime;
 
-  // MQTT availability tracking
-  unsigned long lastMqttWarningTime;  // Throttle logging of MQTT unavailable state
+  // Ring buffer helpers - inline for performance
+  inline uint16_t queueSize() const {
+    return (queueHead - queueTail) & AppConfig::EVENT_QUEUE_MASK;
+  }
+
+  inline bool queueEmpty() const {
+    return queueHead == queueTail;
+  }
+
+  inline bool queueFull() const {
+    return queueSize() == (AppConfig::EVENT_QUEUE_SIZE - 1);
+  }
 
   // Event handlers
   void onShotDetected(const NormalizedShotData& shotData);
@@ -66,14 +85,14 @@ private:
   void performHealthCheck();
   void updateActivityTime();
   void scanForDevices();
-  void publishQueuedEvents();  // Process event queue asynchronously
+  void publishQueuedEvents();
 
 public:
   TimerApplication();
   ~TimerApplication();
 
   bool initialize();
-  void run(); // Main application loop
+  void run();
 
   // Getters for debugging/monitoring
   bool isSessionActive() const { return sessionActive; }

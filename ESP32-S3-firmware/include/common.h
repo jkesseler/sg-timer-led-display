@@ -95,30 +95,11 @@
 #define MQTT_BROKER_IP "192.168.1.198"
 #define MQTT_BROKER_PORT 1883
 #define MQTT_CLIENT_ID "j.k.pewpew-timer-bridge"
-#define MQTT_CHECK_INTERVAL 5000        // Check MQTT connection every 5 seconds
-#define MQTT_RECONNECT_INTERVAL 5000   // Reconnection attempt interval in milliseconds
-#define MQTT_SOCKET_TIMEOUT 5000        // Socket connection timeout in milliseconds
+#define MQTT_QUEUEU_SIZE 4 // Max queued MQTT messages
 
 // Note: If your MQTT broker requires authentication, uncomment and set these:
 // #define MQTT_USER "username"
 // #define MQTT_PASSWORD "password"
-
-// =============================================================================
-// Radio Coexistence Configuration (BLE/WiFi Sharing 2.4GHz Antenna)
-// =============================================================================
-
-// Enable radio coexistence prioritization (recommended for shot timer)
-#define ENABLE_RADIO_COEXISTENCE 1
-// Prioritization: 0 = No preference, 1 = Prefer BLE (recommended)
-#define RADIO_COEXISTENCE_PREFERENCE 1
-
-// Event queue size for async MQTT publishing
-// Larger = more buffering but more memory, Smaller = less latency but risk of drops
-#define MQTT_EVENT_QUEUE_MAX_SIZE 10
-
-// BLE-only window duration (ms) after each BLE event
-// This prevents WiFi from interfering with BLE reception
-#define BLE_WINDOW_MS 5
 
 // =============================================================================
 // Protocol Constants
