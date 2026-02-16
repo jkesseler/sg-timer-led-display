@@ -39,18 +39,28 @@ bool TimerApplication::initialize() {
     return false;
   }
 
-  // Initialize MQTT manager
-  mqttManager = std::unique_ptr<MqttManager>(new MqttManager());
-  if (!mqttManager->initialize()) {
-    LOG_ERROR("SYSTEM", "Failed to initialize MQTT manager");
-    // Non-fatal - continue without MQTT
+  // Initialize WiFi and MQTT only if we're using BLE mode with MQTT republishing
+  // or if MQTT server is configured (WiFiConfig will load saved config)
+  if (TIMER_TYPE == TIMER_TYPE_BLE && TIMER_REPUBLISH_MQTT) {
+    // Initialize MQTT manager
+    mqttManager = std::unique_ptr<MqttManager>(new MqttManager());
+    if (!mqttManager->initialize()) {
+      LOG_ERROR("SYSTEM", "Failed to initialize MQTT manager");
+      // Non-fatal - continue without MQTT
+    }
+  } else {
+    LOG_SYSTEM("MQTT disabled (TIMER_TYPE=%d, TIMER_REPUBLISH_MQTT=%d)", TIMER_TYPE, TIMER_REPUBLISH_MQTT);
   }
 
-  // Initialize BLE
-  BLEDevice::init(BLE_DEVICE_NAME);
-  LOG_BLE("ESP32-S3 BLE Client initialized");
+  // Initialize BLE only if timer type is BLE
+  if (TIMER_TYPE == TIMER_TYPE_BLE) {
+    BLEDevice::init(BLE_DEVICE_NAME);
+    LOG_BLE("ESP32-S3 BLE Client initialized");
+    LOG_SYSTEM("Ready to scan for timer devices (SG Timer or Special Pie Timer)");
+  } else {
+    LOG_SYSTEM("BLE disabled - Timer Type: MQTT");
+  }
 
-  LOG_SYSTEM("Ready to scan for timer devices (SG Timer or Special Pie Timer)");
   LOG_SYSTEM("Application initialized successfully");
 
   startupTime = millis();
@@ -65,15 +75,17 @@ void TimerApplication::run() {
   WiFiConfig::update();
 
   // ============================================================
-  // PHASE 2: BLE Device Management
+  // PHASE 2: BLE Device Management (only if TIMER_TYPE == TIMER_TYPE_BLE)
   // ============================================================
-  if (!timerDevice) {
-    scanForDevices();
-  }
+  if (TIMER_TYPE == TIMER_TYPE_BLE) {
+    if (!timerDevice) {
+      scanForDevices();
+    }
 
-  // Process BLE events - this may trigger callbacks that enqueue shots
-  if (timerDevice) {
-    timerDevice->update();
+    // Process BLE events - this may trigger callbacks that enqueue shots
+    if (timerDevice) {
+      timerDevice->update();
+    }
   }
 
   // ============================================================
@@ -148,8 +160,10 @@ void TimerApplication::onShotDetected(const NormalizedShotData& shotData) {
   // This is called from BLE callback context - must be fast!
   // Only queue if MQTT is available - don't buffer when unavailable
   // ============================================================
-  bool mqttReady = mqttManager && mqttManager->canPublish();
-  if (mqttReady) {
+  // Only publish to MQTT if TIMER_TYPE == TIMER_TYPE_BLE && TIMER_REPUBLISH_MQTT == true && connected to MQTT broker
+  bool shouldPublishMqtt = (TIMER_TYPE == TIMER_TYPE_BLE) && TIMER_REPUBLISH_MQTT && mqttManager && mqttManager->canPublish();
+
+  if (shouldPublishMqtt) {
     if (!queueFull()) {
       // Copy shot data into ring buffer
       shotEventBuffer[queueHead] = shotData;

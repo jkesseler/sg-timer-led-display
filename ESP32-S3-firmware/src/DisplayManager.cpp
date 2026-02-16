@@ -1,4 +1,5 @@
 #include "DisplayManager.h"
+#include "WiFiConfig.h"
 #include "Logger.h"
 #include <stdio.h>
 #include <U8g2_for_Adafruit_GFX.h>
@@ -232,7 +233,7 @@ void DisplayManager::showStartup() {
   // Calculate text width for scrolling
   // Uses character count estimate: ~15 pixels per char for u8g2_font_luRS18_tr
   // This is reliable for embedded systems and avoids font metric overhead
-  const char *startupText = STARTUP_TEXT;
+  const char *startupText = WiFiConfig::getStartupText();
   startupTextPixelWidth = strlen(startupText) * 15;
   LOG_DISPLAY("Startup text: \"%s\"", startupText);
   LOG_DISPLAY("Text length: %d chars, estimated width: %d pixels", strlen(startupText), startupTextPixelWidth);
@@ -357,7 +358,7 @@ void DisplayManager::renderStartupMessage() {
   u8g2_for_adafruit_gfx.setForegroundColor(DisplayColors::GREEN);
   u8g2_for_adafruit_gfx.setFont(u8g2_font_luRS18_tr);
 
-  const char *startupText = STARTUP_TEXT;
+  const char *startupText = WiFiConfig::getStartupText();
 
   // If text fits on screen, just display it normally
   if (startupTextPixelWidth <= displayWidth - 8) {

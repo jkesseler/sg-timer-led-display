@@ -1,4 +1,5 @@
 #include "MqttManager.h"
+#include "WiFiConfig.h"
 #include "common.h"
 #include <WiFi.h>
 #include <PubSubClient.h>
@@ -61,8 +62,18 @@ MqttManager::~MqttManager() {
 bool MqttManager::initialize() {
   LOG_SYSTEM("Initializing MQTT Manager");
 
+  // Get MQTT configuration from WiFiConfig (will use defaults if not configured)
+  const char* mqttServer = WiFiConfig::getMqttServer();
+  int mqttPort = WiFiConfig::getMqttPort();
+
+  // Check if MQTT server is configured
+  if (!mqttServer || mqttServer[0] == '\0') {
+    LOG_SYSTEM("MQTT server not configured - MQTT disabled");
+    return false;
+  }
+
   // Set MQTT broker details
-  mqttClient.setServer(MQTT_BROKER_IP, MQTT_BROKER_PORT);
+  mqttClient.setServer(mqttServer, mqttPort);
 
   // Set a reasonable buffer size for our messages
   mqttClient.setBufferSize(512);
@@ -73,7 +84,7 @@ bool MqttManager::initialize() {
   // Keep-alive interval
   mqttClient.setKeepAlive(60);  // 60 seconds keep-alive
 
-  LOG_SYSTEM("MQTT configured for %s:%d", MQTT_BROKER_IP, MQTT_BROKER_PORT);
+  LOG_SYSTEM("MQTT configured for %s:%d", mqttServer, mqttPort);
   LOG_SYSTEM("Note: MQTT will connect when WiFi becomes available");
 
   return true;
@@ -111,9 +122,27 @@ bool MqttManager::tryConnect() {
     mqttConnected = false;
   }
 
-  LOG_DEBUG("MQTT", "Attempting connection to %s:%d", MQTT_BROKER_IP, MQTT_BROKER_PORT);
+  // Get MQTT configuration
+  const char* mqttServer = WiFiConfig::getMqttServer();
+  int mqttPort = WiFiConfig::getMqttPort();
+  const char* mqttUser = WiFiConfig::getMqttUser();
+  const char* mqttPassword = WiFiConfig::getMqttPassword();
 
-  if (mqttClient.connect(MQTT_CLIENT_ID)) {
+  LOG_DEBUG("MQTT", "Attempting connection to %s:%d", mqttServer, mqttPort);
+
+  // Connect with or without authentication
+  bool connected = false;
+  bool useAuth = (mqttUser && mqttUser[0] != '\0' && mqttPassword && mqttPassword[0] != '\0');
+
+  if (useAuth) {
+    LOG_DEBUG("MQTT", "Using authentication (user: %s)", mqttUser);
+    connected = mqttClient.connect(MQTT_CLIENT_ID, mqttUser, mqttPassword);
+  } else {
+    LOG_DEBUG("MQTT", "Connecting without authentication");
+    connected = mqttClient.connect(MQTT_CLIENT_ID);
+  }
+
+  if (connected) {
     mqttConnected = true;
     LOG_BLE("MQTT connected successfully");
     return true;
@@ -129,7 +158,7 @@ bool MqttManager::tryConnect() {
     lastDiagnosticLog = millis();
     switch (state) {
       case -4:
-        LOG_ERROR("MQTT", "Timeout - broker unreachable at %s:%d", MQTT_BROKER_IP, MQTT_BROKER_PORT);
+        LOG_ERROR("MQTT", "Timeout - broker unreachable at %s:%d", mqttServer, mqttPort);
         break;
       case -2:
         LOG_ERROR("MQTT", "Network unreachable");
