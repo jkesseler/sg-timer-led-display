@@ -1,6 +1,7 @@
 #include "TimerApplication.h"
 #include "SGTimerDevice.h"
 #include "SpecialPieTimerDevice.h"
+#include "ASNTimerDevice.h"
 #include "WiFiConfig.h"
 #include "common.h"
 #include <BLEDevice.h>
@@ -464,6 +465,7 @@ void TimerApplication::scanForDevices() {
 
   BLEUUID sgServiceUuid(SGTimerDevice::SERVICE_UUID);
   BLEUUID specialPieServiceUuid(SpecialPieTimerDevice::SERVICE_UUID);
+  BLEUUID asnServiceUuid(ASNTimerDevice::SERVICE_UUID);
 
   bool deviceFound = false;
 
@@ -511,6 +513,36 @@ void TimerApplication::scanForDevices() {
         }
       } else {
         LOG_ERROR("TIMER", "Failed to initialize Special Pie Timer");
+        timerDevice.reset();
+      }
+    }
+
+    // Check for ASN Timer
+    else if (device.haveServiceUUID() && device.isAdvertisingService(asnServiceUuid))
+    {
+      LOG_SYSTEM("ASN Timer found! Connecting...");
+
+      ASNTimerDevice *asnDevice = new ASNTimerDevice();
+      timerDevice = std::unique_ptr<ITimerDevice>(asnDevice);
+      setupCallbacks();
+
+      if (timerDevice->initialize())
+      {
+        if (asnDevice->attemptConnection(&device))
+        {
+          LOG_SYSTEM("Successfully connected to ASN Timer");
+          deviceFound = true;
+          break;
+        }
+        else
+        {
+          LOG_ERROR("TIMER", "Failed to connect to ASN Timer");
+          timerDevice.reset();
+        }
+      }
+      else
+      {
+        LOG_ERROR("TIMER", "Failed to initialize ASN Timer");
         timerDevice.reset();
       }
     }
