@@ -1,16 +1,16 @@
-#include "ASNTimerDevice.h"
+#include "ASNTrackerDevice.h"
 #include "Logger.h"
 #include "common.h"
 
 // Static constants
-const char *ASNTimerDevice::SERVICE_UUID = "E5A10001-F1A2-4B63-9F8C-D7B781E35E2A";
-const char *ASNTimerDevice::CHARACTERISTIC_UUID = "E5A10002-F1A2-4B63-9F8C-D7B781E35E2A";
+const char *ASNTrackerDevice::SERVICE_UUID = "E5A10001-F1A2-4B63-9F8C-D7B781E35E2A";
+const char *ASNTrackerDevice::CHARACTERISTIC_UUID = "E5A10002-F1A2-4B63-9F8C-D7B781E35E2A";
 
 // Static instance for callbacks
-ASNTimerDevice* ASNTimerDevice::instance = nullptr;
+ASNTrackerDevice* ASNTrackerDevice::instance = nullptr;
 
-ASNTimerDevice::ASNTimerDevice() :
-  BaseTimerDevice("ASN Timer"),
+ASNTrackerDevice::ASNTrackerDevice() :
+  BaseTimerDevice("ASN Tracker"),
   pNotifyCharacteristic(nullptr),
   previousTimeSeconds(0),
   previousTimeCentiseconds(0),
@@ -20,24 +20,24 @@ ASNTimerDevice::ASNTimerDevice() :
   instance = this;
 }
 
-ASNTimerDevice::~ASNTimerDevice() {
+ASNTrackerDevice::~ASNTrackerDevice() {
   disconnect();
   instance = nullptr;
 }
 
-const char* ASNTimerDevice::getLogTag() const {
-  return "ASN-TIMER";
+const char* ASNTrackerDevice::getLogTag() const {
+  return "ASN-Tracker";
 }
 
-bool ASNTimerDevice::attemptConnection(BLEAdvertisedDevice* device) {
+bool ASNTrackerDevice::attemptConnection(BLEAdvertisedDevice* device) {
   if (!device) return false;
 
   if (device->haveName()) {
-    LOG_BLE("ASN Timer found: %s (%s)",
+    LOG_BLE("ASN Tracker found: %s (%s)",
             device->getName().c_str(),
             device->getAddress().toString().c_str());
   } else {
-    LOG_BLE("ASN Timer found: %s", device->getAddress().toString().c_str());
+    LOG_BLE("ASN Tracker found: %s", device->getAddress().toString().c_str());
   }
 
   // Store device info
@@ -57,7 +57,7 @@ bool ASNTimerDevice::attemptConnection(BLEAdvertisedDevice* device) {
   pClient = BLEDevice::createClient();
 
   if (!pClient) {
-    LOG_ERROR("ASN-TIMER", "Failed to create BLE client");
+    LOG_ERROR("ASN-Tracker", "Failed to create BLE client");
     setConnectionState(DeviceConnectionState::ERROR);
     return false;
   }
@@ -69,7 +69,7 @@ bool ASNTimerDevice::attemptConnection(BLEAdvertisedDevice* device) {
     pService = pClient->getService(serviceUuid);
 
     if (pService != nullptr) {
-      LOG_BLE("ASN Timer service found");
+      LOG_BLE("ASN Tracker service found");
 
       pNotifyCharacteristic = pService->getCharacteristic(CHARACTERISTIC_UUID);
 
@@ -86,28 +86,28 @@ bool ASNTimerDevice::attemptConnection(BLEAdvertisedDevice* device) {
           setConnectionState(DeviceConnectionState::CONNECTED);
           return true;
         } else {
-          LOG_ERROR("ASN-TIMER", "Characteristic cannot notify");
+          LOG_ERROR("ASN-Tracker", "Characteristic cannot notify");
           pClient->disconnect();
           delete pClient;
           pClient = nullptr;
           setConnectionState(DeviceConnectionState::ERROR);
         }
       } else {
-        LOG_ERROR("ASN-TIMER", "Event characteristic not found");
+        LOG_ERROR("ASN-Tracker", "Event characteristic not found");
         pClient->disconnect();
         delete pClient;
         pClient = nullptr;
         setConnectionState(DeviceConnectionState::ERROR);
       }
     } else {
-      LOG_ERROR("ASN-TIMER", "Service not found");
+      LOG_ERROR("ASN-Tracker", "Service not found");
       pClient->disconnect();
       delete pClient;
       pClient = nullptr;
       setConnectionState(DeviceConnectionState::ERROR);
     }
   } else {
-    LOG_ERROR("ASN-TIMER", "Failed to connect");
+    LOG_ERROR("ASN-Tracker", "Failed to connect");
     delete pClient;
     pClient = nullptr;
     setConnectionState(DeviceConnectionState::ERROR);
@@ -117,34 +117,34 @@ bool ASNTimerDevice::attemptConnection(BLEAdvertisedDevice* device) {
 }
 
 // Static notification callback
-void ASNTimerDevice::notifyCallback(BLERemoteCharacteristic* pBLERemoteCharacteristic,
+void ASNTrackerDevice::notifyCallback(BLERemoteCharacteristic* pBLERemoteCharacteristic,
                                           uint8_t* pData, size_t length, bool isNotify) {
   if (instance && pData && length > 0) {
     instance->processTimerData(pData, length);
   }
 }
 
-void ASNTimerDevice::processTimerData(uint8_t* pData, size_t length) {
+void ASNTrackerDevice::processTimerData(uint8_t* pData, size_t length) {
   if (!pData || length == 0) {
-    LOG_WARN("ASN-TIMER", "Invalid data received (null or empty)");
+    LOG_WARN("ASN-Tracker", "Invalid data received (null or empty)");
     return;
   }
 
   if (Logger::getLevel() <= LogLevel::DEBUG) {
-    LOG_DEBUG("ASN-TIMER", "Notification received (%d bytes)", length);
+    LOG_DEBUG("ASN-Tracker", "Notification received (%d bytes)", length);
     for (size_t i = 0; i < length; i++) {
       Serial.printf("%02X ", pData[i]);
     }
     Serial.println();
   }
 
-  // ASN Timer Protocol:
+  // ASN Tracker Protocol:
   // [F8] [F9] [MESSAGE_TYPE] [DATA...] [F9] [F8]
 
   // Validate frame markers
   if (length < 6 || pData[0] != 0xF8 || pData[1] != 0xF9 ||
       pData[length - 2] != 0xF9 || pData[length - 1] != 0xF8) {
-    LOG_WARN("ASN-TIMER", "Invalid frame markers");
+    LOG_WARN("ASN-Tracker", "Invalid frame markers");
     return;
   }
 
@@ -206,7 +206,7 @@ void ASNTimerDevice::processTimerData(uint8_t* pData, size_t length) {
         uint32_t currentCentiseconds = pData[5];
         uint8_t shotNumber = pData[6];
 
-        LOG_DEBUG("ASN-TIMER", "SHOT_DETECTED #%u: %u.%02u", shotNumber, currentSeconds, currentCentiseconds);
+        LOG_DEBUG("ASN-Tracker", "SHOT_DETECTED #%u: %u.%02u", shotNumber, currentSeconds, currentCentiseconds);
 
         // Calculate split time if we have a previous shot
         uint32_t splitTimeMs = 0;
@@ -225,7 +225,7 @@ void ASNTimerDevice::processTimerData(uint8_t* pData, size_t length) {
           // Convert to milliseconds (centiseconds = 10ms)
           splitTimeMs = (deltaSeconds * 1000) + (deltaCentiseconds * 10);
 
-          LOG_DEBUG("ASN-TIMER", "Split: %d.%02d", deltaSeconds, deltaCentiseconds);
+          LOG_DEBUG("ASN-Tracker", "Split: %d.%02d", deltaSeconds, deltaCentiseconds);
         }
 
         // Store current shot as previous for next split calculation
@@ -257,7 +257,7 @@ void ASNTimerDevice::processTimerData(uint8_t* pData, size_t length) {
       break;
 
     default:
-      LOG_WARN("ASN-TIMER", "Unknown message type: 0x%02X", static_cast<uint8_t>(messageType));
+      LOG_WARN("ASN-Tracker", "Unknown message type: 0x%02X", static_cast<uint8_t>(messageType));
       break;
   }
 }
