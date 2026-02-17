@@ -1,6 +1,7 @@
 #include "TimerApplication.h"
 #include "SGTimerDevice.h"
 #include "SpecialPieTimerDevice.h"
+#include "SpecialPieMacTimerDevice.h"
 #include "ASNTrackerDevice.h"
 #include "WiFiConfig.h"
 #include "common.h"
@@ -442,8 +443,8 @@ void TimerApplication::scanForDevices() {
     return;
   }
 
-  // Throttle scan attempts
-  if (isScanning || (now - lastScanAttempt < BLE_SCAN_RETRY_INTERVAL_MS)) {
+  // Throttle scan attempts - wait 5 seconds between full scan cycles
+  if (isScanning || (now - lastScanAttempt < 5000)) {
     return;
   }
 
@@ -454,104 +455,129 @@ void TimerApplication::scanForDevices() {
     displayManager->showConnectionState(DeviceConnectionState::SCANNING, nullptr);
   }
 
-  LOG_SYSTEM("Scanning for timer devices...");
-
-  BLEScan* pScan = BLEDevice::getScan();
-  pScan->setActiveScan(true);
-  pScan->setInterval(BLE_SCAN_INTERVAL);
-  pScan->setWindow(BLE_SCAN_WINDOW);
-
-  BLEScanResults foundDevices = pScan->start(BLE_SCAN_DURATION, false);
-
-  BLEUUID sgServiceUuid(SGTimerDevice::SERVICE_UUID);
-  BLEUUID specialPieServiceUuid(SpecialPieTimerDevice::SERVICE_UUID);
-  BLEUUID asnServiceUuid(ASNTrackerDevice::SERVICE_UUID);
-
   bool deviceFound = false;
 
-  for (int i = 0; i < foundDevices.getCount(); i++) {
-    BLEAdvertisedDevice device = foundDevices.getDevice(i);
+  // STEP 1: Try MAC-based Special Pie Timer first (fast, no scanning)
+  LOG_SYSTEM("Step 1: Trying MAC-based Special Pie Timer (54:14:a7:ab:21:96)...");
 
-    // Check for SG Timer
-    if (device.haveServiceUUID() && device.isAdvertisingService(sgServiceUuid)) {
-      LOG_SYSTEM("SG Timer found! Connecting...");
+  SpecialPieMacTimerDevice* macDevice = new SpecialPieMacTimerDevice();
+  timerDevice = std::unique_ptr<ITimerDevice>(macDevice);
+  setupCallbacks();
 
-      SGTimerDevice* sgDevice = new SGTimerDevice();
-      timerDevice = std::unique_ptr<ITimerDevice>(sgDevice);
-      setupCallbacks();
+  if (timerDevice->initialize()) {
+    if (macDevice->startScanning()) {
+      LOG_SYSTEM("Successfully connected to Special Pie Timer (MAC-based)");
+      deviceFound = true;
+      isScanning = false;
+      return;
+    } else {
+      LOG_SYSTEM("MAC-based connection failed");
+      timerDevice.reset();
+    }
+  } else {
+    LOG_ERROR("TIMER", "Failed to initialize MAC-based Special Pie Timer");
+    timerDevice.reset();
+  }
 
-      if (timerDevice->initialize()) {
-        if (sgDevice->attemptConnection(&device)) {
-          LOG_SYSTEM("Successfully connected to SG Timer");
-          deviceFound = true;
-          break;
+  // STEP 2: If MAC failed, try UUID-based scanning for all devices
+  if (!deviceFound) {
+    LOG_SYSTEM("Step 2: Scanning for UUID-based timer devices...");
+
+    BLEScan* pScan = BLEDevice::getScan();
+    pScan->setActiveScan(true);
+    pScan->setInterval(BLE_SCAN_INTERVAL);
+    pScan->setWindow(BLE_SCAN_WINDOW);
+
+    BLEScanResults foundDevices = pScan->start(BLE_SCAN_DURATION, false);
+
+    BLEUUID sgServiceUuid(SGTimerDevice::SERVICE_UUID);
+    BLEUUID specialPieServiceUuid(SpecialPieTimerDevice::SERVICE_UUID);
+    BLEUUID asnServiceUuid(ASNTrackerDevice::SERVICE_UUID);
+
+    for (int i = 0; i < foundDevices.getCount(); i++) {
+      BLEAdvertisedDevice device = foundDevices.getDevice(i);
+
+      // Check for SG Timer
+      if (device.haveServiceUUID() && device.isAdvertisingService(sgServiceUuid)) {
+        LOG_SYSTEM("SG Timer found! Connecting...");
+
+        SGTimerDevice* sgDevice = new SGTimerDevice();
+        timerDevice = std::unique_ptr<ITimerDevice>(sgDevice);
+        setupCallbacks();
+
+        if (timerDevice->initialize()) {
+          if (sgDevice->attemptConnection(&device)) {
+            LOG_SYSTEM("Successfully connected to SG Timer");
+            deviceFound = true;
+            break;
+          } else {
+            LOG_ERROR("TIMER", "Failed to connect to SG Timer");
+            timerDevice.reset();
+          }
         } else {
-          LOG_ERROR("TIMER", "Failed to connect to SG Timer");
+          LOG_ERROR("TIMER", "Failed to initialize SG Timer");
           timerDevice.reset();
         }
-      } else {
-        LOG_ERROR("TIMER", "Failed to initialize SG Timer");
-        timerDevice.reset();
       }
-    }
-    // Check for Special Pie Timer
-    else if (device.haveServiceUUID() && device.isAdvertisingService(specialPieServiceUuid)) {
-      LOG_SYSTEM("Special Pie Timer found! Connecting...");
+      // Check for Special Pie Timer
+      else if (device.haveServiceUUID() && device.isAdvertisingService(specialPieServiceUuid)) {
+        LOG_SYSTEM("Special Pie Timer found! Connecting...");
 
-      SpecialPieTimerDevice* specialPieDevice = new SpecialPieTimerDevice();
-      timerDevice = std::unique_ptr<ITimerDevice>(specialPieDevice);
-      setupCallbacks();
+        SpecialPieTimerDevice* specialPieDevice = new SpecialPieTimerDevice();
+        timerDevice = std::unique_ptr<ITimerDevice>(specialPieDevice);
+        setupCallbacks();
 
-      if (timerDevice->initialize()) {
-        if (specialPieDevice->attemptConnection(&device)) {
-          LOG_SYSTEM("Successfully connected to Special Pie Timer");
-          deviceFound = true;
-          break;
+        if (timerDevice->initialize()) {
+          if (specialPieDevice->attemptConnection(&device)) {
+            LOG_SYSTEM("Successfully connected to Special Pie Timer");
+            deviceFound = true;
+            break;
+          } else {
+            LOG_ERROR("TIMER", "Failed to connect to Special Pie Timer");
+            timerDevice.reset();
+          }
         } else {
-          LOG_ERROR("TIMER", "Failed to connect to Special Pie Timer");
+          LOG_ERROR("TIMER", "Failed to initialize Special Pie Timer");
           timerDevice.reset();
         }
-      } else {
-        LOG_ERROR("TIMER", "Failed to initialize Special Pie Timer");
-        timerDevice.reset();
       }
-    }
 
-    // Check for ASN Tracker
-    else if (device.haveServiceUUID() && device.isAdvertisingService(asnServiceUuid))
-    {
-      LOG_SYSTEM("ASN Tracker found! Connecting...");
-
-      ASNTrackerDevice *asnDevice = new ASNTrackerDevice();
-      timerDevice = std::unique_ptr<ITimerDevice>(asnDevice);
-      setupCallbacks();
-
-      if (timerDevice->initialize())
+      // Check for ASN Tracker
+      else if (device.haveServiceUUID() && device.isAdvertisingService(asnServiceUuid))
       {
-        if (asnDevice->attemptConnection(&device))
+        LOG_SYSTEM("ASN Tracker found! Connecting...");
+
+        ASNTrackerDevice *asnDevice = new ASNTrackerDevice();
+        timerDevice = std::unique_ptr<ITimerDevice>(asnDevice);
+        setupCallbacks();
+
+        if (timerDevice->initialize())
         {
-          LOG_SYSTEM("Successfully connected to ASN Tracker");
-          deviceFound = true;
-          break;
+          if (asnDevice->attemptConnection(&device))
+          {
+            LOG_SYSTEM("Successfully connected to ASN Tracker");
+            deviceFound = true;
+            break;
+          }
+          else
+          {
+            LOG_ERROR("TIMER", "Failed to connect to ASN Tracker");
+            timerDevice.reset();
+          }
         }
         else
         {
-          LOG_ERROR("TIMER", "Failed to connect to ASN Tracker");
+          LOG_ERROR("TIMER", "Failed to initialize ASN Tracker");
           timerDevice.reset();
         }
       }
-      else
-      {
-        LOG_ERROR("TIMER", "Failed to initialize ASN Tracker");
-        timerDevice.reset();
-      }
     }
+
+    pScan->clearResults();
   }
 
-  pScan->clearResults();
-
   if (!deviceFound) {
-    LOG_SYSTEM("No compatible timer devices found. Retrying...");
+    LOG_SYSTEM("No compatible timer devices found. Will retry in 5 seconds...");
   }
 
   isScanning = false;

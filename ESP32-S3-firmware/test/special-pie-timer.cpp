@@ -15,6 +15,10 @@
 //
 // Discovery: Scans for devices advertising FFF0 or 0917FE11 service UUIDs
 
+// DEVICE MAC ADDRESS - Update this to match your timer
+// Found via scanner: SP M1A2 Timer 2196
+const char* DEVICE_MAC_ADDRESS = "54:14:a7:ab:21:96";
+
 // Global references for connection management
 BLEClient *g_pClient = nullptr;
 BLERemoteService *g_pService = nullptr;
@@ -134,6 +138,7 @@ void loop() {
   // If not connected, try to scan and connect
   if (!g_isConnected) {
     Serial.println("\n--- Starting device scan ---");
+    Serial.printf("Looking for device: %s\n", DEVICE_MAC_ADDRESS);
 
     BLEScan *pScan = BLEDevice::getScan();
     pScan->setActiveScan(true);
@@ -160,20 +165,21 @@ void loop() {
       }
       Serial.println();
 
-      // Look for devices advertising the Special Pie timer service or device info service
-      bool hasTimerService = device.isAdvertisingService(timerServiceUuid);
-      bool hasDeviceInfoService = device.isAdvertisingService(deviceInfoServiceUuid);
+      // Check if this is our target device by MAC address
+      String deviceMac = device.getAddress().toString().c_str();
+      deviceMac.toLowerCase();
+      String targetMac = String(DEVICE_MAC_ADDRESS);
+      targetMac.toLowerCase();
 
-      if (hasTimerService || hasDeviceInfoService)
+      if (deviceMac == targetMac)
       {
-        Serial.println("*** Special Pie Timer found! ***");
-        if (hasTimerService) {
-          Serial.println("  - Has Timer Service (FFF0)");
-        }
-        if (hasDeviceInfoService) {
-          Serial.println("  - Has Device Info Service (0917FE11)");
-        }
-        deviceFound = true;        // Wait before attempting connection
+        Serial.println("*** TARGET DEVICE FOUND! ***");
+        Serial.printf("  Name: %s\n", device.getName().c_str());
+        Serial.printf("  MAC: %s\n", device.getAddress().toString().c_str());
+        Serial.printf("  RSSI: %d dBm\n", device.getRSSI());
+        deviceFound = true;
+
+        // Wait before attempting connection
         Serial.println("Waiting 2 seconds before connecting...");
         delay(2000);
 

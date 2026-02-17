@@ -35,7 +35,7 @@
 #ifdef DEBUG_BUILD
   #define STARTUP_MESSAGE_DELAY 2000   // 2 seconds for debug builds
 #else
-  #define STARTUP_MESSAGE_DELAY 20000  // 20 seconds for production builds
+  #define STARTUP_MESSAGE_DELAY 10000  // 20 seconds for production builds
 #endif
 
 // =============================================================================
