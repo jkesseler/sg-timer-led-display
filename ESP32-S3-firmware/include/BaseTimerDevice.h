@@ -16,9 +16,6 @@
  * - Update loop with heartbeat logging
  * - Connection lost handling with automatic cleanup
  *
- * Derived classes must implement:
- * - getLogTag() - Return a string tag for logging (e.g., "SG-TIMER", "SPECIAL-PIE")
- *
  * Derived classes typically implement:
  * - attemptConnection(BLEAdvertisedDevice*) - Device-specific connection logic
  * - processTimerData(uint8_t*, size_t) - BLE protocol-specific data parsing
@@ -60,9 +57,6 @@ protected:
     }
   }
 
-  // Pure virtual - must be implemented by derived classes
-  virtual const char* getLogTag() const = 0;
-
 public:
   BaseTimerDevice(const char* model)
     : pClient(nullptr),
@@ -82,13 +76,13 @@ public:
 
   // Common ITimerDevice implementations
   bool initialize() override {
-    LOG_INFO(getLogTag(), "Initializing %s device interface", deviceModel.c_str());
+    LOG_INFO("Initializing %s device interface", deviceModel.c_str());
     setConnectionState(DeviceConnectionState::DISCONNECTED);
     return true;
   }
 
   bool startScanning() override {
-    LOG_INFO(getLogTag(), "Will start scanning for %s devices", deviceModel.c_str());
+    LOG_INFO("Will start scanning for %s devices", deviceModel.c_str());
     setConnectionState(DeviceConnectionState::SCANNING);
     return true;
   }
@@ -185,7 +179,7 @@ public:
 protected:
   // Can be overridden by derived classes for device-specific cleanup
   virtual void handleConnectionLost() {
-    LOG_WARN(getLogTag(), "Connection lost");
+    LOG_WARN("BLE", "Connection lost");
     isConnectedFlag = false;
     pService = nullptr;
 

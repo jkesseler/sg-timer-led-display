@@ -3,6 +3,7 @@
 #include "common.h"
 
 // Static constants
+const char *ASNTrackerDevice::LOG_TAG = "ASN-Tracker";
 const char *ASNTrackerDevice::SERVICE_UUID = "E5A10001-F1A2-4B63-9F8C-D7B781E35E2A";
 const char *ASNTrackerDevice::CHARACTERISTIC_UUID = "E5A10002-F1A2-4B63-9F8C-D7B781E35E2A";
 
@@ -25,10 +26,6 @@ ASNTrackerDevice::~ASNTrackerDevice() {
   instance = nullptr;
 }
 
-const char* ASNTrackerDevice::getLogTag() const {
-  return "ASN-Tracker";
-}
-
 // Static method to check if advertised device is an ASN Tracker
 bool ASNTrackerDevice::matchesDevice(BLEAdvertisedDevice* device) {
   if (!device || !device->haveServiceUUID()) {
@@ -43,11 +40,11 @@ bool ASNTrackerDevice::attemptConnection(BLEAdvertisedDevice* device) {
   if (!device) return false;
 
   if (device->haveName()) {
-    LOG_BLE("ASN Tracker found: %s (%s)",
+    LOG_BLE(LOG_TAG, "ASN Tracker found: %s (%s)",
             device->getName().c_str(),
             device->getAddress().toString().c_str());
   } else {
-    LOG_BLE("ASN Tracker found: %s", device->getAddress().toString().c_str());
+    LOG_BLE(LOG_TAG, "ASN Tracker found: %s", device->getAddress().toString().c_str());
   }
 
   // Store device info
@@ -60,64 +57,64 @@ bool ASNTrackerDevice::attemptConnection(BLEAdvertisedDevice* device) {
 
   // Brief delay before connection attempt to allow BLE stack to stabilize
   // Note: This blocking delay is acceptable during initial connection setup
-  LOG_BLE("Waiting %dms before connecting", BLE_CONNECTION_DELAY_MS);
+  LOG_BLE(LOG_TAG, "Waiting %dms before connecting", BLE_CONNECTION_DELAY_MS);
   delay(BLE_CONNECTION_DELAY_MS);
 
   setConnectionState(DeviceConnectionState::CONNECTING);
   pClient = BLEDevice::createClient();
 
   if (!pClient) {
-    LOG_ERROR("ASN-Tracker", "Failed to create BLE client");
+    LOG_ERROR(LOG_TAG, "Failed to create BLE client");
     setConnectionState(DeviceConnectionState::ERROR);
     return false;
   }
 
-  LOG_BLE("Attempting connection");
+  LOG_BLE(LOG_TAG, "Attempting connection");
   if (pClient->connect(device)) {
-    LOG_BLE("Connected to device");
+    LOG_BLE(LOG_TAG, "Connected to device");
     BLEUUID serviceUuid(SERVICE_UUID);
     pService = pClient->getService(serviceUuid);
 
     if (pService != nullptr) {
-      LOG_BLE("ASN Tracker service found");
+      LOG_BLE(LOG_TAG, "ASN Tracker service found");
 
       pNotifyCharacteristic = pService->getCharacteristic(CHARACTERISTIC_UUID);
 
       if (pNotifyCharacteristic != nullptr) {
-        LOG_BLE("Event characteristic found");
+        LOG_BLE(LOG_TAG, "Event characteristic found");
 
         // Check if characteristic can notify
         if (pNotifyCharacteristic->canNotify()) {
-          LOG_BLE("Registering for notifications");
+          LOG_BLE(LOG_TAG, "Registering for notifications");
           pNotifyCharacteristic->registerForNotify(notifyCallback);
-          LOG_BLE("Successfully registered for notifications - listening for events");
+          LOG_BLE(LOG_TAG, "Successfully registered for notifications - listening for events");
           isConnectedFlag = true;
           lastHeartbeat = millis();
           setConnectionState(DeviceConnectionState::CONNECTED);
           return true;
         } else {
-          LOG_ERROR("ASN-Tracker", "Characteristic cannot notify");
+          LOG_ERROR(LOG_TAG, "Characteristic cannot notify");
           pClient->disconnect();
           delete pClient;
           pClient = nullptr;
           setConnectionState(DeviceConnectionState::ERROR);
         }
       } else {
-        LOG_ERROR("ASN-Tracker", "Event characteristic not found");
+        LOG_ERROR(LOG_TAG, "Event characteristic not found");
         pClient->disconnect();
         delete pClient;
         pClient = nullptr;
         setConnectionState(DeviceConnectionState::ERROR);
       }
     } else {
-      LOG_ERROR("ASN-Tracker", "Service not found");
+      LOG_ERROR(LOG_TAG, "Service not found");
       pClient->disconnect();
       delete pClient;
       pClient = nullptr;
       setConnectionState(DeviceConnectionState::ERROR);
     }
   } else {
-    LOG_ERROR("ASN-Tracker", "Failed to connect");
+    LOG_ERROR(LOG_TAG, "Failed to connect");
     delete pClient;
     pClient = nullptr;
     setConnectionState(DeviceConnectionState::ERROR);
@@ -136,12 +133,12 @@ void ASNTrackerDevice::notifyCallback(BLERemoteCharacteristic* pBLERemoteCharact
 
 void ASNTrackerDevice::processTimerData(uint8_t* pData, size_t length) {
   if (!pData || length == 0) {
-    LOG_WARN("ASN-Tracker", "Invalid data received (null or empty)");
+    LOG_WARN(LOG_TAG, "Invalid data received (null or empty)");
     return;
   }
 
   if (Logger::getLevel() <= LogLevel::DEBUG) {
-    LOG_DEBUG("ASN-Tracker", "Notification received (%d bytes)", length);
+    LOG_DEBUG(LOG_TAG, "Notification received (%d bytes)", length);
     for (size_t i = 0; i < length; i++) {
       Serial.printf("%02X ", pData[i]);
     }
@@ -154,7 +151,7 @@ void ASNTrackerDevice::processTimerData(uint8_t* pData, size_t length) {
   // Validate frame markers
   if (length < 6 || pData[0] != 0xF8 || pData[1] != 0xF9 ||
       pData[length - 2] != 0xF9 || pData[length - 1] != 0xF8) {
-    LOG_WARN("ASN-Tracker", "Invalid frame markers");
+    LOG_WARN(LOG_TAG, "Invalid frame markers");
     return;
   }
 
@@ -164,7 +161,7 @@ void ASNTrackerDevice::processTimerData(uint8_t* pData, size_t length) {
     case ASNMessageType::SESSION_START:
       if (length >= 6) {
         currentSessionId = pData[3];
-        LOG_TIMER("SESSION_START - ID: 0x%02X", currentSessionId);
+        LOG_TIMER(LOG_TAG, "SESSION_START - ID: 0x%02X", currentSessionId);
 
         // Update session state
         currentSession.sessionId = currentSessionId;
@@ -193,7 +190,7 @@ void ASNTrackerDevice::processTimerData(uint8_t* pData, size_t length) {
     case ASNMessageType::SESSION_STOP:
       if (length >= 6) {
         uint8_t sessionId = pData[3];
-        LOG_TIMER("SESSION_STOP - ID: 0x%02X", sessionId);
+        LOG_TIMER(LOG_TAG, "SESSION_STOP - ID: 0x%02X", sessionId);
 
         currentSession.isActive = false;
         sessionActiveFlag = false;
@@ -216,7 +213,7 @@ void ASNTrackerDevice::processTimerData(uint8_t* pData, size_t length) {
         uint32_t currentCentiseconds = pData[5];
         uint8_t shotNumber = pData[6];
 
-        LOG_DEBUG("ASN-Tracker", "SHOT_DETECTED #%u: %u.%02u", shotNumber, currentSeconds, currentCentiseconds);
+        LOG_DEBUG(LOG_TAG, "SHOT_DETECTED #%u: %u.%02u", shotNumber, currentSeconds, currentCentiseconds);
 
         // Calculate split time if we have a previous shot
         uint32_t splitTimeMs = 0;
@@ -235,7 +232,7 @@ void ASNTrackerDevice::processTimerData(uint8_t* pData, size_t length) {
           // Convert to milliseconds (centiseconds = 10ms)
           splitTimeMs = (deltaSeconds * 1000) + (deltaCentiseconds * 10);
 
-          LOG_DEBUG("ASN-Tracker", "Split: %d.%02d", deltaSeconds, deltaCentiseconds);
+          LOG_DEBUG(LOG_TAG, "Split: %d.%02d", deltaSeconds, deltaCentiseconds);
         }
 
         // Store current shot as previous for next split calculation
@@ -268,7 +265,7 @@ void ASNTrackerDevice::processTimerData(uint8_t* pData, size_t length) {
       break;
 
     default:
-      LOG_WARN("ASN-Tracker", "Unknown message type: 0x%02X", static_cast<uint8_t>(messageType));
+      LOG_WARN(LOG_TAG, "Unknown message type: 0x%02X", static_cast<uint8_t>(messageType));
       break;
   }
 }

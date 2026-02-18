@@ -16,6 +16,7 @@ enum class SpecialPieMessageType : uint8_t {
 class SpecialPieTimerDevice : public BaseTimerDevice {
 private:
   // Special Pie Timer specific configuration
+  static const char* LOG_TAG;
   static const char* CHARACTERISTIC_UUID;
 
   // BLE components
@@ -30,7 +31,6 @@ private:
 
   // Internal methods
   void processTimerData(uint8_t* data, size_t length);
-  const char* getLogTag() const override;
 
   // Static callback for BLE notifications
   static void notifyCallback(BLERemoteCharacteristic* pBLERemoteCharacteristic,

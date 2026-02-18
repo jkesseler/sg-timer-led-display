@@ -26,6 +26,7 @@ enum class SpecialPieMacMessageType : uint8_t {
 class SpecialPieMacTimerDevice : public BaseTimerDevice {
 private:
   // Special Pie Timer specific configuration
+  static const char* LOG_TAG;
   static const char* CHARACTERISTIC_UUID;
   static const char* DEVICE_INFO_SERVICE_UUID;
   static const char* FIRMWARE_CHAR_UUID;
@@ -42,7 +43,6 @@ private:
 
   // Internal methods
   void processTimerData(uint8_t* data, size_t length);
-  const char* getLogTag() const override;
   bool connectToMacAddress(const char* macAddress);
 
   // Static callback for BLE notifications
