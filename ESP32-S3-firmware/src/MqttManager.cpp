@@ -111,7 +111,7 @@ bool MqttManager::tryConnect() {
   if (mqttClient.connected()) {
     if (!mqttConnected) {
       mqttConnected = true;
-      LOG_BLE("MQTT connection restored");
+      LOG_INFO("MQTT", "MQTT connection restored");
     }
     return true;
   }
@@ -144,7 +144,7 @@ bool MqttManager::tryConnect() {
 
   if (connected) {
     mqttConnected = true;
-    LOG_BLE("MQTT connected successfully");
+    LOG_INFO("MQTT", "MQTT connected successfully");
     return true;
   }
 
@@ -258,7 +258,7 @@ void MqttManager::publishDeviceInfo(const char* deviceName, const char* deviceMo
   publishJson(Topics::DEVICE_INFO, jsonBuffer);
 }
 
-void MqttManager::publishSessionStarted(uint32_t sessionId, uint16_t startDelaySeconds) {
+void MqttManager::publishSessionStarted(uint32_t sessionId, float startDelaySeconds) {
   JsonDocument doc;
   doc["sessionId"] = sessionId;
   doc["startDelaySeconds"] = startDelaySeconds;

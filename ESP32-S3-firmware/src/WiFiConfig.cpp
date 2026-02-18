@@ -3,6 +3,15 @@
 #include <WiFi.h>
 #include "common.h"
 
+namespace {
+int sanitizeMqttPort(int port) {
+  if (port <= 0 || port > 65535) {
+    return MQTT_BROKER_PORT;
+  }
+  return port;
+}
+}
+
 // Static member initialization
 bool WiFiConfig::wifiConnected = false;
 unsigned long WiFiConfig::lastConnectionCheck = 0;
@@ -11,7 +20,7 @@ bool WiFiConfig::shouldSaveConfig = false;
 
 // Runtime configuration values (loaded from Preferences)
 char WiFiConfig::mqtt_server[41] = MQTT_BROKER_IP;
-char WiFiConfig::mqtt_port[7] = "";
+char WiFiConfig::mqtt_port[7] = "1883";
 char WiFiConfig::mqtt_user[41] = MQTT_USER;
 char WiFiConfig::mqtt_password[41] = MQTT_PASSWORD;
 char WiFiConfig::timer_type[7] = "";
@@ -45,7 +54,7 @@ void WiFiConfig::loadConfiguration() {
   savedMqttServer.toCharArray(mqtt_server, sizeof(mqtt_server));
 
   // Load MQTT port
-  int savedMqttPort = preferences.getInt("mqtt_port", MQTT_BROKER_PORT);
+  int savedMqttPort = sanitizeMqttPort(preferences.getInt("mqtt_port", MQTT_BROKER_PORT));
   snprintf(mqtt_port, sizeof(mqtt_port), "%d", savedMqttPort);
 
   // Load MQTT user
@@ -78,7 +87,9 @@ void WiFiConfig::saveConfiguration() {
   preferences.begin("wifi-config", false);
 
   preferences.putString("mqtt_server", mqtt_server);
-  preferences.putInt("mqtt_port", atoi(mqtt_port));
+  int port = sanitizeMqttPort(atoi(mqtt_port));
+  snprintf(mqtt_port, sizeof(mqtt_port), "%d", port);
+  preferences.putInt("mqtt_port", port);
   preferences.putString("mqtt_user", mqtt_user);
   preferences.putString("mqtt_password", mqtt_password);
   preferences.putInt("timer_type", atoi(timer_type));
@@ -142,6 +153,8 @@ void WiFiConfig::initialize() {
   mqtt_server[sizeof(mqtt_server) - 1] = '\0';
   strncpy(mqtt_port, customMqttPort->getValue(), sizeof(mqtt_port) - 1);
   mqtt_port[sizeof(mqtt_port) - 1] = '\0';
+  int sanitizedPort = sanitizeMqttPort(atoi(mqtt_port));
+  snprintf(mqtt_port, sizeof(mqtt_port), "%d", sanitizedPort);
   strncpy(mqtt_user, customMqttUser->getValue(), sizeof(mqtt_user) - 1);
   mqtt_user[sizeof(mqtt_user) - 1] = '\0';
   strncpy(mqtt_password, customMqttPassword->getValue(), sizeof(mqtt_password) - 1);
@@ -262,8 +275,7 @@ const char* WiFiConfig::getMqttServer() {
 }
 
 int WiFiConfig::getMqttPort() {
-  int port = atoi(mqtt_port);
-  return (port > 0) ? port : MQTT_BROKER_PORT;
+  return sanitizeMqttPort(atoi(mqtt_port));
 }
 
 const char* WiFiConfig::getMqttUser() {

@@ -56,9 +56,9 @@ bool SGTimerDevice::attemptConnection(BLEAdvertisedDevice* device) {
   isConnectedFlag = false;
 
   if (device->haveName()) {
-    LOG_BLE(LOG_TAG, "SG Timer found: %s (%s)", device->getAddress().toString().c_str(), device->getName().c_str());
+    LOG_INFO(LOG_TAG, "SG Timer found: %s (%s)", device->getAddress().toString().c_str(), device->getName().c_str());
   } else {
-    LOG_BLE(LOG_TAG, "SG Timer found: %s", device->getAddress().toString().c_str());
+    LOG_INFO(LOG_TAG, "SG Timer found: %s", device->getAddress().toString().c_str());
   }
 
   // Store device information
@@ -82,7 +82,7 @@ bool SGTimerDevice::attemptConnection(BLEAdvertisedDevice* device) {
 
   // Brief delay before connection attempt to allow BLE stack to stabilize
   // Note: This blocking delay is acceptable during initial connection setup
-  LOG_BLE(LOG_TAG, "Waiting %dms before connecting", BLE_CONNECTION_DELAY_MS);
+  LOG_INFO(LOG_TAG, "Waiting %dms before connecting", BLE_CONNECTION_DELAY_MS);
   delay(BLE_CONNECTION_DELAY_MS);
 
   setConnectionState(DeviceConnectionState::CONNECTING);
@@ -94,25 +94,25 @@ bool SGTimerDevice::attemptConnection(BLEAdvertisedDevice* device) {
     return false;
   }
 
-  LOG_BLE(LOG_TAG, "Attempting connection");
+  LOG_INFO(LOG_TAG, "Attempting connection");
   if (pClient->connect(device)) {
-    LOG_BLE(LOG_TAG, "Connected to device");
+    LOG_INFO(LOG_TAG, "Connected to device");
     BLEUUID serviceUuid(SERVICE_UUID);
     pService = pClient->getService(serviceUuid);
 
     if (pService != nullptr) {
-      LOG_BLE(LOG_TAG, "Service found");
+      LOG_INFO(LOG_TAG, "Service found");
 
       pEventCharacteristic = pService->getCharacteristic(CHARACTERISTIC_UUID);
 
       if (pEventCharacteristic != nullptr) {
-        LOG_BLE(LOG_TAG, "EVENT characteristic found");
+        LOG_INFO(LOG_TAG, "EVENT characteristic found");
 
         // Check if characteristic can notify
         if (pEventCharacteristic->canNotify()) {
-          LOG_BLE(LOG_TAG, "Registering for notifications");
+          LOG_INFO(LOG_TAG, "Registering for notifications");
           pEventCharacteristic->registerForNotify(notifyCallback);
-          LOG_BLE(LOG_TAG, "Successfully registered for notifications - listening for events");
+          LOG_INFO(LOG_TAG, "Successfully registered for notifications - listening for events");
           isConnectedFlag = true;
           lastHeartbeat = millis();
           setConnectionState(DeviceConnectionState::CONNECTED);
@@ -297,7 +297,8 @@ void SGTimerDevice::processTimerData(uint8_t* pData, size_t length) {
           shotData.absoluteTimeMs = shot_time_ms;
           shotData.splitTimeMs = splitTime;
           shotData.timestampMs = millis();
-          shotData.deviceModel = deviceModel.c_str();
+          strncpy(shotData.deviceModel, deviceModel.c_str(), sizeof(shotData.deviceModel) - 1);
+          shotData.deviceModel[sizeof(shotData.deviceModel) - 1] = '\0';
           shotData.isFirstShot = isFirstShot;
 
           // Notify callback

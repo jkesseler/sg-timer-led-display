@@ -45,14 +45,14 @@ bool SpecialPieMacTimerDevice::attemptConnection(BLEAdvertisedDevice* device) {
   if (!device) return false;
 
   if (device->haveName()) {
-    LOG_BLE(LOG_TAG, "Timer found: %s (%s)",
-            device->getName().c_str(),
-            device->getAddress().toString().c_str());
+    LOG_INFO(LOG_TAG, "Timer found: %s (%s)",
+         device->getName().c_str(),
+         device->getAddress().toString().c_str());
 
     // Store device name for display
     deviceName = device->getName().c_str();
   } else {
-    LOG_BLE(LOG_TAG, "Timer found: %s", device->getAddress().toString().c_str());
+    LOG_INFO(LOG_TAG, "Timer found: %s", device->getAddress().toString().c_str());
     deviceName = device->getAddress().toString().c_str();
   }
 
@@ -61,7 +61,7 @@ bool SpecialPieMacTimerDevice::attemptConnection(BLEAdvertisedDevice* device) {
 }
 
 bool SpecialPieMacTimerDevice::connectToMacAddress(const char* macAddress) {
-  LOG_BLE(LOG_TAG, "Connecting to %s", macAddress);
+  LOG_INFO(LOG_TAG, "Connecting to %s", macAddress);
 
   setConnectionState(DeviceConnectionState::CONNECTING);
 
@@ -79,28 +79,28 @@ bool SpecialPieMacTimerDevice::connectToMacAddress(const char* macAddress) {
     return false;
   }
 
-  LOG_BLE(LOG_TAG, "Attempting connection...");
+  LOG_INFO(LOG_TAG, "Attempting connection...");
   if (pClient->connect(bleAddress)) {
-    LOG_BLE(LOG_TAG, "Connected to device!");
+    LOG_INFO(LOG_TAG, "Connected to device!");
 
     // Get timer service
     BLEUUID serviceUuid(SERVICE_UUID);
     pService = pClient->getService(serviceUuid);
 
     if (pService != nullptr) {
-      LOG_BLE(LOG_TAG, "Timer Service (FFF0) found");
+      LOG_INFO(LOG_TAG, "Timer Service (FFF0) found");
 
       // TODO: Is this necessary? findout if firmware version is needed for any reason. If not, remove to save time during connection.
       // Try to read firmware version
       BLEUUID deviceInfoUuid(DEVICE_INFO_SERVICE_UUID);
       BLERemoteService* pDeviceInfoService = pClient->getService(deviceInfoUuid);
       if (pDeviceInfoService != nullptr) {
-        LOG_BLE(LOG_TAG, "Device Info Service found");
+        LOG_INFO(LOG_TAG, "Device Info Service found");
         BLERemoteCharacteristic* pFirmwareChar = pDeviceInfoService->getCharacteristic(FIRMWARE_CHAR_UUID);
         if (pFirmwareChar != nullptr && pFirmwareChar->canRead()) {
           std::string firmwareValue = pFirmwareChar->readValue();
           if (firmwareValue.length() > 0) {
-            LOG_BLE(LOG_TAG, "Firmware: %s", firmwareValue.c_str());
+            LOG_INFO(LOG_TAG, "Firmware: %s", firmwareValue.c_str());
             deviceName = "SP M1A2+ FW:" + String(firmwareValue.c_str());
           }
         }
@@ -110,12 +110,12 @@ bool SpecialPieMacTimerDevice::connectToMacAddress(const char* macAddress) {
       pNotifyCharacteristic = pService->getCharacteristic(CHARACTERISTIC_UUID);
 
       if (pNotifyCharacteristic != nullptr) {
-        LOG_BLE(LOG_TAG, "FFF1 (timer events) characteristic found");
+        LOG_INFO(LOG_TAG, "FFF1 (timer events) characteristic found");
 
         if (pNotifyCharacteristic->canNotify()) {
-          LOG_BLE(LOG_TAG, "Registering for notifications...");
+          LOG_INFO(LOG_TAG, "Registering for notifications...");
           pNotifyCharacteristic->registerForNotify(notifyCallback);
-          LOG_BLE(LOG_TAG, "Successfully registered for timer event notifications!");
+          LOG_INFO(LOG_TAG, "Successfully registered for timer event notifications!");
 
           isConnectedFlag = true;
           lastHeartbeat = millis();
@@ -212,6 +212,11 @@ void SpecialPieMacTimerDevice::processTimerData(uint8_t* pData, size_t length) {
           currentSession.startDelaySeconds = 0.0f;
           sessionStartedCallback(currentSession);
         }
+
+        // Device has no separate countdown; signal ready immediately
+        if (countdownCompleteCallback) {
+          countdownCompleteCallback(currentSession);
+        }
       }
       break;
     }
@@ -268,11 +273,12 @@ void SpecialPieMacTimerDevice::processTimerData(uint8_t* pData, size_t length) {
         if (shotDetectedCallback) {
           NormalizedShotData shotData;
           shotData.sessionId = currentSessionId;
-          shotData.shotNumber = shotNumber;
+          shotData.shotNumber = shotNumber + 1;  // Normalize to 1-based
           shotData.absoluteTimeMs = absoluteTimeMs;
           shotData.splitTimeMs = splitTimeMs;
           shotData.timestampMs = millis();
-          shotData.deviceModel = deviceModel.c_str();
+          strncpy(shotData.deviceModel, deviceModel.c_str(), sizeof(shotData.deviceModel) - 1);
+          shotData.deviceModel[sizeof(shotData.deviceModel) - 1] = '\0';
           shotData.isFirstShot = isFirstShot;
 
           shotDetectedCallback(shotData);

@@ -40,11 +40,11 @@ bool SpecialPieTimerDevice::attemptConnection(BLEAdvertisedDevice* device) {
   if (!device) return false;
 
   if (device->haveName()) {
-    LOG_BLE(LOG_TAG, "Special Pie Timer found: %s (%s)",
-            device->getName().c_str(),
-            device->getAddress().toString().c_str());
+    LOG_INFO(LOG_TAG, "Special Pie Timer found: %s (%s)",
+             device->getName().c_str(),
+             device->getAddress().toString().c_str());
   } else {
-    LOG_BLE(LOG_TAG, "Special Pie Timer found: %s", device->getAddress().toString().c_str());
+    LOG_INFO(LOG_TAG, "Special Pie Timer found: %s", device->getAddress().toString().c_str());
   }
 
   // Store device info
@@ -57,7 +57,7 @@ bool SpecialPieTimerDevice::attemptConnection(BLEAdvertisedDevice* device) {
 
   // Brief delay before connection attempt to allow BLE stack to stabilize
   // Note: This blocking delay is acceptable during initial connection setup
-  LOG_BLE(LOG_TAG, "Waiting %dms before connecting", BLE_CONNECTION_DELAY_MS);
+  LOG_INFO(LOG_TAG, "Waiting %dms before connecting", BLE_CONNECTION_DELAY_MS);
   delay(BLE_CONNECTION_DELAY_MS);
 
   setConnectionState(DeviceConnectionState::CONNECTING);
@@ -69,25 +69,25 @@ bool SpecialPieTimerDevice::attemptConnection(BLEAdvertisedDevice* device) {
     return false;
   }
 
-  LOG_BLE(LOG_TAG, "Attempting connection");
+  LOG_INFO(LOG_TAG, "Attempting connection");
   if (pClient->connect(device)) {
-    LOG_BLE(LOG_TAG, "Connected to device");
+    LOG_INFO(LOG_TAG, "Connected to device");
     BLEUUID serviceUuid(SERVICE_UUID);
     pService = pClient->getService(serviceUuid);
 
     if (pService != nullptr) {
-      LOG_BLE(LOG_TAG, "Special Pie Timer service found");
+      LOG_INFO(LOG_TAG, "Special Pie Timer service found");
 
       pNotifyCharacteristic = pService->getCharacteristic(CHARACTERISTIC_UUID);
 
       if (pNotifyCharacteristic != nullptr) {
-        LOG_BLE(LOG_TAG, "FFF1 characteristic found");
+        LOG_INFO(LOG_TAG, "FFF1 characteristic found");
 
         // Check if characteristic can notify
         if (pNotifyCharacteristic->canNotify()) {
-          LOG_BLE(LOG_TAG, "Registering for notifications");
+          LOG_INFO(LOG_TAG, "Registering for notifications");
           pNotifyCharacteristic->registerForNotify(notifyCallback);
-          LOG_BLE(LOG_TAG, "Successfully registered for notifications - listening for events");
+          LOG_INFO(LOG_TAG, "Successfully registered for notifications - listening for events");
           isConnectedFlag = true;
           lastHeartbeat = millis();
           setConnectionState(DeviceConnectionState::CONNECTED);
@@ -250,11 +250,12 @@ void SpecialPieTimerDevice::processTimerData(uint8_t* pData, size_t length) {
         // Create normalized shot data
         NormalizedShotData shotData;
         shotData.sessionId = currentSessionId;
-        shotData.shotNumber = shotNumber;
+        shotData.shotNumber = shotNumber + 1;  // Normalize to 1-based
         shotData.absoluteTimeMs = absoluteTimeMs;
         shotData.splitTimeMs = splitTimeMs;
         shotData.timestampMs = millis();
-        shotData.deviceModel = deviceModel.c_str();
+        strncpy(shotData.deviceModel, deviceModel.c_str(), sizeof(shotData.deviceModel) - 1);
+        shotData.deviceModel[sizeof(shotData.deviceModel) - 1] = '\0';
         shotData.isFirstShot = isFirstShot;
 
         // Notify callback
