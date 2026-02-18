@@ -247,6 +247,7 @@ void ASNTrackerDevice::processTimerData(uint8_t* pData, size_t length) {
         uint32_t absoluteTimeMs = (currentSeconds * 1000) + (currentCentiseconds * 10);
 
         // Update session shot count
+        // ASNTracker use 0 index shot numbers
         currentSession.totalShots = shotNumber + 1;
 
         // Create normalized shot data

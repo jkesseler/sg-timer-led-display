@@ -3,7 +3,6 @@
 #include "common.h"
 
 // Static constants
-const char* SpecialPieMacTimerDevice::TARGET_MAC_ADDRESS = "54:14:a7:ab:21:96"; // SP M1A2 Timer 2196
 const char* SpecialPieMacTimerDevice::SERVICE_UUID = "0000FFF0-0000-1000-8000-00805F9B34FB";
 const char* SpecialPieMacTimerDevice::CHARACTERISTIC_UUID = "0000FFF1-0000-1000-8000-00805F9B34FB";
 const char* SpecialPieMacTimerDevice::DEVICE_INFO_SERVICE_UUID = "0917FE11-5D37-816D-8000-00805F9B34FB";
@@ -32,106 +31,38 @@ const char* SpecialPieMacTimerDevice::getLogTag() const {
   return "SP-MAC";
 }
 
-// Static method to check if advertised device matches target MAC address
+// Static method to check if advertised device matches SP M1A2 Timer name pattern
 bool SpecialPieMacTimerDevice::matchesDevice(BLEAdvertisedDevice* device) {
-  if (!device) {
+  if (!device || !device->haveName()) {
     return false;
   }
 
-  String deviceMac = device->getAddress().toString().c_str();
-  deviceMac.toLowerCase();
-  String targetMac = String(TARGET_MAC_ADDRESS);
-  targetMac.toLowerCase();
-
-  return deviceMac == targetMac;
+  String deviceName = device->getName().c_str();
+  // LLM: Rather string.startsWith use string.Matcjhes with regex "SP M1A2 Timer [0-9A-Fa-f]{4}"
+  // Match pattern "SP M1A2 Timer <xxxx>" where <xxxx> is a 4-character identifier
+  // Example: "SP M1A2 Timer 2196"
+  return deviceName.startsWith("SP M1A2 Timer ");
 }
 
-bool SpecialPieMacTimerDevice::initialize() {
-  LOG_SYSTEM("Initializing Special Pie MAC Timer Device");
-  setConnectionState(DeviceConnectionState::DISCONNECTED);
-  return true;
-}
-
-bool SpecialPieMacTimerDevice::startScanning() {
-  LOG_BLE("Starting scan for device: %s", TARGET_MAC_ADDRESS);
-
-  setConnectionState(DeviceConnectionState::SCANNING);
-
-  BLEScan* pScan = BLEDevice::getScan();
-  pScan->setActiveScan(true);
-  pScan->setInterval(100);
-  pScan->setWindow(99);
-
-  LOG_BLE("Scanning for 10 seconds...");
-  BLEScanResults foundDevices = pScan->start(10, false);
-
-  LOG_BLE("Found %d devices", foundDevices.getCount());
-
-  bool deviceFound = false;
-  for (int i = 0; i < foundDevices.getCount(); i++) {
-    BLEAdvertisedDevice device = foundDevices.getDevice(i);
-
-    // Check if this is our target device by MAC address
-    String deviceMac = device.getAddress().toString().c_str();
-    deviceMac.toLowerCase();
-    String targetMac = String(TARGET_MAC_ADDRESS);
-    targetMac.toLowerCase();
-
-    if (deviceMac == targetMac) {
-      LOG_BLE("Target device found!");
-      LOG_BLE("  Name: %s", device.getName().c_str());
-      LOG_BLE("  MAC: %s", device.getAddress().toString().c_str());
-      LOG_BLE("  RSSI: %d dBm", device.getRSSI());
-
-      deviceFound = true;
-
-      // Attempt connection
-      if (connectToMacAddress(device.getAddress().toString().c_str())) {
-        pScan->clearResults();
-        return true;
-      }
-      break;
-    }
-  }
-
-  pScan->clearResults();
-
-  if (!deviceFound) {
-    LOG_WARN("SP-MAC", "Target device not found");
-    setConnectionState(DeviceConnectionState::DISCONNECTED);
-  }
-
-  return false;
-}
-
-bool SpecialPieMacTimerDevice::connect(BLEAddress address) {
-  return connectToMacAddress(address.toString().c_str());
-}
 bool SpecialPieMacTimerDevice::attemptConnection(BLEAdvertisedDevice* device) {
   if (!device) return false;
 
   if (device->haveName()) {
-    LOG_BLE("Special Pie Timer found: %s (%s)",
+    LOG_BLE("SP M1A2 Timer found: %s (%s)",
             device->getName().c_str(),
             device->getAddress().toString().c_str());
+
+    // Store device name for display
+    deviceName = device->getName().c_str();
   } else {
-    LOG_BLE("Special Pie Timer found: %s", device->getAddress().toString().c_str());
+    LOG_BLE("SP M1A2 Timer found: %s", device->getAddress().toString().c_str());
+    deviceName = device->getAddress().toString().c_str();
   }
 
-  // Connect using the advertised device directly
+  // Connect using the advertised device's MAC address
   return connectToMacAddress(device->getAddress().toString().c_str());
 }
 
-bool SpecialPieMacTimerDevice::isSpecialPieTimer(BLEAdvertisedDevice* device) {
-  if (!device) return false;
-
-  if (device->haveServiceUUID()) {
-    BLEUUID serviceUuid(SERVICE_UUID);
-    return device->isAdvertisingService(serviceUuid);
-  }
-
-  return false;
-}
 bool SpecialPieMacTimerDevice::connectToMacAddress(const char* macAddress) {
   LOG_BLE("Connecting to %s", macAddress);
 
@@ -226,99 +157,6 @@ bool SpecialPieMacTimerDevice::connectToMacAddress(const char* macAddress) {
   }
 
   return false;
-}
-
-void SpecialPieMacTimerDevice::disconnect() {
-  LOG_BLE("Disconnecting from Special Pie MAC Timer");
-
-  if (pClient && pClient->isConnected()) {
-    pClient->disconnect();
-  }
-
-  if (pClient) {
-    delete pClient;
-    pClient = nullptr;
-  }
-
-  pService = nullptr;
-  pNotifyCharacteristic = nullptr;
-  isConnectedFlag = false;
-  sessionActiveFlag = false;
-  hasPreviousShot = false;
-  setConnectionState(DeviceConnectionState::DISCONNECTED);
-}
-
-DeviceConnectionState SpecialPieMacTimerDevice::getConnectionState() const {
-  return connectionState;
-}
-
-bool SpecialPieMacTimerDevice::isConnected() const {
-  return isConnectedFlag && pClient && pClient->isConnected();
-}
-
-const char* SpecialPieMacTimerDevice::getDeviceModel() const {
-  return deviceModel.c_str();
-}
-
-const char* SpecialPieMacTimerDevice::getDeviceName() const {
-  return deviceName.c_str();
-}
-
-BLEAddress SpecialPieMacTimerDevice::getDeviceAddress() const {
-  return deviceAddress;
-}
-
-// Callback registration
-void SpecialPieMacTimerDevice::onShotDetected(std::function<void(const NormalizedShotData&)> callback) {
-  shotDetectedCallback = callback;
-}
-
-void SpecialPieMacTimerDevice::onSessionStarted(std::function<void(const SessionData&)> callback) {
-  sessionStartedCallback = callback;
-}
-
-void SpecialPieMacTimerDevice::onCountdownComplete(std::function<void(const SessionData&)> callback) {
-  countdownCompleteCallback = callback;
-}
-
-void SpecialPieMacTimerDevice::onSessionStopped(std::function<void(const SessionData&)> callback) {
-  sessionStoppedCallback = callback;
-}
-
-void SpecialPieMacTimerDevice::onSessionSuspended(std::function<void(const SessionData&)> callback) {
-  sessionSuspendedCallback = callback;
-}
-
-void SpecialPieMacTimerDevice::onSessionResumed(std::function<void(const SessionData&)> callback) {
-  sessionResumedCallback = callback;
-}
-
-void SpecialPieMacTimerDevice::onConnectionStateChanged(std::function<void(DeviceConnectionState)> callback) {
-  connectionStateCallback = callback;
-}
-
-void SpecialPieMacTimerDevice::update() {
-  if (isConnectedFlag && pClient && pClient->isConnected()) {
-    // Print heartbeat every 30 seconds
-    if (millis() - lastHeartbeat > 30000) {
-      LOG_TIMER("Connected - waiting for events...");
-      lastHeartbeat = millis();
-    }
-  } else if (isConnectedFlag) {
-    // Connection lost
-    LOG_ERROR("SP-MAC", "Connection lost");
-    isConnectedFlag = false;
-    sessionActiveFlag = false;
-    hasPreviousShot = false;
-    setConnectionState(DeviceConnectionState::DISCONNECTED);
-
-    if (pClient) {
-      delete pClient;
-      pClient = nullptr;
-    }
-    pService = nullptr;
-    pNotifyCharacteristic = nullptr;
-  }
 }
 
 // Static notification callback
@@ -443,7 +281,8 @@ void SpecialPieMacTimerDevice::processTimerData(uint8_t* pData, size_t length) {
         }
 
         // Update session shot count
-        currentSession.totalShots = shotNumber;
+        // SpecialPieTimer use 0 index shot numbers
+        currentSession.totalShots = shotNumber + 1;
       }
       break;
     }

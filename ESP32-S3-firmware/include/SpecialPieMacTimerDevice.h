@@ -14,22 +14,18 @@ enum class SpecialPieMacMessageType : uint8_t {
 };
 
 /**
- * @brief Special Pie Timer M1A2+ device implementation with MAC-based connection
+ * @brief Special Pie Timer M1A2+ device implementation with name-based identification
  *
- * Connects to Special Pie Timer by MAC address instead of service UUID scanning.
- * Uses the same BLE protocol as SpecialPieTimerDevice but with direct MAC addressing.
+ * Identifies Special Pie Timer by device name pattern "SP M1A2 Timer <xxxx>"
+ * where <xxxx> is a 4-character identifier (e.g., "SP M1A2 Timer 2196").
+ * Does not rely on service UUID advertising like other timer devices.
  *
  * Protocol: Frame-based with markers [F8 F9] [MESSAGE_TYPE] [DATA...] [F9 F8]
  * Time format: Seconds + Centiseconds (converted to milliseconds for normalization)
  */
 class SpecialPieMacTimerDevice : public BaseTimerDevice {
 private:
-  // Hardcoded MAC address for target device
-  // TODO: Make this configurable via settings
-  static const char* TARGET_MAC_ADDRESS;
-
   // Special Pie Timer specific configuration
-  static const char *SERVICE_UUID;
   static const char* CHARACTERISTIC_UUID;
   static const char* DEVICE_INFO_SERVICE_UUID;
   static const char* FIRMWARE_CHAR_UUID;
@@ -57,49 +53,13 @@ public:
   SpecialPieMacTimerDevice();
   virtual ~SpecialPieMacTimerDevice();
 
-  // ITimerDevice interface implementation
-  bool initialize() override;
-  bool startScanning() override;
-  bool connect(BLEAddress address) override;
-  void disconnect() override;
-  DeviceConnectionState getConnectionState() const override;
-  bool isConnected() const override;
-
-  // Device information
-  const char* getDeviceModel() const override;
-  const char* getDeviceName() const override;
-  BLEAddress getDeviceAddress() const override;
-
-  // Callback registration
-  void onShotDetected(std::function<void(const NormalizedShotData&)> callback) override;
-  void onSessionStarted(std::function<void(const SessionData&)> callback) override;
-  void onCountdownComplete(std::function<void(const SessionData&)> callback) override;
-  void onSessionStopped(std::function<void(const SessionData&)> callback) override;
-  void onSessionSuspended(std::function<void(const SessionData&)> callback) override;
-  void onSessionResumed(std::function<void(const SessionData&)> callback) override;
-  void onConnectionStateChanged(std::function<void(DeviceConnectionState)> callback) override;
-
-  // Device capabilities
-  bool supportsRemoteStart() const override { return false; }
-  bool supportsShotList() const override { return false; }
-  bool supportsSessionControl() const override { return false; }
-
-  // Advanced features (not supported)
-  bool requestShotList(uint32_t sessionId) override { return false; }
-  bool startSession() override { return false; }
-  bool stopSession() override { return false; }
-
-  // Update method
-  void update() override;
+  static const char* SERVICE_UUID;
 
   // Public connection method for TimerApplication
   bool attemptConnection(BLEAdvertisedDevice* device);
 
   // Device identification - check if advertised device matches target MAC address
   static bool matchesDevice(BLEAdvertisedDevice* device);
-
-  // Helper method to check if a device is a Special Pie Timer by UUID (legacy)
-  static bool isSpecialPieTimer(BLEAdvertisedDevice* device);
 
   // Static instance for callbacks
   static SpecialPieMacTimerDevice* instance;
