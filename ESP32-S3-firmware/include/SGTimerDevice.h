@@ -47,6 +47,9 @@ public:
 
   static const char *SERVICE_UUID;
 
+  // Device identification - check if advertised device is an SG Timer
+  static bool matchesDevice(BLEAdvertisedDevice* device);
+
   // Public connection method for TimerApplication
   bool attemptConnection(BLEAdvertisedDevice* device);
 

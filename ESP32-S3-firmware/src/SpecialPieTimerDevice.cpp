@@ -29,6 +29,16 @@ const char* SpecialPieTimerDevice::getLogTag() const {
   return "SPECIAL-PIE";
 }
 
+// Static method to check if advertised device is a Special Pie Timer (UUID-based)
+bool SpecialPieTimerDevice::matchesDevice(BLEAdvertisedDevice* device) {
+  if (!device || !device->haveServiceUUID()) {
+    return false;
+  }
+
+  BLEUUID serviceUuid(SERVICE_UUID);
+  return device->isAdvertisingService(serviceUuid);
+}
+
 bool SpecialPieTimerDevice::attemptConnection(BLEAdvertisedDevice* device) {
   if (!device) return false;
 

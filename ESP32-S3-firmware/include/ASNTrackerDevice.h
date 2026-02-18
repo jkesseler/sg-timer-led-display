@@ -42,6 +42,9 @@ public:
 
   static const char *SERVICE_UUID;
 
+  // Device identification - check if advertised device is an ASN Tracker
+  static bool matchesDevice(BLEAdvertisedDevice* device);
+
   // Public connection method for TimerApplication
   bool attemptConnection(BLEAdvertisedDevice* device);
 

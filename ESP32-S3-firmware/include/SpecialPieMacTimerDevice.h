@@ -29,7 +29,7 @@ private:
   static const char* TARGET_MAC_ADDRESS;
 
   // Special Pie Timer specific configuration
-  static const char* SERVICE_UUID;
+  static const char *SERVICE_UUID;
   static const char* CHARACTERISTIC_UUID;
   static const char* DEVICE_INFO_SERVICE_UUID;
   static const char* FIRMWARE_CHAR_UUID;
@@ -92,10 +92,13 @@ public:
   // Update method
   void update() override;
 
-  // Public connection method for TimerApplication (UUID-based)
+  // Public connection method for TimerApplication
   bool attemptConnection(BLEAdvertisedDevice* device);
 
-  // Helper method to check if a device is a Special Pie Timer
+  // Device identification - check if advertised device matches target MAC address
+  static bool matchesDevice(BLEAdvertisedDevice* device);
+
+  // Helper method to check if a device is a Special Pie Timer by UUID (legacy)
   static bool isSpecialPieTimer(BLEAdvertisedDevice* device);
 
   // Static instance for callbacks

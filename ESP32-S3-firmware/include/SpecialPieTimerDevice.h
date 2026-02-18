@@ -42,7 +42,10 @@ public:
 
   static const char *SERVICE_UUID;
 
-  // Helper method to check if a device is a Special Pie Timer
+  // Device identification - check if advertised device is a Special Pie Timer
+  static bool matchesDevice(BLEAdvertisedDevice* device);
+
+  // Helper method to check if a device is a Special Pie Timer (legacy)
   static bool isSpecialPieTimer(BLEAdvertisedDevice* device);
 
   // Public connection method for TimerApplication

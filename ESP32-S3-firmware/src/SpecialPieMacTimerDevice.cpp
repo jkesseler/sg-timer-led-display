@@ -13,7 +13,7 @@ const char* SpecialPieMacTimerDevice::FIRMWARE_CHAR_UUID = "09170002-5D37-816D-8
 SpecialPieMacTimerDevice* SpecialPieMacTimerDevice::instance = nullptr;
 
 SpecialPieMacTimerDevice::SpecialPieMacTimerDevice() :
-  BaseTimerDevice("Special Pie M1A2+ (MAC)"),
+  BaseTimerDevice("SP M1A2 Timer"),
   pNotifyCharacteristic(nullptr),
   previousTimeSeconds(0),
   previousTimeCentiseconds(0),
@@ -30,6 +30,20 @@ SpecialPieMacTimerDevice::~SpecialPieMacTimerDevice() {
 
 const char* SpecialPieMacTimerDevice::getLogTag() const {
   return "SP-MAC";
+}
+
+// Static method to check if advertised device matches target MAC address
+bool SpecialPieMacTimerDevice::matchesDevice(BLEAdvertisedDevice* device) {
+  if (!device) {
+    return false;
+  }
+
+  String deviceMac = device->getAddress().toString().c_str();
+  deviceMac.toLowerCase();
+  String targetMac = String(TARGET_MAC_ADDRESS);
+  targetMac.toLowerCase();
+
+  return deviceMac == targetMac;
 }
 
 bool SpecialPieMacTimerDevice::initialize() {

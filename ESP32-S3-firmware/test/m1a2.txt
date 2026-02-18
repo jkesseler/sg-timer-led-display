@@ -1,0 +1,7 @@
+Device #10:
+  Name:           SP M1A2 Timer 2196
+  MAC Address:    54:14:a7:ab:21:96
+  RSSI:           -51 dBm
+
+  >>> Special Pie Timer M1A2+ <<<
+  Use with: test-special-pie

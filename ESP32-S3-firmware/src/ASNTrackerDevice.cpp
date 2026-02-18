@@ -29,6 +29,16 @@ const char* ASNTrackerDevice::getLogTag() const {
   return "ASN-Tracker";
 }
 
+// Static method to check if advertised device is an ASN Tracker
+bool ASNTrackerDevice::matchesDevice(BLEAdvertisedDevice* device) {
+  if (!device || !device->haveServiceUUID()) {
+    return false;
+  }
+
+  BLEUUID serviceUuid(SERVICE_UUID);
+  return device->isAdvertisingService(serviceUuid);
+}
+
 bool ASNTrackerDevice::attemptConnection(BLEAdvertisedDevice* device) {
   if (!device) return false;
 

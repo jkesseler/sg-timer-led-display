@@ -31,6 +31,16 @@ const char* SGTimerDevice::getLogTag() const {
   return "SG-TIMER";
 }
 
+// Static method to check if advertised device is an SG Timer
+bool SGTimerDevice::matchesDevice(BLEAdvertisedDevice* device) {
+  if (!device || !device->haveServiceUUID()) {
+    return false;
+  }
+
+  BLEUUID serviceUuid(SERVICE_UUID);
+  return device->isAdvertisingService(serviceUuid);
+}
+
 // Connect to the already-discovered SG Timer device
 bool SGTimerDevice::attemptConnection(BLEAdvertisedDevice* device) {
   if (!device) {
