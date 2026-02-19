@@ -6,16 +6,16 @@
 #include <BLEUtils.h>
 #include <BLEScan.h>
 
-// ASN Tracker Protocol Message Types (matches Special Pie)
-enum class ASNMessageType : uint8_t {
+// Special Pie Timer Protocol Message Types
+enum class SpecialPieMessageType : uint8_t {
   SESSION_STOP = 0x18,    // 24 decimal
   SESSION_START = 0x34,   // 52 decimal
   SHOT_DETECTED = 0x36    // 54 decimal
 };
 
-class ASNTrackerDevice : public BaseTimerDevice {
+class SpecialPieM1A2Plus : public BaseTimerDevice {
 private:
-  // ASN Tracker specific configuration
+  // Special Pie Timer specific configuration
   static const char* LOG_TAG;
   static const char* CHARACTERISTIC_UUID;
 
@@ -37,17 +37,18 @@ private:
                            uint8_t* pData, size_t length, bool isNotify);
 
 public:
-  ASNTrackerDevice();
-  virtual ~ASNTrackerDevice();
+  SpecialPieM1A2Plus();
+  virtual ~SpecialPieM1A2Plus();
 
   static const char *SERVICE_UUID;
 
-  // Device identification - check if advertised device is an ASN Tracker
+  // Device identification - check if advertised device is a Special Pie Timer
   static bool matchesDevice(BLEAdvertisedDevice* device);
 
   // Public connection method for TimerApplication
   bool attemptConnection(BLEAdvertisedDevice* device);
 
   // Static instance for callbacks
-  static ASNTrackerDevice* instance;
+  static SpecialPieM1A2Plus* instance;
 };
+

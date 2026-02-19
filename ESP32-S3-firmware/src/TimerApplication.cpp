@@ -1,8 +1,8 @@
 #include "TimerApplication.h"
-#include "SGTimerDevice.h"
-#include "SpecialPieTimerDevice.h"
-#include "SpecialPieMacTimerDevice.h"
-#include "ASNTrackerDevice.h"
+#include "SGTimer.h"
+#include "SpecialPieM1A2Plus.h"
+#include "SpecialPieM1A2F.h"
+#include "ASNTracker.h"
 #include "WiFiConfig.h"
 #include "common.h"
 #include <BLEDevice.h>
@@ -478,11 +478,11 @@ void TimerApplication::scanForDevices() {
     BLEAdvertisedDevice device = foundDevices.getDevice(i);
 
     // Try MAC-based Special Pie Timer first (highest priority)
-    if (SpecialPieMacTimerDevice::matchesDevice(&device)) {
+    if (SpecialPieM1A2F::matchesDevice(&device)) {
       LOG_SYSTEM("Found MAC-based Special Pie Timer (MAC: %s)",
                  device.getAddress().toString().c_str());
 
-      SpecialPieMacTimerDevice* macDevice = new SpecialPieMacTimerDevice();
+      SpecialPieM1A2F* macDevice = new SpecialPieM1A2F();
       timerDevice = std::unique_ptr<ITimerDevice>(macDevice);
       setupCallbacks();
 
@@ -496,10 +496,10 @@ void TimerApplication::scanForDevices() {
       }
     }
     // Try SG Timer
-    else if (SGTimerDevice::matchesDevice(&device)) {
+    else if (SGTimer::matchesDevice(&device)) {
       LOG_SYSTEM("Found SG Timer (UUID-based)");
 
-      SGTimerDevice* sgDevice = new SGTimerDevice();
+      SGTimer* sgDevice = new SGTimer();
       timerDevice = std::unique_ptr<ITimerDevice>(sgDevice);
       setupCallbacks();
 
@@ -513,10 +513,10 @@ void TimerApplication::scanForDevices() {
       }
     }
     // Try UUID-based Special Pie Timer
-    else if (SpecialPieTimerDevice::matchesDevice(&device)) {
+    else if (SpecialPieM1A2Plus::matchesDevice(&device)) {
       LOG_SYSTEM("Found UUID-based Special Pie Timer");
 
-      SpecialPieTimerDevice* specialPieDevice = new SpecialPieTimerDevice();
+      SpecialPieM1A2Plus* specialPieDevice = new SpecialPieM1A2Plus();
       timerDevice = std::unique_ptr<ITimerDevice>(specialPieDevice);
       setupCallbacks();
 
@@ -530,10 +530,10 @@ void TimerApplication::scanForDevices() {
       }
     }
     // Try ASN Tracker
-    else if (ASNTrackerDevice::matchesDevice(&device)) {
+    else if (ASNTracker::matchesDevice(&device)) {
       LOG_SYSTEM("Found ASN Tracker");
 
-      ASNTrackerDevice* asnDevice = new ASNTrackerDevice();
+      ASNTracker* asnDevice = new ASNTracker();
       timerDevice = std::unique_ptr<ITimerDevice>(asnDevice);
       setupCallbacks();
 

@@ -4,10 +4,10 @@ This document reflects the timer device implementations currently compiled into 
 
 ## Implementations in code
 
-- `SGTimerDevice`
-- `SpecialPieMacTimerDevice`
-- `SpecialPieTimerDevice`
-- `ASNTrackerDevice`
+- `SGTimer`
+- `SpecialPieM1A2F`
+- `SpecialPieM1A2Plus`
+- `ASNTracker`
 
 All devices inherit from `BaseTimerDevice` and implement the `ITimerDevice` interface.
 
@@ -15,10 +15,10 @@ All devices inherit from `BaseTimerDevice` and implement the `ITimerDevice` inte
 
 `TimerApplication::scanForDevices()` checks each advertised device in this priority order:
 
-1. `SpecialPieMacTimerDevice::matchesDevice()`
-2. `SGTimerDevice::matchesDevice()`
-3. `SpecialPieTimerDevice::matchesDevice()`
-4. `ASNTrackerDevice::matchesDevice()`
+1. `SpecialPieM1A2F::matchesDevice()`
+2. `SGTimer::matchesDevice()`
+3. `SpecialPieM1A2Plus::matchesDevice()`
+4. `ASNTracker::matchesDevice()`
 
 First successful connection wins; only one timer is connected at a time.
 
@@ -54,24 +54,24 @@ First successful connection wins; only one timer is connected at a time.
 
 ## Device-specific notes
 
-### SG Timer (`SGTimerDevice`)
+### SG Timer (`SGTimer`)
 
 - Detects by SG service UUID
 - Parses SG BLE event IDs (`0x00`..`0x05`)
 - Device model is refined from advertised name pattern (`SG-SST4...`)
 
-### Special Pie name/MAC variant (`SpecialPieMacTimerDevice`)
+### Special Pie name/MAC variant (`SpecialPieM1A2F`)
 
 - Prioritized first during scanning
 - Matches device names with prefix `SP M1A2 Timer `
 - Can read optional firmware value from device info service and include it in display name
 
-### Special Pie UUID variant (`SpecialPieTimerDevice`)
+### Special Pie UUID variant (`SpecialPieM1A2Plus`)
 
 - Fallback when name-based match does not trigger
 - Uses same `FFF0/FFF1` event path
 
-### ASN Tracker (`ASNTrackerDevice`)
+### ASN Tracker (`ASNTracker`)
 
 - Uses ASN-specific UUID pair
 - Protocol payload shape closely matches Special Pie framed events
@@ -86,8 +86,8 @@ This queueing layer is independent of device type.
 ## Relevant source files
 
 - `ESP32-S3-firmware/src/TimerApplication.cpp`
-- `ESP32-S3-firmware/src/SGTimerDevice.cpp`
-- `ESP32-S3-firmware/src/SpecialPieMacTimerDevice.cpp`
-- `ESP32-S3-firmware/src/SpecialPieTimerDevice.cpp`
-- `ESP32-S3-firmware/src/ASNTrackerDevice.cpp`
+- `ESP32-S3-firmware/src/SGTimer.cpp`
+- `ESP32-S3-firmware/src/SpecialPieM1A2F.cpp`
+- `ESP32-S3-firmware/src/SpecialPieM1A2Plus.cpp`
+- `ESP32-S3-firmware/src/ASNTracker.cpp`
 - `ESP32-S3-firmware/include/ITimerDevice.h`

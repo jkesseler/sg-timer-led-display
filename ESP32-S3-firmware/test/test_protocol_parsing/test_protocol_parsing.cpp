@@ -24,10 +24,10 @@
 
 // ── Include real source files (stubs resolve Arduino/BLE headers) ─
 #include "../../src/Logger.cpp"
-#include "../../src/SGTimerDevice.cpp"
-#include "../../src/SpecialPieTimerDevice.cpp"
-#include "../../src/ASNTrackerDevice.cpp"
-#include "../../src/SpecialPieMacTimerDevice.cpp"
+#include "../../src/SGTimer.cpp"
+#include "../../src/SpecialPieM1A2Plus.cpp"
+#include "../../src/ASNTracker.cpp"
+#include "../../src/SpecialPieM1A2F.cpp"
 
 #undef private
 #undef protected
@@ -61,7 +61,7 @@ protected:
 
 class SGTimerProtocolTest : public ProtocolTestBase {
 protected:
-  SGTimerDevice device;
+  SGTimer device;
 
   void SetUp() override {
     ProtocolTestBase::SetUp();
@@ -182,7 +182,7 @@ TEST_F(SGTimerProtocolTest, ShotDetected_DeviceModelStored) {
   device.processTimerData(pkt, sizeof(pkt));
 
   EXPECT_TRUE(callbackCalled);
-  // SGTimerDevice initializes deviceModel via BaseTimerDevice("SG Timer")
+  // SGTimer initializes deviceModel via BaseTimerDevice("SG Timer")
   EXPECT_STREQ(receivedShot.deviceModel, "SG Timer");
 }
 
@@ -248,7 +248,7 @@ TEST_F(SGTimerProtocolTest, ShotDetected_TooShortForShot) {
 
 class SpecialPieProtocolTest : public ProtocolTestBase {
 protected:
-  SpecialPieTimerDevice device;
+  SpecialPieM1A2Plus device;
 
   void SetUp() override {
     ProtocolTestBase::SetUp();
@@ -288,6 +288,17 @@ TEST_F(SpecialPieProtocolTest, SessionStart_AlsoTriggersCountdownComplete) {
   device.processTimerData(pkt, sizeof(pkt));
 
   EXPECT_TRUE(countdownCallbackCalled);  // SP fires countdown immediately
+}
+
+TEST(SpecialPieM1A2FDeviceMatchTest, MatchesExpectedNamePattern) {
+  BLEAdvertisedDevice valid;
+  valid.setName("SP M1A2 Timer 2196");
+
+  BLEAdvertisedDevice invalid;
+  invalid.setName("SP M1A2 Timer 21-6");
+
+  EXPECT_TRUE(SpecialPieM1A2F::matchesDevice(&valid));
+  EXPECT_FALSE(SpecialPieM1A2F::matchesDevice(&invalid));
 }
 
 // ── SHOT_DETECTED ────────────────────────────────────────────────
@@ -392,12 +403,12 @@ TEST_F(SpecialPieProtocolTest, RejectsNullData) {
 //
 // ASN Tracker uses the same frame protocol as Special Pie Timer
 // (F8 F9 ... F9 F8) with different UUIDs. These tests verify the
-// ASNTrackerDevice implementation handles it correctly.
+// ASNTracker implementation handles it correctly.
 // ═════════════════════════════════════════════════════════════════
 
 class ASNTrackerProtocolTest : public ProtocolTestBase {
 protected:
-  ASNTrackerDevice device;
+  ASNTracker device;
 
   void SetUp() override {
     ProtocolTestBase::SetUp();
@@ -486,7 +497,7 @@ TEST_F(ASNTrackerProtocolTest, MultiShotSplitAccumulation) {
 
 class SpecialPieMacProtocolTest : public ProtocolTestBase {
 protected:
-  SpecialPieMacTimerDevice device;
+  SpecialPieM1A2F device;
 
   void SetUp() override {
     ProtocolTestBase::SetUp();
@@ -593,10 +604,10 @@ TEST_F(SpecialPieMacProtocolTest, ShotResetsOnNewSession) {
 TEST(CrossDevice, AllDevicesProduceNonEmptyModel) {
   Logger::setLevel(LogLevel::NONE);
 
-  SGTimerDevice sg;
-  SpecialPieTimerDevice sp;
-  ASNTrackerDevice asn;
-  SpecialPieMacTimerDevice spMac;
+  SGTimer sg;
+  SpecialPieM1A2Plus sp;
+  ASNTracker asn;
+  SpecialPieM1A2F spMac;
 
   EXPECT_STRNE(sg.getDeviceModel(), "");
   EXPECT_STRNE(sp.getDeviceModel(), "");
@@ -607,10 +618,10 @@ TEST(CrossDevice, AllDevicesProduceNonEmptyModel) {
 TEST(CrossDevice, InitializeReturnsTrue) {
   Logger::setLevel(LogLevel::NONE);
 
-  SGTimerDevice sg;
-  SpecialPieTimerDevice sp;
-  ASNTrackerDevice asn;
-  SpecialPieMacTimerDevice spMac;
+  SGTimer sg;
+  SpecialPieM1A2Plus sp;
+  ASNTracker asn;
+  SpecialPieM1A2F spMac;
 
   EXPECT_TRUE(sg.initialize());
   EXPECT_TRUE(sp.initialize());
@@ -621,7 +632,7 @@ TEST(CrossDevice, InitializeReturnsTrue) {
 TEST(CrossDevice, DefaultCapabilities) {
   Logger::setLevel(LogLevel::NONE);
 
-  SGTimerDevice sg;
+  SGTimer sg;
   EXPECT_FALSE(sg.supportsRemoteStart());
   EXPECT_FALSE(sg.supportsShotList());
   EXPECT_FALSE(sg.supportsSessionControl());

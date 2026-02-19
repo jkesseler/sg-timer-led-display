@@ -1,17 +1,17 @@
-#include "SpecialPieTimerDevice.h"
+#include "ASNTracker.h"
 #include "Logger.h"
 #include "common.h"
 
 // Static constants
-const char* SpecialPieTimerDevice::LOG_TAG = "SP-M1A2+";
-const char* SpecialPieTimerDevice::SERVICE_UUID = "0000FFF0-0000-1000-8000-00805F9B34FB";
-const char* SpecialPieTimerDevice::CHARACTERISTIC_UUID = "0000FFF1-0000-1000-8000-00805F9B34FB";
+const char *ASNTracker::LOG_TAG = "ASN-Tracker";
+const char *ASNTracker::SERVICE_UUID = "E5A10001-F1A2-4B63-9F8C-D7B781E35E2A";
+const char *ASNTracker::CHARACTERISTIC_UUID = "E5A10002-F1A2-4B63-9F8C-D7B781E35E2A";
 
 // Static instance for callbacks
-SpecialPieTimerDevice* SpecialPieTimerDevice::instance = nullptr;
+ASNTracker* ASNTracker::instance = nullptr;
 
-SpecialPieTimerDevice::SpecialPieTimerDevice() :
-  BaseTimerDevice("Special Pie Timer"),
+ASNTracker::ASNTracker() :
+  BaseTimerDevice("ASN Tracker"),
   pNotifyCharacteristic(nullptr),
   previousTimeSeconds(0),
   previousTimeCentiseconds(0),
@@ -21,13 +21,13 @@ SpecialPieTimerDevice::SpecialPieTimerDevice() :
   instance = this;
 }
 
-SpecialPieTimerDevice::~SpecialPieTimerDevice() {
+ASNTracker::~ASNTracker() {
   disconnect();
   instance = nullptr;
 }
 
-// Static method to check if advertised device is a Special Pie Timer (UUID-based)
-bool SpecialPieTimerDevice::matchesDevice(BLEAdvertisedDevice* device) {
+// Static method to check if advertised device is an ASN Tracker
+bool ASNTracker::matchesDevice(BLEAdvertisedDevice* device) {
   if (!device || !device->haveServiceUUID()) {
     return false;
   }
@@ -36,10 +36,8 @@ bool SpecialPieTimerDevice::matchesDevice(BLEAdvertisedDevice* device) {
   return device->isAdvertisingService(serviceUuid);
 }
 
-bool SpecialPieTimerDevice::attemptConnection(BLEAdvertisedDevice* device) {
-  if (!device) {
-    return false;
-  }
+bool ASNTracker::attemptConnection(BLEAdvertisedDevice* device) {
+  if (!device) return false;
 
   // Disconnect any existing connection before attempting new one
   disconnect();
@@ -48,11 +46,11 @@ bool SpecialPieTimerDevice::attemptConnection(BLEAdvertisedDevice* device) {
   isConnectedFlag = false;
 
   if (device->haveName()) {
-    LOG_INFO(LOG_TAG, "Special Pie Timer found: %s (%s)",
+    LOG_INFO(LOG_TAG, "ASN Tracker found: %s (%s)",
              device->getName().c_str(),
              device->getAddress().toString().c_str());
   } else {
-    LOG_INFO(LOG_TAG, "Special Pie Timer found: %s", device->getAddress().toString().c_str());
+    LOG_INFO(LOG_TAG, "ASN Tracker found: %s", device->getAddress().toString().c_str());
   }
 
   // Store device info
@@ -86,12 +84,12 @@ bool SpecialPieTimerDevice::attemptConnection(BLEAdvertisedDevice* device) {
     pService = pClient->getService(serviceUuid);
 
     if (pService != nullptr) {
-      LOG_INFO(LOG_TAG, "Special Pie Timer service found");
+      LOG_INFO(LOG_TAG, "ASN Tracker service found");
 
       pNotifyCharacteristic = pService->getCharacteristic(CHARACTERISTIC_UUID);
 
       if (pNotifyCharacteristic != nullptr) {
-        LOG_INFO(LOG_TAG, "FFF1 characteristic found");
+        LOG_INFO(LOG_TAG, "Event characteristic found");
 
         // Check if characteristic can notify
         if (pNotifyCharacteristic->canNotify()) {
@@ -111,7 +109,7 @@ bool SpecialPieTimerDevice::attemptConnection(BLEAdvertisedDevice* device) {
           return false;
         }
       } else {
-        LOG_ERROR(LOG_TAG, "FFF1 characteristic not found");
+        LOG_ERROR(LOG_TAG, "Event characteristic not found");
         pClient->disconnect();
         delete pClient;
         pClient = nullptr;
@@ -137,14 +135,14 @@ bool SpecialPieTimerDevice::attemptConnection(BLEAdvertisedDevice* device) {
 }
 
 // Static notification callback
-void SpecialPieTimerDevice::notifyCallback(BLERemoteCharacteristic* pBLERemoteCharacteristic,
+void ASNTracker::notifyCallback(BLERemoteCharacteristic* pBLERemoteCharacteristic,
                                           uint8_t* pData, size_t length, bool isNotify) {
   if (instance && pData && length > 0) {
     instance->processTimerData(pData, length);
   }
 }
 
-void SpecialPieTimerDevice::processTimerData(uint8_t* pData, size_t length) {
+void ASNTracker::processTimerData(uint8_t* pData, size_t length) {
   if (!pData || length == 0) {
     LOG_WARN(LOG_TAG, "Invalid data received (null or empty)");
     return;
@@ -158,7 +156,7 @@ void SpecialPieTimerDevice::processTimerData(uint8_t* pData, size_t length) {
     Serial.println();
   }
 
-  // Special Pie Timer Protocol:
+  // ASN Tracker Protocol:
   // [F8] [F9] [MESSAGE_TYPE] [DATA...] [F9] [F8]
 
   // Validate frame markers
@@ -168,20 +166,20 @@ void SpecialPieTimerDevice::processTimerData(uint8_t* pData, size_t length) {
     return;
   }
 
-  SpecialPieMessageType messageType = static_cast<SpecialPieMessageType>(pData[2]);
+  ASNMessageType messageType = static_cast<ASNMessageType>(pData[2]);
 
   switch (messageType) {
-    case SpecialPieMessageType::SESSION_START:
+    case ASNMessageType::SESSION_START:
       if (length >= 6) {
         currentSessionId = pData[3];
-        LOG_TIMER("SESSION_START - ID: 0x%02X", currentSessionId);
+        LOG_INFO(LOG_TAG, "SESSION_START - ID: 0x%02X", currentSessionId);
 
         // Update session state
         currentSession.sessionId = currentSessionId;
         currentSession.isActive = true;
         currentSession.totalShots = 0;
         currentSession.startTimestamp = millis();
-        currentSession.startDelaySeconds = 0.0f;  // Special Pie doesn't report start delay
+        currentSession.startDelaySeconds = 0.0f;  // ASN doesn't report start delay
 
         sessionActiveFlag = true;
         hasPreviousShot = false;
@@ -193,17 +191,17 @@ void SpecialPieTimerDevice::processTimerData(uint8_t* pData, size_t length) {
           sessionStartedCallback(currentSession);
         }
 
-        // Special Pie doesn't have a separate countdown - immediately signal ready
+        // ASN doesn't have a separate countdown - immediately signal ready
         if (countdownCompleteCallback) {
           countdownCompleteCallback(currentSession);
         }
       }
       break;
 
-    case SpecialPieMessageType::SESSION_STOP:
+    case ASNMessageType::SESSION_STOP:
       if (length >= 6) {
         uint8_t sessionId = pData[3];
-        LOG_TIMER("SESSION_STOP - ID: 0x%02X", sessionId);
+        LOG_INFO(LOG_TAG, "SESSION_STOP - ID: 0x%02X", sessionId);
 
         currentSession.isActive = false;
         sessionActiveFlag = false;
@@ -215,7 +213,7 @@ void SpecialPieTimerDevice::processTimerData(uint8_t* pData, size_t length) {
       }
       break;
 
-    case SpecialPieMessageType::SHOT_DETECTED:
+    case ASNMessageType::SHOT_DETECTED:
       if (length >= 10) {
         // Protocol format: F8 F9 36 00 [SEC] [CS] [SHOT#] [CHECKSUM?] F9 F8
         // Byte 4: Seconds
@@ -257,7 +255,7 @@ void SpecialPieTimerDevice::processTimerData(uint8_t* pData, size_t length) {
         uint32_t absoluteTimeMs = (currentSeconds * 1000) + (currentCentiseconds * 10);
 
         // Update session shot count
-        // SpecialPieTimer use 0 index shot numbers
+        // ASNTracker use 0 index shot numbers
         currentSession.totalShots = shotNumber + 1;
 
         // Create normalized shot data

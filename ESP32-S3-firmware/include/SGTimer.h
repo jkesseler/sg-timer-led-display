@@ -16,7 +16,7 @@ enum class SGTimerEvent : uint8_t {
   SESSION_SET_BEGIN = 0x05
 };
 
-class SGTimerDevice : public BaseTimerDevice {
+class SGTimer : public BaseTimerDevice {
 private:
   // SG Timer specific configuration
   static const char* LOG_TAG;
@@ -41,8 +41,8 @@ private:
                            uint8_t* pData, size_t length, bool isNotify);
 
 public:
-  SGTimerDevice();
-  virtual ~SGTimerDevice();
+  SGTimer();
+  virtual ~SGTimer();
 
   static const char *SERVICE_UUID;
 
@@ -53,5 +53,5 @@ public:
   bool attemptConnection(BLEAdvertisedDevice* device);
 
   // Static instance for callbacks
-  static SGTimerDevice* instance;
+  static SGTimer* instance;
 };

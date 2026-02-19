@@ -19,16 +19,16 @@ ESP32-S3 firmware and companion tooling for displaying shot timer events on HUB7
 
 ## Supported BLE timer implementations
 
-- `SGTimerDevice` (UUID-based discovery)
-- `SpecialPieMacTimerDevice` (name-pattern discovery: `SP M1A2 Timer ...`)
-- `SpecialPieTimerDevice` (UUID-based discovery)
-- `ASNTrackerDevice` (UUID-based discovery)
+- `SGTimer` (UUID-based discovery)
+- `SpecialPieM1A2F` (name-pattern discovery: `SP M1A2 Timer ...`)
+- `SpecialPieM1A2Plus` (UUID-based discovery)
+- `ASNTracker` (UUID-based discovery)
 
 Scan priority in `TimerApplication::scanForDevices()` is:
-1. `SpecialPieMacTimerDevice`
-2. `SGTimerDevice`
-3. `SpecialPieTimerDevice`
-4. `ASNTrackerDevice`
+1. `SpecialPieM1A2F`
+2. `SGTimer`
+3. `SpecialPieM1A2Plus`
+4. `ASNTracker`
 
 ## Runtime modes and config
 

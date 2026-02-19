@@ -31,10 +31,10 @@ This directory contains implementation-facing docs for the current ESP32-S3 firm
 
 ## Current supported timer implementations
 
-- `SGTimerDevice` (`ESP32-S3-firmware/src/SGTimerDevice.cpp`)
-- `SpecialPieMacTimerDevice` (`ESP32-S3-firmware/src/SpecialPieMacTimerDevice.cpp`)
-- `SpecialPieTimerDevice` (`ESP32-S3-firmware/src/SpecialPieTimerDevice.cpp`)
-- `ASNTrackerDevice` (`ESP32-S3-firmware/src/ASNTrackerDevice.cpp`)
+- `SGTimer` (`ESP32-S3-firmware/src/SGTimer.cpp`)
+- `SpecialPieM1A2F` (`ESP32-S3-firmware/src/SpecialPieM1A2F.cpp`)
+- `SpecialPieM1A2Plus` (`ESP32-S3-firmware/src/SpecialPieM1A2Plus.cpp`)
+- `ASNTracker` (`ESP32-S3-firmware/src/ASNTracker.cpp`)
 
 All of these implement `ITimerDevice` via `BaseTimerDevice`, and all shot times are normalized to milliseconds in `NormalizedShotData`.
 

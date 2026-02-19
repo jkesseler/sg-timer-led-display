@@ -1,17 +1,17 @@
-#include "SGTimerDevice.h"
+#include "SGTimer.h"
 #include "Logger.h"
 #include "common.h"
 
 // Static constants - Service UUIDs for device discovery
-const char* SGTimerDevice::LOG_TAG = "SG-TIMER";
-const char* SGTimerDevice::SERVICE_UUID = "7520FFFF-14D2-4CDA-8B6B-697C554C9311";
-const char* SGTimerDevice::CHARACTERISTIC_UUID = "75200001-14D2-4CDA-8B6B-697C554C9311";
-const char* SGTimerDevice::SHOT_LIST_UUID = "75200004-14D2-4CDA-8B6B-697C554C9311";
+const char* SGTimer::LOG_TAG = "SG-TIMER";
+const char* SGTimer::SERVICE_UUID = "7520FFFF-14D2-4CDA-8B6B-697C554C9311";
+const char* SGTimer::CHARACTERISTIC_UUID = "75200001-14D2-4CDA-8B6B-697C554C9311";
+const char* SGTimer::SHOT_LIST_UUID = "75200004-14D2-4CDA-8B6B-697C554C9311";
 
 // Static instance for callbacks
-SGTimerDevice* SGTimerDevice::instance = nullptr;
+SGTimer* SGTimer::instance = nullptr;
 
-SGTimerDevice::SGTimerDevice() :
+SGTimer::SGTimer() :
   BaseTimerDevice("SG Timer"),
   pEventCharacteristic(nullptr),
   previousShotTime(0),
@@ -23,13 +23,13 @@ SGTimerDevice::SGTimerDevice() :
   instance = this;
 }
 
-SGTimerDevice::~SGTimerDevice() {
+SGTimer::~SGTimer() {
   disconnect();
   instance = nullptr;
 }
 
 // Static method to check if advertised device is an SG Timer
-bool SGTimerDevice::matchesDevice(BLEAdvertisedDevice* device) {
+bool SGTimer::matchesDevice(BLEAdvertisedDevice* device) {
   if (!device || !device->haveServiceUUID()) {
     return false;
   }
@@ -39,7 +39,7 @@ bool SGTimerDevice::matchesDevice(BLEAdvertisedDevice* device) {
 }
 
 // Connect to the already-discovered SG Timer device
-bool SGTimerDevice::attemptConnection(BLEAdvertisedDevice* device) {
+bool SGTimer::attemptConnection(BLEAdvertisedDevice* device) {
   if (!device) {
     LOG_ERROR(LOG_TAG, "Null device pointer passed to attemptConnection");
     setConnectionState(DeviceConnectionState::ERROR);
@@ -153,14 +153,14 @@ bool SGTimerDevice::attemptConnection(BLEAdvertisedDevice* device) {
 }
 
 // Static notification callback
-void SGTimerDevice::notifyCallback(BLERemoteCharacteristic* pBLERemoteCharacteristic,
+void SGTimer::notifyCallback(BLERemoteCharacteristic* pBLERemoteCharacteristic,
                                   uint8_t* pData, size_t length, bool isNotify) {
   if (instance && pData && length > 0) {
     instance->processTimerData(pData, length);
   }
 }
 
-void SGTimerDevice::processTimerData(uint8_t* pData, size_t length) {
+void SGTimer::processTimerData(uint8_t* pData, size_t length) {
   if (!pData || length == 0) {
     LOG_WARN(LOG_TAG, "Invalid data received (null or empty)");
     return;

@@ -23,7 +23,7 @@ enum class SpecialPieMacMessageType : uint8_t {
  * Protocol: Frame-based with markers [F8 F9] [MESSAGE_TYPE] [DATA...] [F9 F8]
  * Time format: Seconds + Centiseconds (converted to milliseconds for normalization)
  */
-class SpecialPieMacTimerDevice : public BaseTimerDevice {
+class SpecialPieM1A2F : public BaseTimerDevice {
 private:
   // Special Pie Timer specific configuration
   static const char* LOG_TAG;
@@ -48,8 +48,8 @@ private:
                            uint8_t* pData, size_t length, bool isNotify);
 
 public:
-  SpecialPieMacTimerDevice();
-  virtual ~SpecialPieMacTimerDevice();
+  SpecialPieM1A2F();
+  virtual ~SpecialPieM1A2F();
 
   static const char* SERVICE_UUID;
 
@@ -60,5 +60,5 @@ public:
   static bool matchesDevice(BLEAdvertisedDevice* device);
 
   // Static instance for callbacks
-  static SpecialPieMacTimerDevice* instance;
+  static SpecialPieM1A2F* instance;
 };
