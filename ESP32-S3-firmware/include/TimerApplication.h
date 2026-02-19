@@ -15,7 +15,7 @@ namespace AppConfig {
   // Using power-of-2 size enables fast modulo via bitwise AND
   constexpr uint16_t EVENT_QUEUE_SIZE = 32;  // Must be power of 2
   constexpr uint16_t EVENT_QUEUE_MASK = EVENT_QUEUE_SIZE - 1;
-  constexpr uint16_t QUEUE_DEPTH_WARN_THRESHOLD = EVENT_QUEUE_SIZE / 8;  // Warn at ~12.5% capacity
+  constexpr uint16_t QUEUE_DEPTH_WARN_THRESHOLD = EVENT_QUEUE_SIZE / 4;  // Warn at ~25% capacity
 
   // Batch processing configuration
   constexpr uint16_t MAX_SHOTS_PER_PUBLISH_CYCLE = 8;  // Max shots to publish per loop iteration
