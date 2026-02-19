@@ -32,8 +32,8 @@ protected:
   unsigned long lastReconnectAttempt;
   unsigned long lastHeartbeat;
   BLEAddress deviceAddress;
-  String deviceName;
-  String deviceModel;
+  char deviceName[64];
+  char deviceModel[32];
 
   // Session tracking
   SessionData currentSession;
@@ -66,8 +66,9 @@ public:
       lastReconnectAttempt(0),
       lastHeartbeat(0),
       deviceAddress("00:00:00:00:00:00"),
-      deviceName(""),
-      deviceModel(model) {
+      deviceName{},
+      deviceModel{} {
+    strncpy(deviceModel, model, sizeof(deviceModel) - 1);
   }
 
   virtual ~BaseTimerDevice() {
@@ -76,13 +77,13 @@ public:
 
   // Common ITimerDevice implementations
   bool initialize() override {
-    LOG_INFO("Initializing %s device interface", deviceModel.c_str());
+    LOG_INFO("Initializing %s device interface", deviceModel);
     setConnectionState(DeviceConnectionState::DISCONNECTED);
     return true;
   }
 
   bool startScanning() override {
-    LOG_INFO("Will start scanning for %s devices", deviceModel.c_str());
+    LOG_INFO("Will start scanning for %s devices", deviceModel);
     setConnectionState(DeviceConnectionState::SCANNING);
     return true;
   }
@@ -112,11 +113,11 @@ public:
   }
 
   const char* getDeviceModel() const override {
-    return deviceModel.c_str();
+    return deviceModel;
   }
 
   const char* getDeviceName() const override {
-    return deviceName.c_str();
+    return deviceName;
   }
 
   BLEAddress getDeviceAddress() const override {
@@ -166,7 +167,7 @@ public:
       if (pClient && pClient->isConnected()) {
         // Print heartbeat at regular intervals
         if (millis() - lastHeartbeat > BLE_HEARTBEAT_INTERVAL_MS) {
-          LOG_BLE("%s connected - waiting for events", deviceModel.c_str());
+          LOG_BLE("%s connected - waiting for events", deviceModel);
           lastHeartbeat = millis();
         }
       } else {

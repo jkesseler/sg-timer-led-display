@@ -71,7 +71,7 @@ public:
   /**
    * @brief Get the local IP address as string
    */
-  static const char* getLocalIP();
+  static String getLocalIP();
 
   /**
    * @brief Trigger WiFi manager portal (for reconfiguration)

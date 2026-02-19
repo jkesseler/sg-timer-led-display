@@ -37,7 +37,15 @@ bool SpecialPieTimerDevice::matchesDevice(BLEAdvertisedDevice* device) {
 }
 
 bool SpecialPieTimerDevice::attemptConnection(BLEAdvertisedDevice* device) {
-  if (!device) return false;
+  if (!device) {
+    return false;
+  }
+
+  // Disconnect any existing connection before attempting new one
+  disconnect();
+  pNotifyCharacteristic = nullptr;
+  pService = nullptr;
+  isConnectedFlag = false;
 
   if (device->haveName()) {
     LOG_INFO(LOG_TAG, "Special Pie Timer found: %s (%s)",
@@ -50,9 +58,11 @@ bool SpecialPieTimerDevice::attemptConnection(BLEAdvertisedDevice* device) {
   // Store device info
   deviceAddress = device->getAddress();
   if (device->haveName()) {
-    deviceName = device->getName().c_str();
+    strncpy(deviceName, device->getName().c_str(), sizeof(deviceName)-1);
+    deviceName[sizeof(deviceName)-1] = '\0';
   } else {
-    deviceName = device->getAddress().toString().c_str();
+    strncpy(deviceName, device->getAddress().toString().c_str(), sizeof(deviceName)-1);
+    deviceName[sizeof(deviceName)-1] = '\0';
   }
 
   // Brief delay before connection attempt to allow BLE stack to stabilize
@@ -98,6 +108,7 @@ bool SpecialPieTimerDevice::attemptConnection(BLEAdvertisedDevice* device) {
           delete pClient;
           pClient = nullptr;
           setConnectionState(DeviceConnectionState::ERROR);
+          return false;
         }
       } else {
         LOG_ERROR(LOG_TAG, "FFF1 characteristic not found");
@@ -105,6 +116,7 @@ bool SpecialPieTimerDevice::attemptConnection(BLEAdvertisedDevice* device) {
         delete pClient;
         pClient = nullptr;
         setConnectionState(DeviceConnectionState::ERROR);
+        return false;
       }
     } else {
       LOG_ERROR(LOG_TAG, "Service not found");
@@ -112,6 +124,7 @@ bool SpecialPieTimerDevice::attemptConnection(BLEAdvertisedDevice* device) {
       delete pClient;
       pClient = nullptr;
       setConnectionState(DeviceConnectionState::ERROR);
+      return false;
     }
   } else {
     LOG_ERROR(LOG_TAG, "Failed to connect");
@@ -254,7 +267,7 @@ void SpecialPieTimerDevice::processTimerData(uint8_t* pData, size_t length) {
         shotData.absoluteTimeMs = absoluteTimeMs;
         shotData.splitTimeMs = splitTimeMs;
         shotData.timestampMs = millis();
-        strncpy(shotData.deviceModel, deviceModel.c_str(), sizeof(shotData.deviceModel) - 1);
+        strncpy(shotData.deviceModel, deviceModel, sizeof(shotData.deviceModel) - 1);
         shotData.deviceModel[sizeof(shotData.deviceModel) - 1] = '\0';
         shotData.isFirstShot = isFirstShot;
 

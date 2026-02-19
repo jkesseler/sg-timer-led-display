@@ -239,13 +239,11 @@ bool WiFiConfig::isConnected() {
   return (WiFi.status() == WL_CONNECTED);
 }
 
-const char* WiFiConfig::getLocalIP() {
-  static char ipBuffer[16];
+String WiFiConfig::getLocalIP() {
   if (isConnected()) {
-    WiFi.localIP().toString().toCharArray(ipBuffer, sizeof(ipBuffer));
-    return ipBuffer;
+    return WiFi.localIP().toString();
   }
-  return "0.0.0.0";
+  return String("0.0.0.0");
 }
 
 void WiFiConfig::startConfigPortal() {

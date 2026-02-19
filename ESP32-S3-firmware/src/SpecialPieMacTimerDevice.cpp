@@ -1,13 +1,13 @@
 #include "SpecialPieMacTimerDevice.h"
 #include "Logger.h"
 #include "common.h"
+#include <cctype>
+#include <string>
 
 // Static constants
 const char* SpecialPieMacTimerDevice::LOG_TAG = "SP-M1A2-F";
 const char* SpecialPieMacTimerDevice::SERVICE_UUID = "0000FFF0-0000-1000-8000-00805F9B34FB";
 const char* SpecialPieMacTimerDevice::CHARACTERISTIC_UUID = "0000FFF1-0000-1000-8000-00805F9B34FB";
-const char* SpecialPieMacTimerDevice::DEVICE_INFO_SERVICE_UUID = "0917FE11-5D37-816D-8000-00805F9B34FB";
-const char* SpecialPieMacTimerDevice::FIRMWARE_CHAR_UUID = "09170002-5D37-816D-8000-00805F9B34FB";
 
 // Static instance for callbacks
 SpecialPieMacTimerDevice* SpecialPieMacTimerDevice::instance = nullptr;
@@ -34,11 +34,18 @@ bool SpecialPieMacTimerDevice::matchesDevice(BLEAdvertisedDevice* device) {
     return false;
   }
 
-  String deviceName = device->getName().c_str();
-  // LLM: Rather string.startsWith use string.Matcjhes with regex "SP M1A2 Timer [0-9A-Fa-f]{4}"
-  // Match pattern "SP M1A2 Timer <xxxx>" where <xxxx> is a 4-character identifier
+  std::string name = device->getName().c_str();
+  // Validate pattern: "SP M1A2 Timer " prefix + exactly 4 alphanumeric characters
   // Example: "SP M1A2 Timer 2196"
-  return deviceName.startsWith("SP M1A2 Timer ");
+  static const char* PREFIX = "SP M1A2 Timer ";
+  static const size_t PREFIX_LEN = 14;
+  static const size_t SUFFIX_LEN = 4;
+  if (name.size() != PREFIX_LEN + SUFFIX_LEN) return false;
+  if (name.substr(0, PREFIX_LEN) != PREFIX) return false;
+  for (size_t i = PREFIX_LEN; i < name.size(); i++) {
+    if (!isalnum((unsigned char)name[i])) return false;
+  }
+  return true;
 }
 
 bool SpecialPieMacTimerDevice::attemptConnection(BLEAdvertisedDevice* device) {
@@ -50,10 +57,12 @@ bool SpecialPieMacTimerDevice::attemptConnection(BLEAdvertisedDevice* device) {
          device->getAddress().toString().c_str());
 
     // Store device name for display
-    deviceName = device->getName().c_str();
+    strncpy(deviceName, device->getName().c_str(), sizeof(deviceName)-1);
+    deviceName[sizeof(deviceName)-1] = '\0';
   } else {
     LOG_INFO(LOG_TAG, "Timer found: %s", device->getAddress().toString().c_str());
-    deviceName = device->getAddress().toString().c_str();
+    strncpy(deviceName, device->getAddress().toString().c_str(), sizeof(deviceName)-1);
+    deviceName[sizeof(deviceName)-1] = '\0';
   }
 
   // Connect using the advertised device's MAC address
@@ -62,6 +71,12 @@ bool SpecialPieMacTimerDevice::attemptConnection(BLEAdvertisedDevice* device) {
 
 bool SpecialPieMacTimerDevice::connectToMacAddress(const char* macAddress) {
   LOG_INFO(LOG_TAG, "Connecting to %s", macAddress);
+
+  // Disconnect any existing connection before attempting new one
+  disconnect();
+  pNotifyCharacteristic = nullptr;
+  pService = nullptr;
+  isConnectedFlag = false;
 
   setConnectionState(DeviceConnectionState::CONNECTING);
 
@@ -90,22 +105,6 @@ bool SpecialPieMacTimerDevice::connectToMacAddress(const char* macAddress) {
     if (pService != nullptr) {
       LOG_INFO(LOG_TAG, "Timer Service (FFF0) found");
 
-      // TODO: Is this necessary? findout if firmware version is needed for any reason. If not, remove to save time during connection.
-      // Try to read firmware version
-      BLEUUID deviceInfoUuid(DEVICE_INFO_SERVICE_UUID);
-      BLERemoteService* pDeviceInfoService = pClient->getService(deviceInfoUuid);
-      if (pDeviceInfoService != nullptr) {
-        LOG_INFO(LOG_TAG, "Device Info Service found");
-        BLERemoteCharacteristic* pFirmwareChar = pDeviceInfoService->getCharacteristic(FIRMWARE_CHAR_UUID);
-        if (pFirmwareChar != nullptr && pFirmwareChar->canRead()) {
-          std::string firmwareValue = pFirmwareChar->readValue();
-          if (firmwareValue.length() > 0) {
-            LOG_INFO(LOG_TAG, "Firmware: %s", firmwareValue.c_str());
-            deviceName = "SP M1A2+ FW:" + String(firmwareValue.c_str());
-          }
-        }
-      }
-
       // Get notification characteristic
       pNotifyCharacteristic = pService->getCharacteristic(CHARACTERISTIC_UUID);
 
@@ -121,8 +120,9 @@ bool SpecialPieMacTimerDevice::connectToMacAddress(const char* macAddress) {
           lastHeartbeat = millis();
           setConnectionState(DeviceConnectionState::CONNECTED);
 
-          if (deviceName.length() == 0) {
-            deviceName = String(macAddress);
+          if (deviceName[0] == '\0') {
+            strncpy(deviceName, macAddress, sizeof(deviceName)-1);
+            deviceName[sizeof(deviceName)-1] = '\0';
           }
 
           return true;
@@ -132,6 +132,7 @@ bool SpecialPieMacTimerDevice::connectToMacAddress(const char* macAddress) {
           delete pClient;
           pClient = nullptr;
           setConnectionState(DeviceConnectionState::ERROR);
+          return false;
         }
       } else {
         LOG_ERROR(LOG_TAG, "FFF1 characteristic not found");
@@ -139,6 +140,7 @@ bool SpecialPieMacTimerDevice::connectToMacAddress(const char* macAddress) {
         delete pClient;
         pClient = nullptr;
         setConnectionState(DeviceConnectionState::ERROR);
+        return false;
       }
     } else {
       LOG_ERROR(LOG_TAG, "Timer service not found");
@@ -146,6 +148,7 @@ bool SpecialPieMacTimerDevice::connectToMacAddress(const char* macAddress) {
       delete pClient;
       pClient = nullptr;
       setConnectionState(DeviceConnectionState::ERROR);
+      return false;
     }
   } else {
     LOG_ERROR(LOG_TAG, "Failed to connect to device");
@@ -193,10 +196,10 @@ void SpecialPieMacTimerDevice::processTimerData(uint8_t* pData, size_t length) {
 
   switch (messageType) {
     case static_cast<uint8_t>(SpecialPieMacMessageType::SESSION_START): {
-      LOG_TIMER(LOG_TAG, "SESSION_START");
+      LOG_INFO(LOG_TAG, "SESSION_START");
       if (length >= 6) {
         currentSessionId = pData[3];
-        LOG_TIMER(LOG_TAG, "  Session ID: 0x%02X", currentSessionId);
+        LOG_INFO(LOG_TAG, "  Session ID: 0x%02X", currentSessionId);
 
         sessionActiveFlag = true;
         hasPreviousShot = false;
@@ -222,10 +225,10 @@ void SpecialPieMacTimerDevice::processTimerData(uint8_t* pData, size_t length) {
     }
 
     case static_cast<uint8_t>(SpecialPieMacMessageType::SESSION_STOP): {
-      LOG_TIMER(LOG_TAG, "SESSION_STOP");
+      LOG_INFO(LOG_TAG, "SESSION_STOP");
       if (length >= 6) {
         uint8_t sessionId = pData[3];
-        LOG_TIMER(LOG_TAG, "  Session ID: 0x%02X", sessionId);
+        LOG_INFO(LOG_TAG, "  Session ID: 0x%02X", sessionId);
 
         sessionActiveFlag = false;
         hasPreviousShot = false;
@@ -240,14 +243,14 @@ void SpecialPieMacTimerDevice::processTimerData(uint8_t* pData, size_t length) {
     }
 
     case static_cast<uint8_t>(SpecialPieMacMessageType::SHOT_DETECTED): {
-      LOG_TIMER(LOG_TAG, "SHOT_DETECTED");
+      LOG_INFO(LOG_TAG, "SHOT_DETECTED");
       if (length >= 10) {
         // Protocol format: F8 F9 36 00 [SEC] [CS] [SHOT#] [CHECKSUM?] F9 F8
         uint32_t currentSeconds = pData[4];
         uint32_t currentCentiseconds = pData[5];
         uint8_t shotNumber = pData[6];
 
-        LOG_TIMER(LOG_TAG, "  Shot #%u: %u.%02u", shotNumber, currentSeconds, currentCentiseconds);
+        LOG_INFO(LOG_TAG, "  Shot #%u: %u.%02u", shotNumber, currentSeconds, currentCentiseconds);
 
         // Convert to milliseconds (centiseconds * 10 = milliseconds)
         uint32_t absoluteTimeMs = (currentSeconds * 1000) + (currentCentiseconds * 10);
@@ -259,9 +262,9 @@ void SpecialPieMacTimerDevice::processTimerData(uint8_t* pData, size_t length) {
         if (hasPreviousShot) {
           uint32_t previousTimeMs = (previousTimeSeconds * 1000) + (previousTimeCentiseconds * 10);
           splitTimeMs = absoluteTimeMs - previousTimeMs;
-          LOG_TIMER(LOG_TAG, "  Split: %u ms", splitTimeMs);
+          LOG_INFO(LOG_TAG, "  Split: %u ms", splitTimeMs);
         } else {
-          LOG_TIMER(LOG_TAG, "  First shot");
+          LOG_INFO(LOG_TAG, "  First shot");
         }
 
         // Store current shot for next split calculation
@@ -277,7 +280,7 @@ void SpecialPieMacTimerDevice::processTimerData(uint8_t* pData, size_t length) {
           shotData.absoluteTimeMs = absoluteTimeMs;
           shotData.splitTimeMs = splitTimeMs;
           shotData.timestampMs = millis();
-          strncpy(shotData.deviceModel, deviceModel.c_str(), sizeof(shotData.deviceModel) - 1);
+          strncpy(shotData.deviceModel, deviceModel, sizeof(shotData.deviceModel) - 1);
           shotData.deviceModel[sizeof(shotData.deviceModel) - 1] = '\0';
           shotData.isFirstShot = isFirstShot;
 

@@ -5,16 +5,15 @@
 #include "MqttManager.h"
 #include "Logger.h"
 #include <memory>
+#include "freertos/queue.h"
 
 // Application configuration
 namespace AppConfig {
   constexpr uint32_t WATCHDOG_TIMEOUT_MS = 10000;  // 10 seconds
   constexpr uint32_t HEALTH_CHECK_INTERVAL_MS = 5000;  // 5 seconds
 
-  // Ring buffer configuration for shot events
-  // Using power-of-2 size enables fast modulo via bitwise AND
-  constexpr uint16_t EVENT_QUEUE_SIZE = 32;  // Must be power of 2
-  constexpr uint16_t EVENT_QUEUE_MASK = EVENT_QUEUE_SIZE - 1;
+  // FreeRTOS queue configuration for shot events
+  constexpr uint16_t EVENT_QUEUE_SIZE = 32;
   constexpr uint16_t QUEUE_DEPTH_WARN_THRESHOLD = EVENT_QUEUE_SIZE / 4;  // Warn at ~25% capacity
 
   // Batch processing configuration
@@ -32,11 +31,8 @@ private:
   uint16_t lastShotNumber;
   uint32_t lastShotTime;
 
-  // Lock-free ring buffer for shot events (faster than std::queue)
-  // Allows BLE callback to enqueue without blocking MQTT publishing
-  NormalizedShotData shotEventBuffer[AppConfig::EVENT_QUEUE_SIZE];
-  volatile uint16_t queueHead;  // Write position (BLE callback writes here)
-  volatile uint16_t queueTail;  // Read position (main loop reads here)
+  // FreeRTOS queue for shot events (written by BLE callback, read by main loop)
+  QueueHandle_t shotEventQueue;
 
   // Diagnostics
   uint16_t maxQueueDepth;
@@ -56,19 +52,6 @@ private:
 
   // MQTT warning throttle
   unsigned long lastMqttWarningTime;
-
-  // Ring buffer helpers - inline for performance
-  inline uint16_t queueSize() const {
-    return (queueHead - queueTail) & AppConfig::EVENT_QUEUE_MASK;
-  }
-
-  inline bool queueEmpty() const {
-    return queueHead == queueTail;
-  }
-
-  inline bool queueFull() const {
-    return queueSize() == (AppConfig::EVENT_QUEUE_SIZE - 1);
-  }
 
   // Event handlers
   void onShotDetected(const NormalizedShotData& shotData);
@@ -101,6 +84,6 @@ public:
 
   // System health
   bool isHealthy() const;
-  bool isInitialized() const;
+  bool isRuntimeReady() const;
   unsigned long getUptimeMs() const;
 };

@@ -11,8 +11,7 @@ TimerApplication::TimerApplication()
   : sessionActive(false),
     lastShotNumber(0),
     lastShotTime(0),
-    queueHead(0),
-    queueTail(0),
+    shotEventQueue(nullptr),
     maxQueueDepth(0),
     totalShotsQueued(0),
     totalShotsPublished(0),
@@ -27,12 +26,23 @@ TimerApplication::TimerApplication()
 }
 
 TimerApplication::~TimerApplication() {
+  if (shotEventQueue) {
+    vQueueDelete(shotEventQueue);
+    shotEventQueue = nullptr;
+  }
   // Smart pointers will handle cleanup automatically
 }
 
 bool TimerApplication::initialize() {
   LOG_SYSTEM("=== SG Shot Timer BLE Bridge ===");
   LOG_SYSTEM("ESP32-S3 DevKit-C Starting...");
+
+  // Create FreeRTOS queue for shot events
+  shotEventQueue = xQueueCreate(AppConfig::EVENT_QUEUE_SIZE, sizeof(NormalizedShotData));
+  if (!shotEventQueue) {
+    LOG_ERROR("SYSTEM", "Failed to create shot event queue");
+    return false;
+  }
 
   // Initialize display manager
   displayManager = std::unique_ptr<DisplayManager>(new DisplayManager());
@@ -167,14 +177,11 @@ void TimerApplication::onShotDetected(const NormalizedShotData& shotData) {
   bool shouldPublishMqtt = (TIMER_TYPE == TIMER_TYPE_BLE) && mqttManager && mqttManager->canPublish();
 
   if (shouldPublishMqtt) {
-    if (!queueFull()) {
-      // Copy shot data into ring buffer
-      shotEventBuffer[queueHead] = shotData;
-      queueHead = (queueHead + 1) & AppConfig::EVENT_QUEUE_MASK;
+    if (xQueueSend(shotEventQueue, &shotData, 0) == pdTRUE) {
       totalShotsQueued++;
 
       // Track max queue depth for diagnostics
-      uint16_t depth = queueSize();
+      uint16_t depth = (uint16_t)uxQueueMessagesWaiting(shotEventQueue);
       if (depth > maxQueueDepth) {
         maxQueueDepth = depth;
         if (maxQueueDepth > AppConfig::QUEUE_DEPTH_WARN_THRESHOLD) {
@@ -237,10 +244,10 @@ void TimerApplication::onSessionStopped(const SessionData& sessionData) {
 
   // Clear any remaining queued shots on session end
   // Stale shots arriving after session end should be discarded
-  uint16_t remaining = queueSize();
+  UBaseType_t remaining = uxQueueMessagesWaiting(shotEventQueue);
   if (remaining > 0) {
-    LOG_WARN("QUEUE", "Discarding %u queued shots on session end", remaining);
-    queueTail = queueHead;  // Clear by moving tail to head
+    LOG_WARN("QUEUE", "Discarding %u queued shots on session end", (unsigned)remaining);
+    xQueueReset(shotEventQueue);
   }
 
   // Publish session ended directly (not queued)
@@ -351,7 +358,7 @@ void TimerApplication::performHealthCheck() {
   // Queue metrics (only if there's been activity)
   if (totalShotsQueued > 0) {
     LOG_DEBUG("HEALTH", "Queue: %u/%u, Published: %lu/%lu, Failures: %lu, Peak: %u",
-              queueSize(), AppConfig::EVENT_QUEUE_SIZE,
+              (unsigned)uxQueueMessagesWaiting(shotEventQueue), AppConfig::EVENT_QUEUE_SIZE,
               (unsigned long)totalShotsPublished,
               (unsigned long)totalShotsQueued,
               (unsigned long)publishFailures,
@@ -368,7 +375,7 @@ void TimerApplication::updateActivityTime() {
 
 void TimerApplication::publishQueuedEvents() {
   // Fast path - nothing to publish
-  if (queueEmpty()) {
+  if (!shotEventQueue || uxQueueMessagesWaiting(shotEventQueue) == 0) {
     return;
   }
 
@@ -377,10 +384,10 @@ void TimerApplication::publishQueuedEvents() {
 
   if (!mqttReady) {
     // MQTT not available - discard buffered events (don't queue when offline)
-    if (!queueEmpty()) {
-      uint16_t discarded = queueSize();
-      queueTail = queueHead;  // Clear queue
-      LOG_DEBUG("QUEUE", "MQTT unavailable - discarded %u queued shots", discarded);
+    UBaseType_t discarded = uxQueueMessagesWaiting(shotEventQueue);
+    if (discarded > 0) {
+      xQueueReset(shotEventQueue);
+      LOG_DEBUG("QUEUE", "MQTT unavailable - discarded %u queued shots", (unsigned)discarded);
     }
     return;
   }
@@ -390,10 +397,9 @@ void TimerApplication::publishQueuedEvents() {
   // This is the key optimization for fast BLE events
   // ============================================================
   uint16_t processed = 0;
-  while (!queueEmpty() && processed < AppConfig::MAX_SHOTS_PER_PUBLISH_CYCLE) {
-    // Get shot from ring buffer
-    NormalizedShotData& shot = shotEventBuffer[queueTail];
-
+  NormalizedShotData shot;
+  while (xQueueReceive(shotEventQueue, &shot, 0) == pdTRUE &&
+         processed < AppConfig::MAX_SHOTS_PER_PUBLISH_CYCLE) {
     // Attempt to publish
     if (mqttManager->publishShotDetected(shot)) {
       totalShotsPublished++;
@@ -406,8 +412,6 @@ void TimerApplication::publishQueuedEvents() {
       break;
     }
 
-    // Advance tail pointer (consume the shot)
-    queueTail = (queueTail + 1) & AppConfig::EVENT_QUEUE_MASK;
     processed++;
   }
 
@@ -429,7 +433,7 @@ unsigned long TimerApplication::getUptimeMs() const {
   return millis();
 }
 
-bool TimerApplication::isInitialized() const {
+bool TimerApplication::isRuntimeReady() const {
   bool displayHealthy = displayManager && displayManager->isInitialized();
   bool timerHealthy = timerDevice != nullptr;
 

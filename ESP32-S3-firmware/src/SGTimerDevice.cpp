@@ -64,20 +64,22 @@ bool SGTimerDevice::attemptConnection(BLEAdvertisedDevice* device) {
   // Store device information
   deviceAddress = device->getAddress();
   if (device->haveName()) {
-    deviceName = device->getName().c_str();
+    deviceName[sizeof(deviceName)-1] = '\0';
+    strncpy(deviceName, device->getName().c_str(), sizeof(deviceName)-1);
     // Extract model from name (SG-SST4XYYYYY where X is model identifier)
-    if (deviceName.startsWith("SG-SST4") && deviceName.length() > 7) {
-      char modelId = deviceName.charAt(7);
+    if (strncmp(deviceName, "SG-SST4", 7) == 0 && strlen(deviceName) > 7) {
+      char modelId = deviceName[7];
       if (modelId == 'A') {
-        deviceModel = "SG Timer Sport";
+        strncpy(deviceModel, "SG Timer Sport", sizeof(deviceModel)-1);
       } else if (modelId == 'B') {
-        deviceModel = "SG Timer GO";
+        strncpy(deviceModel, "SG Timer GO", sizeof(deviceModel)-1);
       } else {
-        deviceModel = "SG Timer";
+        strncpy(deviceModel, "SG Timer", sizeof(deviceModel)-1);
       }
     }
   } else {
-    deviceName = device->getAddress().toString().c_str();
+    strncpy(deviceName, device->getAddress().toString().c_str(), sizeof(deviceName)-1);
+    deviceName[sizeof(deviceName)-1] = '\0';
   }
 
   // Brief delay before connection attempt to allow BLE stack to stabilize
@@ -188,7 +190,7 @@ void SGTimerDevice::processTimerData(uint8_t* pData, size_t length) {
         if (length >= 8) {
           uint32_t sess_id = (pData[2] << 24) | (pData[3] << 16) | (pData[4] << 8) | pData[5];
           uint16_t start_delay = (pData[6] << 8) | pData[7];
-          LOG_TIMER(LOG_TAG , "SESSION_STARTED - ID: %u, Delay: %.1fs", sess_id, start_delay * 0.1);
+          LOG_INFO(LOG_TAG, "SESSION_STARTED - ID: %u, Delay: %.1fs", sess_id, start_delay * 0.1);
 
           // Update session state
           currentSession.sessionId = sess_id;
@@ -212,7 +214,7 @@ void SGTimerDevice::processTimerData(uint8_t* pData, size_t length) {
         if (length >= 8) {
           uint32_t sess_id = (pData[2] << 24) | (pData[3] << 16) | (pData[4] << 8) | pData[5];
           uint16_t total_shots = (pData[6] << 8) | pData[7];
-          LOG_TIMER(LOG_TAG, "SESSION_SUSPENDED - ID: %u, Total shots: %u", sess_id, total_shots);
+          LOG_INFO(LOG_TAG, "SESSION_SUSPENDED - ID: %u, Total shots: %u", sess_id, total_shots);
 
           currentSession.totalShots = total_shots;
           if (sessionSuspendedCallback) {
@@ -225,7 +227,7 @@ void SGTimerDevice::processTimerData(uint8_t* pData, size_t length) {
         if (length >= 8) {
           uint32_t sess_id = (pData[2] << 24) | (pData[3] << 16) | (pData[4] << 8) | pData[5];
           uint16_t total_shots = (pData[6] << 8) | pData[7];
-          LOG_TIMER(LOG_TAG, "SESSION_RESUMED - ID: %u, Total shots: %u", sess_id, total_shots);
+          LOG_INFO(LOG_TAG, "SESSION_RESUMED - ID: %u, Total shots: %u", sess_id, total_shots);
 
           currentSession.totalShots = total_shots;
           if (sessionResumedCallback) {
@@ -239,10 +241,10 @@ void SGTimerDevice::processTimerData(uint8_t* pData, size_t length) {
           uint32_t sess_id = (pData[2] << 24) | (pData[3] << 16) | (pData[4] << 8) | pData[5];
           uint16_t total_shots = (pData[6] << 8) | pData[7];
           if (hasLastShot) {
-            LOG_TIMER(LOG_TAG, "SESSION_STOPPED - ID: %u, Total shots: %u, Last: #%u at %u:%02u",
+            LOG_INFO(LOG_TAG, "SESSION_STOPPED - ID: %u, Total shots: %u, Last: #%u at %u:%02u",
                      sess_id, total_shots, lastShotNum + 1, lastShotSeconds, lastShotHundredths);
           } else {
-            LOG_TIMER(LOG_TAG, "SESSION_STOPPED - ID: %u, Total shots: %u", sess_id, total_shots);
+            LOG_INFO(LOG_TAG, "SESSION_STOPPED - ID: %u, Total shots: %u", sess_id, total_shots);
           }
 
           currentSession.isActive = false;
@@ -297,7 +299,7 @@ void SGTimerDevice::processTimerData(uint8_t* pData, size_t length) {
           shotData.absoluteTimeMs = shot_time_ms;
           shotData.splitTimeMs = splitTime;
           shotData.timestampMs = millis();
-          strncpy(shotData.deviceModel, deviceModel.c_str(), sizeof(shotData.deviceModel) - 1);
+          strncpy(shotData.deviceModel, deviceModel, sizeof(shotData.deviceModel) - 1);
           shotData.deviceModel[sizeof(shotData.deviceModel) - 1] = '\0';
           shotData.isFirstShot = isFirstShot;
 
@@ -311,7 +313,7 @@ void SGTimerDevice::processTimerData(uint8_t* pData, size_t length) {
       case SGTimerEvent::SESSION_SET_BEGIN:
         if (length >= 6) {
           uint32_t sess_id = (pData[2] << 24) | (pData[3] << 16) | (pData[4] << 8) | pData[5];
-          LOG_TIMER(LOG_TAG, "SESSION_SET_BEGIN - ID: %u (countdown complete)", sess_id);
+          LOG_INFO(LOG_TAG, "SESSION_SET_BEGIN - ID: %u (countdown complete)", sess_id);
 
           // Notify callback that countdown has completed
           if (countdownCompleteCallback) {

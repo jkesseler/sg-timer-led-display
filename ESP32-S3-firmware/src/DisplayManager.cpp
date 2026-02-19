@@ -585,7 +585,7 @@ void DisplayManager::formatTime(uint32_t timeMs, char* buffer, size_t bufferSize
   const uint32_t centiseconds = (timeMs % 1000) / 10;  // Get hundredths of a second (0-99)
 
   // Format as "ss:cc" where ss = seconds, cc = centiseconds (always 2 digits each)
-  snprintf(buffer, bufferSize, "%02lu:%02lu", totalSeconds, centiseconds);
+  snprintf(buffer, bufferSize, "%02lu:%02lu", (unsigned long)totalSeconds, (unsigned long)centiseconds);
 }
 
 void DisplayManager::formatSplitTime(uint32_t timeMs, char* buffer, size_t bufferSize) {
@@ -595,8 +595,8 @@ void DisplayManager::formatSplitTime(uint32_t timeMs, char* buffer, size_t buffe
 
   // Format as "s:cc" when < 10 seconds, "ss:cc" when >= 10 seconds
   if (totalSeconds < 10) {
-    snprintf(buffer, bufferSize, "%lu:%02lu", totalSeconds, centiseconds);
+    snprintf(buffer, bufferSize, "%lu:%02lu", (unsigned long)totalSeconds, (unsigned long)centiseconds);
   } else {
-    snprintf(buffer, bufferSize, "%02lu:%02lu", totalSeconds, centiseconds);
+    snprintf(buffer, bufferSize, "%02lu:%02lu", (unsigned long)totalSeconds, (unsigned long)centiseconds);
   }
 }

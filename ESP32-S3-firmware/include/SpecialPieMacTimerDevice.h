@@ -28,8 +28,6 @@ private:
   // Special Pie Timer specific configuration
   static const char* LOG_TAG;
   static const char* CHARACTERISTIC_UUID;
-  static const char* DEVICE_INFO_SERVICE_UUID;
-  static const char* FIRMWARE_CHAR_UUID;
 
   // BLE components
   BLERemoteCharacteristic* pNotifyCharacteristic;
