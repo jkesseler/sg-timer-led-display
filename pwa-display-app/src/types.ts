@@ -95,11 +95,28 @@ export interface DeviceInfoMessage {
   deviceName?: string;
   deviceModel?: string;
   firmwareVersion?: string;
+  deviceId?: string;   // Embedded by firmware in publishDeviceInfo
   timestamp: number;
 }
 
 // MQTT Message Handler Type
-export type MqttMessageHandler<T = any> = (message: T) => void;
+// deviceId is parsed from the MQTT topic (e.g. timer/ABCDEF/connection/state → 'ABCDEF')
+export type MqttMessageHandler<T = any> = (message: T, deviceId: string) => void;
+
+// A device discovered via its presence topic
+export interface KnownDevice {
+  deviceId: string;          // 6-char alphanumeric from DeviceId.h
+  deviceName?: string;       // BLE device name (from device/info)
+  deviceModel?: string;      // BLE device model (from device/info)
+  firmwareVersion?: string;
+  presence: 'online' | 'offline';
+  lastSeenMs: number;        // Date.now() when last message was received
+}
+
+// Presence payload published to timer/<deviceId>/presence
+export interface DevicePresenceMessage {
+  presence: 'online' | 'offline';
+}
 
 // Display Colors
 export interface DisplayColors {
@@ -127,7 +144,12 @@ export interface DisplayConfig {
 }
 
 // MQTT Topics
+// Values are MQTT subscription patterns using '+' (single-level wildcard)
+// so the display subscribes to events from ANY device in one call.
 export interface MqttTopics {
+  /** timer/+/presence – retained, used for device discovery */
+  PRESENCE: string;
+  /** timer/+/connection/state – retained */
   CONNECTION_STATE: string;
   SESSION_STARTED: string;
   SESSION_STOPPED: string;
@@ -135,6 +157,7 @@ export interface MqttTopics {
   SESSION_RESUMED: string;
   SHOT_DETECTED: string;
   COUNTDOWN_COMPLETE: string;
+  /** timer/+/device/info – retained */
   DEVICE_INFO: string;
 }
 
@@ -160,8 +183,20 @@ export interface UseMqttReturn {
   isConnected: boolean;
   connectionError: string | null;
   settings: MqttSettings;
+  /** All devices discovered via timer/+/presence */
+  knownDevices: KnownDevice[];
+  /** Currently active device ID; null = auto (first online device) */
+  selectedDeviceId: string | null;
+  /** Manually pin the display to a specific device */
+  selectDevice: (deviceId: string | null) => void;
   connect: (customSettings?: MqttSettings | null) => void;
   disconnect: () => void;
+  /**
+   * Register a handler for a topic pattern.
+   * Uses MQTT '+' wildcard patterns (e.g. MqttTopics.CONNECTION_STATE).
+   * The handler receives (parsedMessage, deviceId) for every matching message.
+   * When selectedDeviceId is set, only messages from that device are forwarded.
+   */
   onMessage: <T = any>(topic: string, handler: MqttMessageHandler<T>) => void;
   updateSettings: (settings: MqttSettings) => void;
 }

@@ -1,5 +1,6 @@
 #include "MqttManager.h"
 #include "WiFiConfig.h"
+#include "DeviceId.h"
 #include "common.h"
 #include <WiFi.h>
 #include <PubSubClient.h>
@@ -9,19 +10,9 @@
 static WiFiClient espClient;
 static PubSubClient mqttClient(espClient);
 
-// MQTT Topic definitions - use PROGMEM-style storage for efficiency
-namespace Topics {
-  const char* CONNECTION_STATE = "timer/connection/state";
-  const char* SESSION_STARTED = "timer/session/started";
-  const char* SESSION_STOPPED = "timer/session/stopped";
-  const char* SESSION_SUSPENDED = "timer/session/suspended";
-  const char* SESSION_RESUMED = "timer/session/resumed";
-  const char* SHOT_DETECTED = "timer/shot/detected";
-  const char* COUNTDOWN_COMPLETE = "timer/countdown/complete";
-  const char* DEVICE_INFO = "timer/device/info";
-}
-
 // Connection state strings for MQTT - static to avoid repeated string construction
+// (Topic strings are built per-device in buildTopics())
+
 namespace ConnectionStates {
   const char* DISCONNECTED = "DISCONNECTED";
   const char* SCANNING = "SCANNING";
@@ -51,6 +42,44 @@ MqttManager::MqttManager()
   : mqttConnected(false),
     wifiWasConnected(false),
     lastMqttCheck(0) {
+  // Zero-initialise all topic buffers
+  memset(topicPresence, 0, sizeof(topicPresence));
+  memset(topicConnectionState, 0, sizeof(topicConnectionState));
+  memset(topicDeviceInfo, 0, sizeof(topicDeviceInfo));
+  memset(topicSessionStarted, 0, sizeof(topicSessionStarted));
+  memset(topicSessionStopped, 0, sizeof(topicSessionStopped));
+  memset(topicSessionSuspended, 0, sizeof(topicSessionSuspended));
+  memset(topicSessionResumed, 0, sizeof(topicSessionResumed));
+  memset(topicShotDetected, 0, sizeof(topicShotDetected));
+  memset(topicCountdownComplete, 0, sizeof(topicCountdownComplete));
+  memset(mqttClientId, 0, sizeof(mqttClientId));
+}
+
+void MqttManager::buildTopics(const char* devId) {
+  // All event topics are scoped under timer/<deviceId>/
+  // Retained topics (presence, connection/state, device/info) allow late-joining
+  // displays to receive the current state immediately upon subscription.
+  snprintf(topicPresence,        TOPIC_BUFFER_SIZE, "timer/%s/presence",          devId);
+  snprintf(topicConnectionState, TOPIC_BUFFER_SIZE, "timer/%s/connection/state",  devId);
+  snprintf(topicDeviceInfo,      TOPIC_BUFFER_SIZE, "timer/%s/device/info",       devId);
+  snprintf(topicSessionStarted,  TOPIC_BUFFER_SIZE, "timer/%s/session/started",   devId);
+  snprintf(topicSessionStopped,  TOPIC_BUFFER_SIZE, "timer/%s/session/stopped",   devId);
+  snprintf(topicSessionSuspended,TOPIC_BUFFER_SIZE, "timer/%s/session/suspended", devId);
+  snprintf(topicSessionResumed,  TOPIC_BUFFER_SIZE, "timer/%s/session/resumed",   devId);
+  snprintf(topicShotDetected,    TOPIC_BUFFER_SIZE, "timer/%s/shot/detected",     devId);
+  snprintf(topicCountdownComplete,TOPIC_BUFFER_SIZE,"timer/%s/countdown/complete",devId);
+  // Unique per-device client ID prevents broker from dropping duplicate connections
+  snprintf(mqttClientId, CLIENT_ID_BUFFER_SIZE, "pewpew-%s", devId);
+  LOG_DEBUG("MQTT", "Topics built for device: %s", devId);
+  LOG_DEBUG("MQTT", "Presence topic: %s", topicPresence);
+}
+
+void MqttManager::publishPresence(bool online) {
+  // Retained + QoS 1 so the broker stores the last value.
+  // Any display that subscribes later immediately receives the current state.
+  const char* payload = online ? "online" : "offline";
+  mqttClient.publish(topicPresence, (const uint8_t*)payload, strlen(payload), /*retain=*/true);
+  LOG_INFO("MQTT", "Presence: %s", payload);
 }
 
 MqttManager::~MqttManager() {
@@ -61,6 +90,10 @@ MqttManager::~MqttManager() {
 
 bool MqttManager::initialize() {
   LOG_SYSTEM("Initializing MQTT Manager");
+
+  // Build device-specific topic strings using the unique device ID.
+  // Must be called after deviceId.initialize().
+  buildTopics(deviceId.get().c_str());
 
   // Get MQTT configuration from WiFiConfig (will use defaults if not configured)
   const char* mqttServer = WiFiConfig::getMqttServer();
@@ -85,6 +118,7 @@ bool MqttManager::initialize() {
   mqttClient.setKeepAlive(60);  // 60 seconds keep-alive
 
   LOG_SYSTEM("MQTT configured for %s:%d", mqttServer, mqttPort);
+  LOG_SYSTEM("MQTT client ID: %s", mqttClientId);
   LOG_SYSTEM("Note: MQTT will connect when WiFi becomes available");
 
   return true;
@@ -130,21 +164,33 @@ bool MqttManager::tryConnect() {
 
   LOG_DEBUG("MQTT", "Attempting connection to %s:%d", mqttServer, mqttPort);
 
-  // Connect with or without authentication
+  // Connect with or without authentication.
+  // The Last Will & Testament (LWT) ensures the broker automatically publishes
+  // "offline" to the presence topic if this device disconnects unexpectedly
+  // (power loss, WiFi drop, etc.). Retained=true means displays that subscribe
+  // later will immediately see the "offline" state.
+  const uint8_t willQos = 0;
+  const bool willRetain = true;
+  const char* willMessage = "offline";
+
   bool connected = false;
   bool useAuth = (mqttUser && mqttUser[0] != '\0' && mqttPassword && mqttPassword[0] != '\0');
 
   if (useAuth) {
     LOG_DEBUG("MQTT", "Using authentication (user: %s)", mqttUser);
-    connected = mqttClient.connect(MQTT_CLIENT_ID, mqttUser, mqttPassword);
+    connected = mqttClient.connect(mqttClientId, mqttUser, mqttPassword,
+                                   topicPresence, willQos, willRetain, willMessage);
   } else {
     LOG_DEBUG("MQTT", "Connecting without authentication");
-    connected = mqttClient.connect(MQTT_CLIENT_ID);
+    connected = mqttClient.connect(mqttClientId,
+                                   topicPresence, willQos, willRetain, willMessage);
   }
 
   if (connected) {
     mqttConnected = true;
     LOG_INFO("MQTT", "MQTT connected successfully");
+    // Announce presence. Retained so late-joining displays see "online" immediately.
+    publishPresence(true);
     return true;
   }
 
@@ -204,7 +250,7 @@ void MqttManager::update() {
   }
 }
 
-bool MqttManager::publishJson(const char* topic, const char* jsonPayload) {
+bool MqttManager::publishJson(const char* topic, const char* jsonPayload, bool retain) {
   // Fast path - check connection status (already cached)
   if (!mqttConnected) {
     return false;
@@ -216,9 +262,12 @@ bool MqttManager::publishJson(const char* topic, const char* jsonPayload) {
     return false;
   }
 
-  // Publish the message
-  if (mqttClient.publish(topic, jsonPayload)) {
-    LOG_DEBUG("MQTT", "Published to %s", topic);
+  // Publish the message.
+  // retain=true → broker stores the last value and delivers it immediately
+  // to any new subscriber ("late joiners"), enabling displays that power-on
+  // after the device to see the current state without any re-publish.
+  if (mqttClient.publish(topic, jsonPayload, retain)) {
+    LOG_DEBUG("MQTT", "Published to %s (retain=%s)", topic, retain ? "y" : "n");
     return true;
   }
 
@@ -238,7 +287,8 @@ void MqttManager::publishConnectionState(DeviceConnectionState state, const char
   doc["timestamp"] = millis();
 
   serializeJson(doc, jsonBuffer, JSON_BUFFER_SIZE);
-  publishJson(Topics::CONNECTION_STATE, jsonBuffer);
+  // Retained: displays that connect later see the current BLE connection state.
+  publishJson(topicConnectionState, jsonBuffer, /*retain=*/true);
 }
 
 void MqttManager::publishDeviceInfo(const char* deviceName, const char* deviceModel, const char* firmwareVersion) {
@@ -252,10 +302,12 @@ void MqttManager::publishDeviceInfo(const char* deviceName, const char* deviceMo
   if (firmwareVersion) {
     doc["firmwareVersion"] = firmwareVersion;
   }
+  doc["deviceId"] = deviceId.get().c_str();  // Embed deviceId so displays can identify the source
   doc["timestamp"] = millis();
 
   serializeJson(doc, jsonBuffer, JSON_BUFFER_SIZE);
-  publishJson(Topics::DEVICE_INFO, jsonBuffer);
+  // Retained: late-joining displays learn device identity without a re-announce.
+  publishJson(topicDeviceInfo, jsonBuffer, /*retain=*/true);
 }
 
 void MqttManager::publishSessionStarted(uint32_t sessionId, float startDelaySeconds) {
@@ -265,7 +317,7 @@ void MqttManager::publishSessionStarted(uint32_t sessionId, float startDelaySeco
   doc["timestamp"] = millis();
 
   serializeJson(doc, jsonBuffer, JSON_BUFFER_SIZE);
-  publishJson(Topics::SESSION_STARTED, jsonBuffer);
+  publishJson(topicSessionStarted, jsonBuffer);  // ephemeral event - not retained
 }
 
 void MqttManager::publishSessionStopped(uint32_t sessionId, uint16_t totalShots, uint32_t lastShotTimeMs) {
@@ -278,7 +330,7 @@ void MqttManager::publishSessionStopped(uint32_t sessionId, uint16_t totalShots,
   doc["timestamp"] = millis();
 
   serializeJson(doc, jsonBuffer, JSON_BUFFER_SIZE);
-  publishJson(Topics::SESSION_STOPPED, jsonBuffer);
+  publishJson(topicSessionStopped, jsonBuffer);  // ephemeral event - not retained
 }
 
 void MqttManager::publishSessionSuspended(uint32_t sessionId) {
@@ -287,7 +339,7 @@ void MqttManager::publishSessionSuspended(uint32_t sessionId) {
   doc["timestamp"] = millis();
 
   serializeJson(doc, jsonBuffer, JSON_BUFFER_SIZE);
-  publishJson(Topics::SESSION_SUSPENDED, jsonBuffer);
+  publishJson(topicSessionSuspended, jsonBuffer);
 }
 
 void MqttManager::publishSessionResumed(uint32_t sessionId) {
@@ -296,7 +348,7 @@ void MqttManager::publishSessionResumed(uint32_t sessionId) {
   doc["timestamp"] = millis();
 
   serializeJson(doc, jsonBuffer, JSON_BUFFER_SIZE);
-  publishJson(Topics::SESSION_RESUMED, jsonBuffer);
+  publishJson(topicSessionResumed, jsonBuffer);
 }
 
 bool MqttManager::publishShotDetected(const NormalizedShotData& shotData) {
@@ -328,7 +380,7 @@ bool MqttManager::publishShotDetected(const NormalizedShotData& shotData) {
   }
 
   // Publish with minimal overhead
-  if (mqttClient.publish(Topics::SHOT_DETECTED, jsonBuffer)) {
+  if (mqttClient.publish(topicShotDetected, jsonBuffer)) {
     LOG_DEBUG("MQTT", "Shot #%u published", shotData.shotNumber);
     return true;
   }
@@ -343,7 +395,7 @@ void MqttManager::publishCountdownComplete(uint32_t sessionId) {
   doc["timestamp"] = millis();
 
   serializeJson(doc, jsonBuffer, JSON_BUFFER_SIZE);
-  publishJson(Topics::COUNTDOWN_COMPLETE, jsonBuffer);
+  publishJson(topicCountdownComplete, jsonBuffer);
 }
 
 void MqttManager::reconnect() {
@@ -354,5 +406,5 @@ void MqttManager::reconnect() {
 }
 
 const char* MqttManager::getMqttClientId() const {
-  return MQTT_CLIENT_ID;
+  return mqttClientId;
 }

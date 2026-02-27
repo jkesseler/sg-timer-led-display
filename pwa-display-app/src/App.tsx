@@ -19,7 +19,8 @@ import './App.css';
 
 function App() {
   // MQTT connection
-  const { isConnected, connectionError, settings, onMessage, updateSettings, connect, disconnect } = useMqtt();
+  const { isConnected, connectionError, settings, onMessage, updateSettings, connect, disconnect,
+          knownDevices, selectedDeviceId, selectDevice } = useMqtt();
 
   // Display state
   const [displayState, setDisplayState] = useState<DisplayState>(DisplayState.STARTUP);
@@ -46,13 +47,25 @@ function App() {
   // MQTT Message Handlers
   useEffect(() => {
     // Connection state changes
-    onMessage<ConnectionStateMessage>(MqttTopics.CONNECTION_STATE, (message) => {
+    onMessage<ConnectionStateMessage>(MqttTopics.CONNECTION_STATE, (message, _deviceId) => {
       console.log('Connection state:', message);
       setDeviceName(message.deviceName || null);
 
       switch (message.state) {
         case ConnectionState.CONNECTED:
-          setDisplayState(DisplayState.CONNECTED);
+          // Only advance to CONNECTED from pre-session states.
+          // Do NOT override shot/session/countdown states — those are sticky
+          // until a new event (new shot, session end, disconnect) comes in.
+          setDisplayState(prev => {
+            const preSessionStates: DisplayState[] = [
+              DisplayState.STARTUP,
+              DisplayState.DISCONNECTED,
+              DisplayState.SCANNING,
+              DisplayState.CONNECTING,
+              DisplayState.CONNECTED,
+            ];
+            return preSessionStates.includes(prev) ? DisplayState.CONNECTED : prev;
+          });
           break;
         case ConnectionState.SCANNING:
           setDisplayState(DisplayState.SCANNING);
@@ -62,8 +75,11 @@ function App() {
           break;
         case ConnectionState.DISCONNECTED:
         case ConnectionState.ERROR:
+          // A real disconnection always clears session state and shows disconnected.
           setDisplayState(DisplayState.DISCONNECTED);
           setDeviceName(null);
+          setShotData(null);
+          setSessionData(null);
           break;
         default:
           break;
@@ -71,7 +87,7 @@ function App() {
     });
 
     // Session started (with countdown)
-    onMessage<SessionStartedMessage>(MqttTopics.SESSION_STARTED, (message) => {
+    onMessage<SessionStartedMessage>(MqttTopics.SESSION_STARTED, (message, _deviceId) => {
       console.log('Session started:', message);
       const newSessionData: SessionData = {
         sessionId: message.sessionId,
@@ -95,13 +111,13 @@ function App() {
     });
 
     // Countdown complete
-    onMessage<CountdownCompleteMessage>(MqttTopics.COUNTDOWN_COMPLETE, (message) => {
+    onMessage<CountdownCompleteMessage>(MqttTopics.COUNTDOWN_COMPLETE, (message, _deviceId) => {
       console.log('Countdown complete:', message);
       setDisplayState(DisplayState.WAITING_FOR_SHOTS);
     });
 
     // Shot detected
-    onMessage<ShotDetectedMessage>(MqttTopics.SHOT_DETECTED, (message) => {
+    onMessage<ShotDetectedMessage>(MqttTopics.SHOT_DETECTED, (message, _deviceId) => {
       console.log('Shot detected:', message);
       setShotData({
         sessionId: message.sessionId,
@@ -124,7 +140,7 @@ function App() {
     });
 
     // Session stopped
-    onMessage<SessionStoppedMessage>(MqttTopics.SESSION_STOPPED, (message) => {
+    onMessage<SessionStoppedMessage>(MqttTopics.SESSION_STOPPED, (message, _deviceId) => {
       console.log('Session stopped:', message);
       if (sessionData) {
         setSessionData({
@@ -149,7 +165,7 @@ function App() {
     });
 
     // Device info
-    onMessage<DeviceInfoMessage>(MqttTopics.DEVICE_INFO, (message) => {
+    onMessage<DeviceInfoMessage>(MqttTopics.DEVICE_INFO, (message, _deviceId) => {
       console.log('Device info:', message);
       setDeviceName(message.deviceName || message.deviceModel || null);
     });
@@ -210,6 +226,29 @@ function App() {
           <div className="status-item">
             {settings.broker}
           </div>
+          {/* Device selector – shown when more than one device is online */}
+          {knownDevices.length > 1 && (
+            <div className="status-item">
+              <label htmlFor="device-select">Device: </label>
+              <select
+                id="device-select"
+                value={selectedDeviceId ?? ''}
+                onChange={e => selectDevice(e.target.value || null)}
+              >
+                <option value="">Auto ({knownDevices.find(d => d.presence === 'online')?.deviceId ?? 'none'})</option>
+                {knownDevices.map(d => (
+                  <option key={d.deviceId} value={d.deviceId}>
+                    {d.deviceName ?? d.deviceId} {d.presence === 'offline' ? '(offline)' : ''}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+          {knownDevices.length === 1 && (
+            <div className="status-item">
+              Device: {knownDevices[0].deviceName ?? knownDevices[0].deviceId}
+            </div>
+          )}
         </div>
       )}
 

@@ -28,6 +28,23 @@ private:
   static constexpr size_t JSON_BUFFER_SIZE = 256;
   char jsonBuffer[JSON_BUFFER_SIZE];
 
+  // Per-device MQTT topics (built at initialize() time using the device ID)
+  // Format: timer/<deviceId>/<event>
+  static constexpr size_t TOPIC_BUFFER_SIZE = 64;
+  char topicPresence[TOPIC_BUFFER_SIZE];          // retained + LWT
+  char topicConnectionState[TOPIC_BUFFER_SIZE];   // retained
+  char topicDeviceInfo[TOPIC_BUFFER_SIZE];        // retained
+  char topicSessionStarted[TOPIC_BUFFER_SIZE];
+  char topicSessionStopped[TOPIC_BUFFER_SIZE];
+  char topicSessionSuspended[TOPIC_BUFFER_SIZE];
+  char topicSessionResumed[TOPIC_BUFFER_SIZE];
+  char topicShotDetected[TOPIC_BUFFER_SIZE];
+  char topicCountdownComplete[TOPIC_BUFFER_SIZE];
+
+  // Unique MQTT client ID (includes device ID to avoid broker conflicts)
+  static constexpr size_t CLIENT_ID_BUFFER_SIZE = 32;
+  char mqttClientId[CLIENT_ID_BUFFER_SIZE];
+
   // Configuration constants
   static constexpr unsigned long MQTT_FAST_CHECK_INTERVAL = 500;   // Check more frequently when publishing
   static constexpr unsigned long MQTT_IDLE_CHECK_INTERVAL = 5000;  // Less frequent when idle
@@ -36,8 +53,15 @@ private:
   bool tryConnect();
   void disconnectMqtt();
 
+  // Builds all device-specific topic strings from the device ID
+  void buildTopics(const char* devId);
+
+  // Publishes retained "online"/"offline" to the presence topic
+  void publishPresence(bool online);
+
   // Helper methods - uses pre-allocated buffer
-  bool publishJson(const char* topic, const char* jsonPayload);
+  // retain=true → broker stores the last value for late-joining subscribers
+  bool publishJson(const char* topic, const char* jsonPayload, bool retain = false);
 
 public:
   MqttManager();
