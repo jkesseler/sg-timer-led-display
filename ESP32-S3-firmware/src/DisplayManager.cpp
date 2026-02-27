@@ -456,8 +456,9 @@ void DisplayManager::renderConnectionStatus() {
       u8g2_for_adafruit_gfx.print(deviceName);
     }
   } else {
+    const char* startupText = WiFiConfig::getStartupText();
     u8g2_for_adafruit_gfx.setCursor(0, lineY);
-    u8g2_for_adafruit_gfx.print(F(STARTUP_TEXT));
+    u8g2_for_adafruit_gfx.print((startupText && startupText[0] != '\0') ? startupText : STARTUP_TEXT);
   }
 }
 

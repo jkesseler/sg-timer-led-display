@@ -35,7 +35,6 @@ Scan priority in `TimerApplication::scanForDevices()` is:
 Compile-time configuration lives in `ESP32-S3-firmware/include/common.h`:
 
 - `TIMER_TYPE` (`TIMER_TYPE_BLE` or `TIMER_TYPE_MQTT`)
-- `TIMER_REPUBLISH_MQTT` (default `false`)
 
 Current default behavior is BLE-first operation (`TIMER_TYPE_BLE`) with MQTT republish disabled unless explicitly enabled.
 

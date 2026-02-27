@@ -43,6 +43,7 @@ private:
   // Device scanning state
   unsigned long lastScanAttempt;
   bool isScanning;
+  bool scanResultsReady;
   unsigned long startupTime;
 
   // Health monitoring
@@ -68,6 +69,7 @@ private:
   void performHealthCheck();
   void updateActivityTime();
   void scanForDevices();
+  void processScanResults();
   void publishQueuedEvents();
 
 public:

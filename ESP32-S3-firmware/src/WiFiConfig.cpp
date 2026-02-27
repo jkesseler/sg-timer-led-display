@@ -1,5 +1,6 @@
 #include "WiFiConfig.h"
 #include "Logger.h"
+#include <Preferences.h>
 #include <WiFi.h>
 #include "common.h"
 
@@ -10,13 +11,34 @@ int sanitizeMqttPort(int port) {
   }
   return port;
 }
+
+void copyIfProvided(char* destination, size_t destinationSize, const WiFiManagerParameter* parameter, const char* fieldName) {
+  if (!parameter) {
+    LOG_DEBUG("SYSTEM", "Portal parameter missing for %s; keeping existing value", fieldName);
+    return;
+  }
+
+  const char* value = parameter->getValue();
+  if (!value || value[0] == '\0') {
+    LOG_DEBUG("SYSTEM", "Portal value empty for %s; keeping existing value: %s", fieldName, destination);
+    return;
+  }
+
+  // Verify value actually changed before logging update
+  if (strncmp(destination, value, destinationSize - 1) == 0) {
+    LOG_DEBUG("SYSTEM", "Portal value unchanged for %s: %s", fieldName, value);
+    return;
+  }
+
+  strncpy(destination, value, destinationSize - 1);
+  destination[destinationSize - 1] = '\0';
+  LOG_SYSTEM("Portal value updated for %s: %s", fieldName, destination);
+}
 }
 
 // Static member initialization
 bool WiFiConfig::wifiConnected = false;
 unsigned long WiFiConfig::lastConnectionCheck = 0;
-Preferences WiFiConfig::preferences;
-bool WiFiConfig::shouldSaveConfig = false;
 
 // Runtime configuration values (loaded from Preferences)
 char WiFiConfig::mqtt_server[41] = MQTT_BROKER_IP;
@@ -42,38 +64,18 @@ bool WiFiConfig::isInitialized() {
   return wifiManagerInitialized;
 }
 
-void WiFiConfig::saveConfigCallback() {
-  shouldSaveConfig = true;
-}
-
 void WiFiConfig::loadConfiguration() {
-  preferences.begin("wifi-config", false);
+  Preferences prefs;
+  prefs.begin("wifi-config", /*readOnly=*/true);
 
-  // Load MQTT server
-  String savedMqttServer = preferences.getString("mqtt_server", MQTT_BROKER_IP);
-  savedMqttServer.toCharArray(mqtt_server, sizeof(mqtt_server));
+  prefs.getString("mqtt_server", MQTT_BROKER_IP).toCharArray(mqtt_server, sizeof(mqtt_server));
+  prefs.getString("mqtt_port",   String(MQTT_BROKER_PORT)).toCharArray(mqtt_port, sizeof(mqtt_port));
+  prefs.getString("mqtt_user",   MQTT_USER).toCharArray(mqtt_user, sizeof(mqtt_user));
+  prefs.getString("mqtt_pass",   MQTT_PASSWORD).toCharArray(mqtt_password, sizeof(mqtt_password));
+  snprintf(timer_type, sizeof(timer_type), "%d", prefs.getInt("timer_type", TIMER_TYPE));
+  prefs.getString("startup_text", STARTUP_TEXT).toCharArray(startup_text, sizeof(startup_text));
 
-  // Load MQTT port
-  int savedMqttPort = sanitizeMqttPort(preferences.getInt("mqtt_port", MQTT_BROKER_PORT));
-  snprintf(mqtt_port, sizeof(mqtt_port), "%d", savedMqttPort);
-
-  // Load MQTT user
-  String savedMqttUser = preferences.getString("mqtt_user", MQTT_USER);
-  savedMqttUser.toCharArray(mqtt_user, sizeof(mqtt_user));
-
-  // Load MQTT password
-  String savedMqttPassword = preferences.getString("mqtt_password", MQTT_PASSWORD);
-  savedMqttPassword.toCharArray(mqtt_password, sizeof(mqtt_password));
-
-  // Load timer type
-  int savedTimerType = preferences.getInt("timer_type", TIMER_TYPE);
-  snprintf(timer_type, sizeof(timer_type), "%d", savedTimerType);
-
-  // Load startup text
-  String savedStartupText = preferences.getString("startup_text", STARTUP_TEXT);
-  savedStartupText.toCharArray(startup_text, sizeof(startup_text));
-
-  preferences.end();
+  prefs.end();
 
   LOG_SYSTEM("Configuration loaded from NVS:");
   LOG_SYSTEM("  MQTT Server: %s", mqtt_server);
@@ -84,18 +86,21 @@ void WiFiConfig::loadConfiguration() {
 }
 
 void WiFiConfig::saveConfiguration() {
-  preferences.begin("wifi-config", false);
+  LOG_SYSTEM("Saving configuration to NVS");
 
-  preferences.putString("mqtt_server", mqtt_server);
+  // Sanitize port before saving
   int port = sanitizeMqttPort(atoi(mqtt_port));
   snprintf(mqtt_port, sizeof(mqtt_port), "%d", port);
-  preferences.putInt("mqtt_port", port);
-  preferences.putString("mqtt_user", mqtt_user);
-  preferences.putString("mqtt_password", mqtt_password);
-  preferences.putInt("timer_type", atoi(timer_type));
-  preferences.putString("startup_text", startup_text);
 
-  preferences.end();
+  Preferences prefs;
+  prefs.begin("wifi-config", /*readOnly=*/false);
+  prefs.putString("mqtt_server",  mqtt_server);
+  prefs.putString("mqtt_port",    mqtt_port);
+  prefs.putString("mqtt_user",    mqtt_user);
+  prefs.putString("mqtt_pass",    mqtt_password);
+  prefs.putInt(   "timer_type",   atoi(timer_type));
+  prefs.putString("startup_text", startup_text);
+  prefs.end();
 
   LOG_SYSTEM("Configuration saved to NVS");
 }
@@ -110,18 +115,15 @@ void WiFiConfig::initialize() {
   // Load configuration from NVS
   loadConfiguration();
 
-  // Reset save flag
-  shouldSaveConfig = false;
-
-  // Create WiFiManager custom parameters (persist for portal lifetime)
-  if (!customMqttServer) {
-    customMqttServer = new WiFiManagerParameter("mqtt_server", "MQTT Server", mqtt_server, 40);
-    customMqttPort = new WiFiManagerParameter("mqtt_port", "MQTT Port", mqtt_port, 6);
-    customMqttUser = new WiFiManagerParameter("mqtt_user", "MQTT User", mqtt_user, 40);
-    customMqttPassword = new WiFiManagerParameter("mqtt_password", "MQTT Password", mqtt_password, 40);
-    customTimerType = new WiFiManagerParameter("timer_type", "Timer Type (1=BLE, 2=MQTT)", timer_type, 6);
-    customStartupText = new WiFiManagerParameter("startup_text", "Startup Text", startup_text, 40);
-  }
+  // Create WiFiManager custom parameters with current values from NVS
+  // WARNING: Must recreate each time to ensure fresh parameter objects for non-blocking mode
+  // Old objects are intentionally leaked (one-time cost) to simplify pointer management
+  customMqttServer = new WiFiManagerParameter("mqtt_server", "MQTT Server", mqtt_server, 40);
+  customMqttPort = new WiFiManagerParameter("mqtt_port", "MQTT Port", mqtt_port, 6);
+  customMqttUser = new WiFiManagerParameter("mqtt_user", "MQTT User", mqtt_user, 40);
+  customMqttPassword = new WiFiManagerParameter("mqtt_password", "MQTT Password", mqtt_password, 40);
+  customTimerType = new WiFiManagerParameter("timer_type", "Timer Type (1=BLE, 2=MQTT)", timer_type, 6);
+  customStartupText = new WiFiManagerParameter("startup_text", "Startup Text", startup_text, 40);
 
   // Add parameters to WiFiManager
   wifiManager.addParameter(customMqttServer);
@@ -131,14 +133,23 @@ void WiFiConfig::initialize() {
   wifiManager.addParameter(customTimerType);
   wifiManager.addParameter(customStartupText);
 
-  // Set save config callback
-  wifiManager.setSaveConfigCallback([]() {
-    WiFiConfig::saveConfigCallback();
+  // Set save params callback — fires when the user clicks Save on the custom params form
+  wifiManager.setSaveParamsCallback([]() {
+    LOG_SYSTEM("WiFiManager params saved — persisting to NVS");
+    copyIfProvided(mqtt_server, sizeof(mqtt_server), customMqttServer, "mqtt_server");
+    copyIfProvided(mqtt_port,   sizeof(mqtt_port),   customMqttPort,   "mqtt_port");
+    int sanitizedPort = sanitizeMqttPort(atoi(mqtt_port));
+    snprintf(mqtt_port, sizeof(mqtt_port), "%d", sanitizedPort);
+    copyIfProvided(mqtt_user,     sizeof(mqtt_user),     customMqttUser,     "mqtt_user");
+    copyIfProvided(mqtt_password, sizeof(mqtt_password), customMqttPassword, "mqtt_password");
+    copyIfProvided(timer_type,    sizeof(timer_type),    customTimerType,    "timer_type");
+    copyIfProvided(startup_text,  sizeof(startup_text),  customStartupText,  "startup_text");
+    WiFiConfig::saveConfiguration();
   });
 
   // Configure WiFi Manager settings for non-blocking operation
-  wifiManager.setConnectTimeout(WIFI_CONFIG_TIMEOUT);
-  wifiManager.setConfigPortalTimeout(WIFI_CONFIG_TIMEOUT);
+  wifiManager.setConnectTimeout(WIFI_CONNECT_TIMEOUT);
+  wifiManager.setConfigPortalTimeout(WIFI_PORTAL_TIMEOUT);
 
   // CRITICAL: Set config portal to non-blocking mode
   // This ensures autoConnect() returns immediately without halting execution
@@ -147,28 +158,6 @@ void WiFiConfig::initialize() {
   // Attempt to connect using saved credentials or start AP for configuration
   // Returns immediately (non-blocking)
   wifiManager.autoConnect(AP_SSID);
-
-  // Read parameter values after autoConnect
-  strncpy(mqtt_server, customMqttServer->getValue(), sizeof(mqtt_server) - 1);
-  mqtt_server[sizeof(mqtt_server) - 1] = '\0';
-  strncpy(mqtt_port, customMqttPort->getValue(), sizeof(mqtt_port) - 1);
-  mqtt_port[sizeof(mqtt_port) - 1] = '\0';
-  int sanitizedPort = sanitizeMqttPort(atoi(mqtt_port));
-  snprintf(mqtt_port, sizeof(mqtt_port), "%d", sanitizedPort);
-  strncpy(mqtt_user, customMqttUser->getValue(), sizeof(mqtt_user) - 1);
-  mqtt_user[sizeof(mqtt_user) - 1] = '\0';
-  strncpy(mqtt_password, customMqttPassword->getValue(), sizeof(mqtt_password) - 1);
-  mqtt_password[sizeof(mqtt_password) - 1] = '\0';
-  strncpy(timer_type, customTimerType->getValue(), sizeof(timer_type) - 1);
-  timer_type[sizeof(timer_type) - 1] = '\0';
-  strncpy(startup_text, customStartupText->getValue(), sizeof(startup_text) - 1);
-  startup_text[sizeof(startup_text) - 1] = '\0';
-
-  // Save configuration if requested
-  if (shouldSaveConfig) {
-    saveConfiguration();
-    shouldSaveConfig = false;
-  }
 
   wifiManagerInitialized = true;
 
@@ -255,7 +244,26 @@ void WiFiConfig::startConfigPortal() {
   WiFi.disconnect(true);  // true = turn off WiFi radio
   delay(100);
 
-  // Start config portal (blocking - use with caution)
+  // CRITICAL: Recreate parameters with current buffer values before portal
+  // This ensures portal displays latest values from NVS and receives fresh parameters
+  // for user submissions. Non-blocking mode requires fresh parameter objects.
+  customMqttServer = new WiFiManagerParameter("mqtt_server", "MQTT Server", mqtt_server, 40);
+  customMqttPort = new WiFiManagerParameter("mqtt_port", "MQTT Port", mqtt_port, 6);
+  customMqttUser = new WiFiManagerParameter("mqtt_user", "MQTT User", mqtt_user, 40);
+  customMqttPassword = new WiFiManagerParameter("mqtt_password", "MQTT Password", mqtt_password, 40);
+  customTimerType = new WiFiManagerParameter("timer_type", "Timer Type (1=BLE, 2=MQTT)", timer_type, 6);
+  customStartupText = new WiFiManagerParameter("startup_text", "Startup Text", startup_text, 40);
+
+  // Re-add parameters to portal (old ones are replaced)
+  wifiManager.addParameter(customMqttServer);
+  wifiManager.addParameter(customMqttPort);
+  wifiManager.addParameter(customMqttUser);
+  wifiManager.addParameter(customMqttPassword);
+  wifiManager.addParameter(customTimerType);
+  wifiManager.addParameter(customStartupText);
+
+  // Start config portal (blocking)
+  // setSaveParamsCallback (set in initialize()) fires on Save and persists to NVS
   wifiManager.startConfigPortal(AP_SSID);
 
   LOG_SYSTEM("Configuration portal closed");

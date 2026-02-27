@@ -1,6 +1,5 @@
 #pragma once
 
-#include <Preferences.h>
 #include <WiFiManager.h>
 
 /**
@@ -14,8 +13,6 @@ class WiFiConfig {
 private:
   static bool wifiConnected;
   static unsigned long lastConnectionCheck;
-  static Preferences preferences;
-  static bool shouldSaveConfig;
 
   // Runtime configuration values (loaded from Preferences)
   static char mqtt_server[41];
@@ -27,7 +24,8 @@ private:
 
   // Configuration constants
   static constexpr unsigned long CONNECTION_CHECK_INTERVAL = 5000;  // Check every 5 seconds
-  static constexpr unsigned long WIFI_CONFIG_TIMEOUT = 60;          // WiFiManager portal timeout (seconds)
+  static constexpr unsigned long WIFI_CONNECT_TIMEOUT = 60;         // WiFi connect timeout (seconds)
+  static constexpr unsigned long WIFI_PORTAL_TIMEOUT = 0;           // 0 = no portal timeout
   static constexpr const char* AP_SSID = "J.K. PewPewTimer AP";      // Access point name
   static constexpr int WIFI_TX_POWER = 80;                          // TX power (0-84)
 
@@ -42,7 +40,6 @@ private:
   // Helper methods
   static void loadConfiguration();
   static void saveConfiguration();
-  static void saveConfigCallback();
 
 public:
   /**

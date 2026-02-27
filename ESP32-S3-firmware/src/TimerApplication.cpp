@@ -7,6 +7,16 @@
 #include "common.h"
 #include <BLEDevice.h>
 
+namespace {
+TimerApplication* gTimerApplicationInstance = nullptr;
+volatile bool gBleScanResultsReady = false;
+
+void onBleScanComplete(BLEScanResults /*scanResults*/) {
+  (void)gTimerApplicationInstance;
+  gBleScanResultsReady = true;
+}
+}
+
 TimerApplication::TimerApplication()
   : sessionActive(false),
     lastShotNumber(0),
@@ -18,14 +28,20 @@ TimerApplication::TimerApplication()
     publishFailures(0),
     lastScanAttempt(0),
     isScanning(false),
+    scanResultsReady(false),
     startupTime(0),
     lastHealthCheck(0),
     lastActivityTime(0),
     hadDeviceConnected(false),
     lastMqttWarningTime(0) {
+  gTimerApplicationInstance = this;
 }
 
 TimerApplication::~TimerApplication() {
+  if (gTimerApplicationInstance == this) {
+    gTimerApplicationInstance = nullptr;
+  }
+
   if (shotEventQueue) {
     vQueueDelete(shotEventQueue);
     shotEventQueue = nullptr;
@@ -36,6 +52,11 @@ TimerApplication::~TimerApplication() {
 bool TimerApplication::initialize() {
   LOG_SYSTEM("=== SG Shot Timer BLE Bridge ===");
   LOG_SYSTEM("ESP32-S3 DevKit-C Starting...");
+
+  // Initialize WiFi manager first so runtime configuration is available
+  // before BLE setup and device scanning begin.
+  // Non-blocking mode keeps startup responsive even without WiFi credentials.
+  WiFiConfig::initialize();
 
   // Create FreeRTOS queue for shot events
   shotEventQueue = xQueueCreate(AppConfig::EVENT_QUEUE_SIZE, sizeof(NormalizedShotData));
@@ -91,6 +112,15 @@ void TimerApplication::run() {
   // PHASE 2: BLE Device Management (only if TIMER_TYPE == TIMER_TYPE_BLE)
   // ============================================================
   if (TIMER_TYPE == TIMER_TYPE_BLE) {
+    if (gBleScanResultsReady) {
+      gBleScanResultsReady = false;
+      scanResultsReady = true;
+    }
+
+    if (isScanning && scanResultsReady) {
+      processScanResults();
+    }
+
     if (!timerDevice) {
       scanForDevices();
     }
@@ -290,12 +320,6 @@ void TimerApplication::onConnectionStateChanged(DeviceConnectionState state) {
 
   if (state == DeviceConnectionState::CONNECTED) {
     hadDeviceConnected = true;
-
-    // Initialize WiFi only after first BLE device connection
-    if (!WiFiConfig::isInitialized()) {
-      LOG_SYSTEM("BLE device connected - initializing WiFi now");
-      WiFiConfig::initialize();
-    }
   }
 
   // Get device info for MQTT publish
@@ -455,6 +479,7 @@ void TimerApplication::scanForDevices() {
 
   lastScanAttempt = now;
   isScanning = true;
+  scanResultsReady = false;
 
   if (displayManager) {
     displayManager->showConnectionState(DeviceConnectionState::SCANNING, nullptr);
@@ -468,7 +493,22 @@ void TimerApplication::scanForDevices() {
   pScan->setInterval(BLE_SCAN_INTERVAL);
   pScan->setWindow(BLE_SCAN_WINDOW);
 
-  BLEScanResults foundDevices = pScan->start(BLE_SCAN_DURATION, false);
+  bool scanStarted = pScan->start(BLE_SCAN_DURATION, onBleScanComplete, false);
+  if (!scanStarted) {
+    LOG_ERROR("BLE", "Failed to start BLE scan");
+    isScanning = false;
+    scanResultsReady = false;
+    return;
+  }
+
+  LOG_SYSTEM("BLE scan started (non-blocking)");
+}
+
+void TimerApplication::processScanResults() {
+  scanResultsReady = false;
+
+  BLEScan* pScan = BLEDevice::getScan();
+  BLEScanResults foundDevices = pScan->getResults();
   LOG_SYSTEM("Scan complete - found %d devices", foundDevices.getCount());
 
   bool deviceFound = false;

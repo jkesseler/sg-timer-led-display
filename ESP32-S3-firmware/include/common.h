@@ -6,8 +6,7 @@
 // =============================================================================
 #define TIMER_TYPE_BLE 1   // Timer messages come from BLE device directly (S.G. Timer or Special Pie Timer)
 #define TIMER_TYPE_MQTT 2  // Timer messages come via MQTT
-#define TIMER_TYPE TIMER_TYPE_BLE
-#define TIMER_REPUBLISH_MQTT false // Publish MQTT messages for external
+#define TIMER_TYPE TIMER_TYPE_BLE // Set the timer type for this build
 
 // =============================================================================
 // Display Configuration
@@ -82,5 +81,7 @@
 #define SHOT_LIST_READ_DELAY 10        // Delay between shot list reads in milliseconds
 
 #define STARTUP_TEXT "J.K. PewPew Timer"
+
+#define EMPTY_DEVICE_ID "000000" // Fallback ID if flash read fails
 
 #endif // COMMON_H

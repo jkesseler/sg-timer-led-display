@@ -88,7 +88,15 @@ public:
   void setActiveScan(bool) {}
   void setInterval(uint16_t) {}
   void setWindow(uint16_t) {}
+  bool start(uint32_t duration, void (*scanCompleteCB)(BLEScanResults), bool is_continue = false) {
+    if (scanCompleteCB) {
+      scanCompleteCB(BLEScanResults());
+    }
+    return true;
+  }
   BLEScanResults start(uint32_t duration, bool is_continue = false) { return BLEScanResults(); }
+  BLEScanResults getResults() { return BLEScanResults(); }
+  void stop() {}
   void clearResults() {}
 };
 

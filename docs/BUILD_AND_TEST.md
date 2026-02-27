@@ -95,9 +95,7 @@ pio device monitor
 
 - BLE scanning and connection are managed by `TimerApplication`
 - Wi-Fi is initialized lazily after first BLE connection (`WiFiConfig`)
-- MQTT manager is initialized only when compile-time conditions allow it:
-  - `TIMER_TYPE == TIMER_TYPE_BLE`
-  - `TIMER_REPUBLISH_MQTT == true`
+- MQTT manager is initialized only when MQTT server is set in NVM
 
 These values are currently defined in `ESP32-S3-firmware/include/common.h`.
 
