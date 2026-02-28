@@ -115,7 +115,7 @@ bool MqttManager::initialize() {
   mqttClient.setSocketTimeout(3);  // 3 seconds
 
   // Keep-alive interval
-  mqttClient.setKeepAlive(60);  // 60 seconds keep-alive
+  mqttClient.setKeepAlive(5);  // 5 seconds keep-alive
 
   LOG_SYSTEM("MQTT configured for %s:%d", mqttServer, mqttPort);
   LOG_SYSTEM("MQTT client ID: %s", mqttClientId);

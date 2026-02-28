@@ -1,7 +1,16 @@
 import React, { useRef, useEffect, useState } from 'react';
+import { useSelector } from 'react-redux';
 import { DisplayConfig, DisplayColors, DisplayState } from '../constants';
 import { formatCountdown } from '../utils';
-import type { LEDMatrixProps, ShotData, SessionData, CanvasRenderingContext } from '../types';
+import {
+  selectDisplayState,
+  selectShotData,
+  selectSessionData,
+  selectDeviceName,
+  selectCountdownRemainingMs,
+} from '../store/mqttSlice';
+import { selectBrightness } from '../store/settingsSlice';
+import type { ShotData, SessionData, CanvasRenderingContext } from '../types';
 import './LEDMatrix.css';
 
 // ESP32-style time formatting (matches firmware format: ss:cc where cc is centiseconds)
@@ -22,15 +31,17 @@ function formatSplitTimeESP32(timeMs: number): string {
 
 /**
  * LED Matrix Display Component
- * Mimics the 128x32 HUB75 LED matrix display from the ESP32 firmware
+ * Mimics the 128x32 HUB75 LED matrix display from the ESP32 firmware.
+ * Reads all display data from Redux state.
  */
-const LEDMatrix: React.FC<LEDMatrixProps> = ({
-  displayState,
-  shotData,
-  sessionData,
-  deviceName,
-  brightness = 200
-}) => {
+const LEDMatrix: React.FC = () => {
+  const displayState = useSelector(selectDisplayState);
+  const shotData = useSelector(selectShotData);
+  const sessionData = useSelector(selectSessionData);
+  const deviceName = useSelector(selectDeviceName);
+  const brightness = useSelector(selectBrightness);
+  const countdownRemainingMs = useSelector(selectCountdownRemainingMs);
+
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [scrollOffset, setScrollOffset] = useState<number>(0);
 
@@ -50,10 +61,14 @@ const LEDMatrix: React.FC<LEDMatrixProps> = ({
   // Render display on canvas
   useEffect(() => {
     const canvas = canvasRef.current;
-    if (!canvas) return;
+    if (!canvas) {
+      return;
+    }
 
     const ctx = canvas.getContext('2d');
-    if (!ctx) return;
+    if (!ctx) {
+      return;
+    }
 
     const width = DisplayConfig.TOTAL_WIDTH;
     const height = DisplayConfig.TOTAL_HEIGHT;
@@ -84,7 +99,7 @@ const LEDMatrix: React.FC<LEDMatrixProps> = ({
         renderConnected(ctx, width, height, deviceName, scrollOffset);
         break;
       case DisplayState.COUNTDOWN:
-        renderCountdown(ctx, width, height, sessionData);
+        renderCountdown(ctx, width, height, countdownRemainingMs);
         break;
       case DisplayState.WAITING_FOR_SHOTS:
         renderWaitingForShots(ctx, width, height);
@@ -100,7 +115,7 @@ const LEDMatrix: React.FC<LEDMatrixProps> = ({
     }
 
     ctx.globalAlpha = 1.0;
-  }, [displayState, shotData, sessionData, deviceName, brightness, scrollOffset]);
+  }, [displayState, shotData, sessionData, deviceName, brightness, scrollOffset, countdownRemainingMs]);
 
   const canvasWidth = DisplayConfig.TOTAL_WIDTH;
   const canvasHeight = DisplayConfig.TOTAL_HEIGHT;
@@ -149,7 +164,7 @@ function renderDisconnected(ctx: CanvasRenderingContext, _width: number, _height
   ctx.fillStyle = DisplayColors.RED;
   ctx.font = 'bold 10px helvetica';
   ctx.textBaseline = 'top';
-  ctx.fillText('NO DEVICE', 0, 4);
+  ctx.fillText('NO TIMER CONNECTED', 0, 4);
 }
 
 function renderScanning(ctx: CanvasRenderingContext, _width: number, _height: number): void {
@@ -198,13 +213,10 @@ function renderCountdown(
   ctx: CanvasRenderingContext,
   width: number,
   _height: number,
-  sessionData: SessionData | null
+  countdownRemainingMs: number
 ): void {
-  if (!sessionData) return;
-
-  // Calculate remaining time
-  const elapsed = (Date.now() - sessionData.countdownStartTime) / 1000;
-  const remaining = Math.max(0, sessionData.startDelaySeconds - elapsed);
+  // Convert ms to seconds for display
+  const remaining = countdownRemainingMs / 1000;
 
   ctx.fillStyle = DisplayColors.YELLOW;
   ctx.font = 'bold 1px helvetica';

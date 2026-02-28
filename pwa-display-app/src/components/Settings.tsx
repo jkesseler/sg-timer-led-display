@@ -1,9 +1,20 @@
 import React, { useState } from 'react';
+import { useSelector } from 'react-redux';
 import { DefaultMqttSettings } from '../constants';
-import type { SettingsProps } from '../types';
+import { selectSettings } from '../store/settingsSlice';
+import { selectIsConnected } from '../store/mqttSlice';
+import type { MqttSettings } from '../types';
 import './Settings.css';
 
-const Settings: React.FC<SettingsProps> = ({ settings, onSave, onClose, isConnected }) => {
+interface SettingsProps {
+  onSave: (settings: MqttSettings) => void;
+  onClose: () => void;
+}
+
+const Settings: React.FC<SettingsProps> = ({ onSave, onClose }) => {
+  const settings = useSelector(selectSettings);
+  const isConnected = useSelector(selectIsConnected);
+
   const [broker, setBroker] = useState<string>(settings.broker || DefaultMqttSettings.broker);
   const [username, setUsername] = useState<string>(settings.username || '');
   const [password, setPassword] = useState<string>(settings.password || '');
