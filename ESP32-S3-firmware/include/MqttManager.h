@@ -2,7 +2,6 @@
 
 #include "ITimerDevice.h"
 #include "Logger.h"
-#include "WiFiConfig.h"
 #include <memory>
 
 /**
