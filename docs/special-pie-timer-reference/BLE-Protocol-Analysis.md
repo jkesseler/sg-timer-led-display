@@ -232,4 +232,4 @@ uint8_t messageType = pData[2];
 
 See `ESP32-S3-firmware/test/special-pie-timer.cpp` for a complete, tested implementation.
 
-See `ESP32-S3-firmware/src/SpecialPieTimerDevice.cpp` for production implementation with ITimerDevice interface.
+See `ESP32-S3-firmware/src/SpecialPieM1A2Plus.cpp` for production implementation with ITimerDevice interface.

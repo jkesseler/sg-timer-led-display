@@ -11,7 +11,7 @@ struct NormalizedShotData {
   uint32_t absoluteTimeMs = 0;    // Always in milliseconds
   uint32_t splitTimeMs = 0;       // Time since previous shot
   uint64_t timestampMs = 0;       // System timestamp when shot was detected
-  const char* deviceModel = nullptr;
+  char deviceModel[32] = {0};     // Owned copy to avoid dangling pointers
   bool isFirstShot = false;       // True if this is the first shot in session
 };
 

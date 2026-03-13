@@ -1,284 +1,93 @@
-# Device Comparison: SG Timer vs Special Pie Timer
+# Device Comparison (Current Firmware)
 
-This document compares the two supported shot timer devices and their BLE protocol implementations.
+This document reflects the timer device implementations currently compiled into `main-firmware`.
 
-## Quick Comparison
+## Implementations in code
 
-| Feature | SG Timer | Special Pie M1A2+ |
-|---------|----------|-------------------|
-| **BLE Service UUID** | `7520FFFF-14D2-4CDA-8B6B-697C554C9311` | `0000FFF0-0000-1000-8000-00805F9B34FB` |
-| **Notification Characteristic** | Custom SG UUID | `0000FFF1-0000-1000-8000-00805F9B34FB` |
-| **Discovery Method** | By MAC address | By service UUID |
-| **Message Format** | Length-prefixed TLV | Frame markers (F8 F9 ... F9 F8) |
-| **Session Start** | ✅ Event 0x00 | ✅ Message 0x34 |
-| **Session Stop** | ✅ Event 0x03 | ✅ Message 0x18 |
-| **Session Suspend** | ✅ Event 0x01 | ❌ Not observed |
-| **Session Resume** | ✅ Event 0x02 | ❌ Not observed |
-| **Shot Detection** | ✅ Event 0x04 | ✅ Message 0x36 |
-| **Shot List Retrieval** | ✅ Via BLE read | ❌ Not available |
-| **Remote Start** | ✅ Possible | ❌ Not available |
-| **Remote Stop** | ✅ Possible | ❌ Not available |
-| **Split Time** | ✅ Included in event | 🔧 Client calculated |
-| **Time Resolution** | Milliseconds | 10ms (centiseconds) |
-| **Max Session Time** | ~49 days (uint32_t ms) | ~4.25 min (uint8_t sec) |
+- `SGTimer`
+- `SpecialPieM1A2F`
+- `SpecialPieM1A2Plus`
+- `ASNTracker`
 
-## Protocol Details
+All devices inherit from `BaseTimerDevice` and implement the `ITimerDevice` interface.
 
-### SG Timer
+## Discovery and connection order
 
-**Protocol**: Custom TLV (Type-Length-Value)
+`TimerApplication::scanForDevices()` checks each advertised device in this priority order:
 
-**Message Structure**:
-```
-[LENGTH] [EVENT_ID] [SESSION_ID (4 bytes)] [EVENT_DATA...] [CHECKSUM]
-```
+1. `SpecialPieM1A2F::matchesDevice()`
+2. `SGTimer::matchesDevice()`
+3. `SpecialPieM1A2Plus::matchesDevice()`
+4. `ASNTracker::matchesDevice()`
 
-**Example Session Start**:
-```
-06 00 65 7a 8b 29 00 1e
-└─ Length: 6 bytes
-   └─ Event: 0x00 (SESSION_START)
-      └─ Session ID: 0x65 7a 8b 29
-         └─ Start delay: 0x00 0x1e (3.0s)
-```
+First successful connection wins; only one timer is connected at a time.
 
-**Example Shot**:
-```
-0a 04 65 7a 8b 29 00 01 00 00 09 29
-└─ Length: 10 bytes
-   └─ Event: 0x04 (SHOT_DETECTED)
-      └─ Session ID: 0x65 7a 8b 29
-         └─ Shot number: 0x00 0x01 (1)
-            └─ Time: 0x00 0x00 0x09 0x29 (2345ms)
-```
+## Quick comparison matrix
 
-**Capabilities**:
-- Full bidirectional control
-- Shot list download after session
-- Suspend/resume session
-- Precise millisecond timing
-- Long session support (hours)
+| Device | Discovery Method | Service UUID | Event Characteristic | Protocol Style | Time Source |
+|---|---|---|---|---|---|
+| SG Timer | Advertised service UUID | `7520FFFF-14D2-4CDA-8B6B-697C554C9311` | `75200001-14D2-4CDA-8B6B-697C554C9311` | Length-prefixed event packet | Native milliseconds |
+| Special Pie (MAC/name variant) | Name starts with `SP M1A2 Timer ` | `0000FFF0-0000-1000-8000-00805F9B34FB` | `0000FFF1-0000-1000-8000-00805F9B34FB` | Framed packets (`F8 F9 ... F9 F8`) | Seconds + centiseconds |
+| Special Pie (UUID variant) | Advertised service UUID | `0000FFF0-0000-1000-8000-00805F9B34FB` | `0000FFF1-0000-1000-8000-00805F9B34FB` | Framed packets (`F8 F9 ... F9 F8`) | Seconds + centiseconds |
+| ASN Tracker | Advertised service UUID | `E5A10001-F1A2-4B63-9F8C-D7B781E35E2A` | `E5A10002-F1A2-4B63-9F8C-D7B781E35E2A` | Framed packets (`F8 F9 ... F9 F8`) | Seconds + centiseconds |
 
-**Reference**: `docs/sg-timer-reference/sg_timer_public_bt_api_32.md`
+## Event support by implementation
 
-### Special Pie M1A2+ Timer
+| Event / Capability | SG Timer | SpecialPieMac | SpecialPie(UUID) | ASN Tracker |
+|---|---:|---:|---:|---:|
+| Session started callback | ✅ | ✅ | ✅ | ✅ |
+| Countdown complete callback | ✅ (when protocol event present) | ❌ | ✅ (triggered immediately after start) | ✅ (triggered immediately after start) |
+| Session stopped callback | ✅ | ✅ | ✅ | ✅ |
+| Session suspended callback | ✅ | ❌ | ❌ | ❌ |
+| Session resumed callback | ✅ | ❌ | ❌ | ❌ |
+| Shot detected callback | ✅ | ✅ | ✅ | ✅ |
+| Remote start/stop methods | Interface exists; default `false` unless overridden | default `false` | default `false` | default `false` |
+| Shot list support | Interface method exists; implementation-specific | default `false` | default `false` | default `false` |
 
-**Protocol**: Frame-based messaging
+## Time normalization rules (actual code behavior)
 
-**Message Structure**:
-```
-[F8] [F9] [MESSAGE_TYPE] [DATA...] [F9] [F8]
-```
+- Output type for all devices: `NormalizedShotData`
+- `absoluteTimeMs` and `splitTimeMs` are always milliseconds
+- SG Timer packets already carry millisecond-scale values
+- Special Pie + ASN Tracker convert centiseconds to milliseconds (`cs * 10`)
+- Special Pie + ASN Tracker split time is derived from current and previous shot timestamps
 
-**Example Session Start**:
-```
-F8 F9 34 03 F9 F8
-└─ Frame start: F8 F9
-   └─ Message: 0x34 (SESSION_START)
-      └─ Session ID: 0x03
-         └─ Frame end: F9 F8
-```
+## Device-specific notes
 
-**Example Shot**:
-```
-F8 F9 36 00 04 24 02 0C F9 F8
-└─ Frame start: F8 F9
-   └─ Message: 0x36 (SHOT_DETECTED)
-      └─ Reserved: 0x00
-         └─ Seconds: 0x04 (4)
-            └─ Centiseconds: 0x24 (36)
-               └─ Shot #: 0x02 (2)
-                  └─ Unknown: 0x0C
-                     └─ Frame end: F9 F8
-```
+### SG Timer (`SGTimer`)
 
-**Capabilities**:
-- Shot detection only
-- Session start/stop notifications
-- Simple notification-based protocol
-- Client must calculate splits
-- Limited to ~4 minute sessions
+- Detects by SG service UUID
+- Parses SG BLE event IDs (`0x00`..`0x05`)
+- Device model is refined from advertised name pattern (`SG-SST4...`)
 
-**Reference**: `docs/special-pie-timer-reference/BLE-Protocol-Analysis.md`
+### Special Pie name/MAC variant (`SpecialPieM1A2F`)
 
-## Implementation Architecture
+- Prioritized first during scanning
+- Matches device names with prefix `SP M1A2 Timer `
+- Can read optional firmware value from device info service and include it in display name
 
-Both devices implement the `ITimerDevice` interface:
+### Special Pie UUID variant (`SpecialPieM1A2Plus`)
 
-```cpp
-class ITimerDevice {
-  // Common interface
-  virtual bool initialize() = 0;
-  virtual bool connect(BLEAddress address) = 0;
-  virtual bool isConnected() const = 0;
+- Fallback when name-based match does not trigger
+- Uses same `FFF0/FFF1` event path
 
-  // Event callbacks
-  virtual void onShotDetected(std::function<void(const NormalizedShotData&)> callback) = 0;
-  virtual void onSessionStarted(std::function<void(const SessionData&)> callback) = 0;
-  virtual void onSessionStopped(std::function<void(const SessionData&)> callback) = 0;
+### ASN Tracker (`ASNTracker`)
 
-  // Capability queries
-  virtual bool supportsRemoteStart() const = 0;
-  virtual bool supportsShotList() const = 0;
-  virtual bool supportsSessionControl() const = 0;
-};
-```
+- Uses ASN-specific UUID pair
+- Protocol payload shape closely matches Special Pie framed events
+- Shot numbers are treated as zero-indexed in implementation (`totalShots = shotNumber + 1`)
 
-### SGTimerDevice
+## MQTT republish path interaction
 
-- **Location**: `ESP32-S3-firmware/src/SGTimerDevice.cpp`
-- **Discovery**: Hardcoded MAC address (`dd:0e:9d:04:72:c3`)
-- **Features**: Full protocol support
-- **Test File**: `ESP32-S3-firmware/test/sg-timer.cpp`
+When MQTT republishing is enabled and broker connection is active, shot events from any connected device are queued in a ring buffer in `TimerApplication` and published asynchronously by `MqttManager`.
 
-### SpecialPieTimerDevice
+This queueing layer is independent of device type.
 
-- **Location**: `ESP32-S3-firmware/src/SpecialPieTimerDevice.cpp`
-- **Discovery**: Service UUID advertisement
-- **Features**: Notification-only support
-- **Test File**: `ESP32-S3-firmware/test/special-pie-timer.cpp` ✅ **Validated**
+## Relevant source files
 
-## Testing Strategy
-
-### Testing SG Timer
-
-1. **Preparation**:
-   - Ensure SG Timer MAC address is correct in `TimerApplication.cpp`
-   - Turn on SG Timer
-   - Set timer to RO (Review Officer) mode
-
-2. **Expected Behavior**:
-   - Auto-connects by MAC address
-   - Receives all session events (start/stop/suspend/resume)
-   - Downloads shot list after session ends
-   - Supports remote control (if implemented)
-
-3. **Validation**:
-   - Check shot times match timer display
-   - Verify shot list completeness
-   - Test reconnection after power cycle
-
-### Testing Special Pie Timer
-
-1. **Preparation**:
-   - Turn on Special Pie Timer
-   - No special mode required
-
-2. **Expected Behavior**:
-   - Auto-connects by service UUID
-   - Receives session start (0x34)
-   - Receives shot events (0x36)
-   - Receives session stop (0x18)
-   - Client calculates split times
-
-3. **Validation**:
-   - Check absolute times match timer display
-   - Verify split time calculations
-   - Test reconnection after power cycle
-   - Confirm session IDs match between start/stop
-
-## Common Features
-
-Both implementations provide:
-
-- **Normalized Data**: All shot data converted to `NormalizedShotData` structure
-- **Callback System**: Event-driven architecture
-- **Connection Management**: Auto-reconnect on disconnect
-- **State Tracking**: Session active/inactive
-- **Error Handling**: Frame validation and error recovery
-
-## Normalized Shot Data
-
-Both devices output standardized shot data:
-
-```cpp
-struct NormalizedShotData {
-  uint32_t sessionId;        // Session identifier
-  uint16_t shotNumber;       // Shot number (0-indexed or 1-indexed)
-  uint32_t absoluteTimeMs;   // Absolute time in milliseconds
-  uint32_t splitTimeMs;      // Split time in milliseconds
-  uint32_t timestampMs;      // Local timestamp when received
-  const char* deviceModel;   // "SG Timer" or "Special Pie Timer"
-  bool isFirstShot;          // True if first shot in session
-};
-```
-
-## Multi-Device Support
-
-`TimerApplication` scans for both device types:
-
-1. Scan for BLE devices
-2. Check for SG Timer (by address)
-3. Check for Special Pie Timer (by service UUID)
-4. Create appropriate device implementation
-5. Set up callbacks
-6. Connect to device
-
-Only one device can be connected at a time.
-
-## Troubleshooting
-
-### SG Timer Not Found
-- Verify MAC address in `TimerApplication::scanForDevices()`
-- Check timer is powered on
-- Ensure timer is in range (< 10m)
-- Verify timer battery level
-
-### Special Pie Timer Not Found
-- Ensure service UUID is correct: `0000FFF0-0000-1000-8000-00805F9B34FB`
-- Check timer is advertising (turn off/on)
-- Move closer to device
-- Check for BLE interference
-
-### No Events Received (SG Timer)
-- Set timer to RO mode
-- Check notification setup succeeded
-- Verify service and characteristic UUIDs
-
-### No Events Received (Special Pie Timer)
-- Start a session on the timer
-- Fire a shot to generate events
-- Check notification callback registration
-
-### Wrong Split Times (Special Pie Timer)
-- Verify centisecond borrowing logic
-- Check conversion factor (centiseconds × 10 = milliseconds)
-- Ensure previous shot tracking is working
-
-## Migration Notes
-
-If migrating from single-device to multi-device:
-
-1. Update `BUILD_AND_TEST.md` test procedures
-2. Verify both test files work independently
-3. Test auto-discovery logic
-4. Validate normalized data from both sources
-5. Check display rendering for both device types
-
-## Performance Comparison
-
-| Metric | SG Timer | Special Pie Timer |
-|--------|----------|-------------------|
-| **Connection Time** | ~3-5 seconds | ~2-4 seconds |
-| **Event Latency** | < 50ms | < 100ms |
-| **Message Size** | 8-30 bytes | 6-10 bytes |
-| **Protocol Overhead** | Medium | Low |
-| **Battery Impact** | Medium | Low |
-
-## Future Enhancements
-
-### SG Timer
-- [ ] Implement remote session control
-- [ ] Add shot list download UI
-- [ ] Support session suspend/resume display
-
-### Special Pie Timer
-- [ ] Investigate FFF2 characteristic (write commands?)
-- [ ] Decode unknown bytes in shot messages
-- [ ] Explore device info service (09170001)
-
-### Common
-- [ ] Support simultaneous multi-device scanning
-- [ ] Add device preference selection
-- [ ] Implement device capability auto-detection
-- [ ] Create unified test framework
+- `ESP32-S3-firmware/src/TimerApplication.cpp`
+- `ESP32-S3-firmware/src/SGTimer.cpp`
+- `ESP32-S3-firmware/src/SpecialPieM1A2F.cpp`
+- `ESP32-S3-firmware/src/SpecialPieM1A2Plus.cpp`
+- `ESP32-S3-firmware/src/ASNTracker.cpp`
+- `ESP32-S3-firmware/include/ITimerDevice.h`

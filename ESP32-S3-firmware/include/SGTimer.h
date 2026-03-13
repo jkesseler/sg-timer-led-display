@@ -16,9 +16,10 @@ enum class SGTimerEvent : uint8_t {
   SESSION_SET_BEGIN = 0x05
 };
 
-class SGTimerDevice : public BaseTimerDevice {
+class SGTimer : public BaseTimerDevice {
 private:
   // SG Timer specific configuration
+  static const char* LOG_TAG;
   static const char* CHARACTERISTIC_UUID;
   static const char* SHOT_LIST_UUID;
 
@@ -35,21 +36,22 @@ private:
 
   // Internal methods
   void processTimerData(uint8_t* data, size_t length);
-  const char* getLogTag() const override;
-
   // Static callback for BLE notifications
   static void notifyCallback(BLERemoteCharacteristic* pBLERemoteCharacteristic,
                            uint8_t* pData, size_t length, bool isNotify);
 
 public:
-  SGTimerDevice();
-  virtual ~SGTimerDevice();
+  SGTimer();
+  virtual ~SGTimer();
 
   static const char *SERVICE_UUID;
+
+  // Device identification - check if advertised device is an SG Timer
+  static bool matchesDevice(BLEAdvertisedDevice* device);
 
   // Public connection method for TimerApplication
   bool attemptConnection(BLEAdvertisedDevice* device);
 
   // Static instance for callbacks
-  static SGTimerDevice* instance;
+  static SGTimer* instance;
 };

@@ -2,6 +2,7 @@
 #include "TimerApplication.h"
 #include "Logger.h"
 #include "common.h"
+#include "DeviceId.h"
 #include <memory>
 
 // Global application instance - using std::unique_ptr for proper lifecycle management
@@ -13,6 +14,8 @@ void setup() {
 
   // Set logging level
   Logger::setLevel(LogLevel::INFO);
+
+  deviceId.initialize();
 
   // Create and initialize application
   app.reset(new TimerApplication());

@@ -1,28 +1,69 @@
 #include "TimerApplication.h"
-#include "SGTimerDevice.h"
-#include "SpecialPieTimerDevice.h"
+#include "SGTimer.h"
+#include "SpecialPieM1A2Plus.h"
+#include "SpecialPieM1A2F.h"
+#include "ASNTracker.h"
+#include "WiFiConfig.h"
 #include "common.h"
 #include <BLEDevice.h>
+
+namespace {
+TimerApplication* gTimerApplicationInstance = nullptr;
+volatile bool gBleScanResultsReady = false;
+
+void onBleScanComplete(BLEScanResults /*scanResults*/) {
+  (void)gTimerApplicationInstance;
+  gBleScanResultsReady = true;
+}
+}
 
 TimerApplication::TimerApplication()
   : sessionActive(false),
     lastShotNumber(0),
     lastShotTime(0),
+    shotEventQueue(nullptr),
+    maxQueueDepth(0),
+    totalShotsQueued(0),
+    totalShotsPublished(0),
+    publishFailures(0),
     lastScanAttempt(0),
     isScanning(false),
+    scanResultsReady(false),
     startupTime(0),
     lastHealthCheck(0),
     lastActivityTime(0),
-    hadDeviceConnected(false) {
+    hadDeviceConnected(false),
+    lastMqttWarningTime(0) {
+  gTimerApplicationInstance = this;
 }
 
 TimerApplication::~TimerApplication() {
+  if (gTimerApplicationInstance == this) {
+    gTimerApplicationInstance = nullptr;
+  }
+
+  if (shotEventQueue) {
+    vQueueDelete(shotEventQueue);
+    shotEventQueue = nullptr;
+  }
   // Smart pointers will handle cleanup automatically
 }
 
 bool TimerApplication::initialize() {
   LOG_SYSTEM("=== SG Shot Timer BLE Bridge ===");
   LOG_SYSTEM("ESP32-S3 DevKit-C Starting...");
+
+  // Initialize WiFi manager first so runtime configuration is available
+  // before BLE setup and device scanning begin.
+  // Non-blocking mode keeps startup responsive even without WiFi credentials.
+  WiFiConfig::initialize();
+
+  // Create FreeRTOS queue for shot events
+  shotEventQueue = xQueueCreate(AppConfig::EVENT_QUEUE_SIZE, sizeof(NormalizedShotData));
+  if (!shotEventQueue) {
+    LOG_ERROR("SYSTEM", "Failed to create shot event queue");
+    return false;
+  }
 
   // Initialize display manager
   displayManager = std::unique_ptr<DisplayManager>(new DisplayManager());
@@ -31,46 +72,94 @@ bool TimerApplication::initialize() {
     return false;
   }
 
+  // Initialize MQTT manager in BLE mode.
+  // Runtime MQTT enable/disable is controlled by WiFiConfig::getMqttServer().
+  if (TIMER_TYPE == TIMER_TYPE_BLE) {
+    // Initialize MQTT manager
+    mqttManager = std::unique_ptr<MqttManager>(new MqttManager());
+    if (!mqttManager->initialize()) {
+      LOG_SYSTEM("MQTT disabled - server not configured");
+      // Non-fatal - continue without MQTT
+    }
+  } else {
+    LOG_SYSTEM("MQTT disabled (TIMER_TYPE=%d)", TIMER_TYPE);
+  }
 
-  // Initialize BLE
-  BLEDevice::init(BLE_DEVICE_NAME);
-  LOG_BLE("ESP32-S3 BLE Client initialized");
-
-  // Note: Device will be created dynamically when found during scanning
-  LOG_SYSTEM("Ready to scan for timer devices (SG Timer or Special Pie Timer)");
+  // Initialize BLE only if timer type is BLE
+  if (TIMER_TYPE == TIMER_TYPE_BLE) {
+    BLEDevice::init(BLE_DEVICE_NAME);
+    LOG_BLE("ESP32-S3 BLE Client initialized");
+    LOG_SYSTEM("Ready to scan for timer devices (SG Timer or Special Pie Timer)");
+  } else {
+    // MQTT client not implemented yet
+    LOG_SYSTEM("BLE disabled - Timer Type: MQTT");
+  }
 
   LOG_SYSTEM("Application initialized successfully");
+
   startupTime = millis();
   lastActivityTime = millis();
   return true;
 }
 
 void TimerApplication::run() {
-  // If no device exists, scan for available devices
-  // Don't scan if we have a device that's connecting/connected
-  if (!timerDevice) {
-    scanForDevices();
+  // ============================================================
+  // PHASE 1: WiFi Background Management (Non-blocking)
+  // ============================================================
+  WiFiConfig::update();
+
+  // ============================================================
+  // PHASE 2: BLE Device Management (only if TIMER_TYPE == TIMER_TYPE_BLE)
+  // ============================================================
+  if (TIMER_TYPE == TIMER_TYPE_BLE) {
+    if (gBleScanResultsReady) {
+      gBleScanResultsReady = false;
+      scanResultsReady = true;
+    }
+
+    if (isScanning && scanResultsReady) {
+      processScanResults();
+    }
+
+    if (!timerDevice) {
+      scanForDevices();
+    }
+
+    // Process BLE events - this may trigger callbacks that enqueue shots
+    if (timerDevice) {
+      timerDevice->update();
+    }
   }
 
-  // Update all components
-  if (timerDevice) {
-    timerDevice->update();
+  // ============================================================
+  // PHASE 3: MQTT Queue Processing (Batch publish)
+  // ============================================================
+  // Process queued events AFTER BLE update to minimize latency
+  publishQueuedEvents();
+
+  // MQTT connection maintenance
+  if (mqttManager) {
+    mqttManager->update();
   }
 
+  // ============================================================
+  // PHASE 4: Display Update
+  // ============================================================
   if (displayManager) {
     displayManager->update();
   }
 
-  // Perform periodic health checks
+  // ============================================================
+  // PHASE 5: Health Monitoring
+  // ============================================================
   performHealthCheck();
 
-  // Yield to FreeRTOS scheduler, while allowing BLE and DMA tasks to run efficiently
+  // Yield to FreeRTOS scheduler
   vTaskDelay(pdMS_TO_TICKS(MAIN_LOOP_DELAY));
 }
 
 void TimerApplication::setupCallbacks() {
   ITimerDevice* device = timerDevice.get();
-
   if (!device) return;
 
   device->onShotDetected([this](const NormalizedShotData& shotData) {
@@ -109,21 +198,54 @@ void TimerApplication::onShotDetected(const NormalizedShotData& shotData) {
   updateActivityTime();
   logShotData(shotData);
 
-  // Update display if session is active
+  // ============================================================
+  // CRITICAL: Enqueue for async MQTT publishing using ring buffer
+  // This is called from BLE callback context - must be fast!
+  // Only queue if MQTT is available - don't buffer when unavailable
+  // ============================================================
+  // Only publish to MQTT if TIMER_TYPE == TIMER_TYPE_BLE and connected to MQTT broker
+  bool shouldPublishMqtt = (TIMER_TYPE == TIMER_TYPE_BLE) && mqttManager && mqttManager->canPublish();
+
+  if (shouldPublishMqtt) {
+    if (xQueueSend(shotEventQueue, &shotData, 0) == pdTRUE) {
+      totalShotsQueued++;
+
+      // Track max queue depth for diagnostics
+      uint16_t depth = (uint16_t)uxQueueMessagesWaiting(shotEventQueue);
+      if (depth > maxQueueDepth) {
+        maxQueueDepth = depth;
+        if (maxQueueDepth > AppConfig::QUEUE_DEPTH_WARN_THRESHOLD) {
+          LOG_WARN("QUEUE", "Peak queue depth: %u/%u", maxQueueDepth, AppConfig::EVENT_QUEUE_SIZE);
+        }
+      }
+    } else {
+      // Queue full - this indicates MQTT can't keep up
+      publishFailures++;
+      LOG_ERROR("QUEUE", "Buffer full! Shot #%u dropped (failures: %lu)",
+                shotData.shotNumber, (unsigned long)publishFailures);
+    }
+  }
+
+  // Update display immediately (regardless of MQTT queue)
   if (sessionActive && displayManager) {
     displayManager->showShotData(shotData);
   }
 }
 
 void TimerApplication::onSessionStarted(const SessionData& sessionData) {
-  LOG_TIMER("Session started: ID %u, Countdown: %.1fs", sessionData.sessionId, sessionData.startDelaySeconds);
+  LOG_TIMER("Session started: ID %u, Countdown: %.1fs",
+            sessionData.sessionId, sessionData.startDelaySeconds);
 
   sessionActive = true;
   lastShotNumber = 0;
   lastShotTime = 0;
 
+  // Publish directly (session events are infrequent)
+  if (mqttManager && mqttManager->canPublish()) {
+    mqttManager->publishSessionStarted(sessionData.sessionId, sessionData.startDelaySeconds);
+  }
+
   if (displayManager) {
-    // Show countdown if there's a delay, otherwise go straight to waiting
     if (sessionData.startDelaySeconds > 0.0f) {
       displayManager->showCountdown(sessionData);
     } else {
@@ -134,6 +256,10 @@ void TimerApplication::onSessionStarted(const SessionData& sessionData) {
 
 void TimerApplication::onCountdownComplete(const SessionData& sessionData) {
   LOG_TIMER("Countdown complete - ready for shots");
+
+  if (mqttManager && mqttManager->canPublish()) {
+    mqttManager->publishCountdownComplete(sessionData.sessionId);
+  }
 
   if (displayManager) {
     displayManager->showWaitingForShots(sessionData);
@@ -146,6 +272,19 @@ void TimerApplication::onSessionStopped(const SessionData& sessionData) {
 
   sessionActive = false;
 
+  // Clear any remaining queued shots on session end
+  // Stale shots arriving after session end should be discarded
+  UBaseType_t remaining = uxQueueMessagesWaiting(shotEventQueue);
+  if (remaining > 0) {
+    LOG_WARN("QUEUE", "Discarding %u queued shots on session end", (unsigned)remaining);
+    xQueueReset(shotEventQueue);
+  }
+
+  // Publish session ended directly (not queued)
+  if (mqttManager && mqttManager->canPublish()) {
+    mqttManager->publishSessionStopped(sessionData.sessionId, sessionData.totalShots, lastShotTime);
+  }
+
   if (displayManager) {
     displayManager->showSessionEnd(sessionData, lastShotNumber);
   }
@@ -154,7 +293,10 @@ void TimerApplication::onSessionStopped(const SessionData& sessionData) {
 void TimerApplication::onSessionSuspended(const SessionData& sessionData) {
   LOG_TIMER("Session suspended: ID %u, Total shots: %d",
             sessionData.sessionId, sessionData.totalShots);
-  // Keep sessionActive true for suspended sessions
+
+  if (mqttManager && mqttManager->canPublish()) {
+    mqttManager->publishSessionSuspended(sessionData.sessionId);
+  }
 }
 
 void TimerApplication::onSessionResumed(const SessionData& sessionData) {
@@ -162,6 +304,10 @@ void TimerApplication::onSessionResumed(const SessionData& sessionData) {
             sessionData.sessionId, sessionData.totalShots);
 
   sessionActive = true;
+
+  if (mqttManager && mqttManager->canPublish()) {
+    mqttManager->publishSessionResumed(sessionData.sessionId);
+  }
 
   if (displayManager) {
     displayManager->showWaitingForShots(sessionData);
@@ -172,23 +318,28 @@ void TimerApplication::onConnectionStateChanged(DeviceConnectionState state) {
   LOG_BLE("Connection state changed: %d", (int)state);
   updateActivityTime();
 
-  // Track successful connections
   if (state == DeviceConnectionState::CONNECTED) {
     hadDeviceConnected = true;
   }
 
-  // Update display based on connection state
+  // Get device info for MQTT publish
+  const char* deviceName = nullptr;
+  const char* deviceModel = nullptr;
+  if (timerDevice) {
+    deviceName = timerDevice->getDeviceName();
+    deviceModel = timerDevice->getDeviceModel();
+  }
+
+  if (mqttManager && mqttManager->canPublish()) {
+    mqttManager->publishConnectionState(state, deviceName, deviceModel);
+  }
+
+  // Handle disconnection
   if (state == DeviceConnectionState::DISCONNECTED) {
     if (sessionActive) {
       sessionActive = false;
     }
-    // Clean up device so we can scan again
-    timerDevice.reset();
-  }
-
-  const char* deviceName = nullptr;
-  if (timerDevice) {
-    deviceName = timerDevice->getDeviceName();
+    timerDevice.reset();  // Clean up so we can scan again
   }
 
   if (displayManager) {
@@ -197,7 +348,7 @@ void TimerApplication::onConnectionStateChanged(DeviceConnectionState state) {
 }
 
 void TimerApplication::logShotData(const NormalizedShotData& shotData) {
-  LOG_TIMER("Shot detected: #%d, Time: %.3fs, Split: %.3fs",
+  LOG_TIMER("Shot #%d: %.3fs (split: %.3fs)",
             shotData.shotNumber,
             shotData.absoluteTimeMs / 1000.0,
             shotData.splitTimeMs / 1000.0);
@@ -206,35 +357,92 @@ void TimerApplication::logShotData(const NormalizedShotData& shotData) {
 void TimerApplication::performHealthCheck() {
   unsigned long currentTime = millis();
 
-  if (currentTime - lastHealthCheck >= AppConfig::HEALTH_CHECK_INTERVAL_MS) {
-    // Check component health
-    bool displayHealthy = displayManager && displayManager->isInitialized();
-    bool timerHealthy = timerDevice != nullptr;
-
-    if (!displayHealthy) {
-      LOG_ERROR("HEALTH", "Display manager is not healthy");
-    }
-
-    // Only log timer error if we had a device and lost it
-    // Don't log when we're just scanning for the first time
-    if (!timerHealthy && hadDeviceConnected) {
-      LOG_ERROR("HEALTH", "Timer device lost connection");
-    }
-
-    // Check for activity timeout (no BLE activity for too long)
-    if (currentTime - lastActivityTime > AppConfig::WATCHDOG_TIMEOUT_MS) {
-      LOG_WARN("HEALTH", "No BLE activity for %lu ms", currentTime - lastActivityTime);
-    }
-
-    LOG_DEBUG("HEALTH", "System uptime: %lu ms, Free heap: %u bytes",
-              getUptimeMs(), ESP.getFreeHeap());
-
-    lastHealthCheck = currentTime;
+  if (currentTime - lastHealthCheck < AppConfig::HEALTH_CHECK_INTERVAL_MS) {
+    return;
   }
+  lastHealthCheck = currentTime;
+
+  // Check component health
+  bool displayHealthy = displayManager && displayManager->isInitialized();
+  bool timerHealthy = timerDevice != nullptr;
+
+  if (!displayHealthy) {
+    LOG_ERROR("HEALTH", "Display manager not healthy");
+  }
+
+  if (!timerHealthy && hadDeviceConnected) {
+    LOG_ERROR("HEALTH", "Timer device lost connection");
+  }
+
+  // Activity timeout warning
+  if (currentTime - lastActivityTime > AppConfig::WATCHDOG_TIMEOUT_MS) {
+    LOG_WARN("HEALTH", "No BLE activity for %lu ms", currentTime - lastActivityTime);
+  }
+
+  // Queue metrics (only if there's been activity)
+  if (totalShotsQueued > 0) {
+    LOG_DEBUG("HEALTH", "Queue: %u/%u, Published: %lu/%lu, Failures: %lu, Peak: %u",
+              (unsigned)uxQueueMessagesWaiting(shotEventQueue), AppConfig::EVENT_QUEUE_SIZE,
+              (unsigned long)totalShotsPublished,
+              (unsigned long)totalShotsQueued,
+              (unsigned long)publishFailures,
+              maxQueueDepth);
+  }
+
+  LOG_DEBUG("HEALTH", "Uptime: %lu ms, Free heap: %u bytes",
+            getUptimeMs(), ESP.getFreeHeap());
 }
 
 void TimerApplication::updateActivityTime() {
   lastActivityTime = millis();
+}
+
+void TimerApplication::publishQueuedEvents() {
+  // Fast path - nothing to publish
+  if (!shotEventQueue || uxQueueMessagesWaiting(shotEventQueue) == 0) {
+    return;
+  }
+
+  // Check MQTT availability
+  bool mqttReady = mqttManager && mqttManager->canPublish();
+
+  if (!mqttReady) {
+    // MQTT not available - discard buffered events (don't queue when offline)
+    UBaseType_t discarded = uxQueueMessagesWaiting(shotEventQueue);
+    if (discarded > 0) {
+      xQueueReset(shotEventQueue);
+      LOG_DEBUG("QUEUE", "MQTT unavailable - discarded %u queued shots", (unsigned)discarded);
+    }
+    return;
+  }
+
+  // ============================================================
+  // BATCH PUBLISH: Process multiple shots per loop iteration
+  // This is the key optimization for fast BLE events
+  // ============================================================
+  uint16_t processed = 0;
+  NormalizedShotData shot;
+  while (xQueueReceive(shotEventQueue, &shot, 0) == pdTRUE &&
+         processed < AppConfig::MAX_SHOTS_PER_PUBLISH_CYCLE) {
+    // Attempt to publish
+    if (mqttManager->publishShotDetected(shot)) {
+      totalShotsPublished++;
+      LOG_DEBUG("QUEUE", "Published shot #%u", shot.shotNumber);
+    } else {
+      // Publish failed - MQTT might have disconnected
+      publishFailures++;
+      LOG_WARN("QUEUE", "Failed to publish shot #%u", shot.shotNumber);
+      // Stop processing this cycle - let MQTT reconnect
+      break;
+    }
+
+    processed++;
+  }
+
+  // Log batch processing stats
+  if (processed > 1) {
+    LOG_DEBUG("QUEUE", "Batch published %u shots", processed);
+  }
 }
 
 bool TimerApplication::isHealthy() const {
@@ -249,113 +457,141 @@ unsigned long TimerApplication::getUptimeMs() const {
   return millis();
 }
 
-bool TimerApplication::isInitialized() const {
+bool TimerApplication::isRuntimeReady() const {
   bool displayHealthy = displayManager && displayManager->isInitialized();
   bool timerHealthy = timerDevice != nullptr;
 
   return displayHealthy && timerHealthy;
 }
 
-
 void TimerApplication::scanForDevices() {
   unsigned long now = millis();
 
-  // Don't scan during startup message display period
+  // Don't scan during startup message display
   if (now - startupTime < STARTUP_MESSAGE_DELAY) {
     return;
   }
 
-  // Throttle scan attempts
-  if (isScanning || (now - lastScanAttempt < BLE_SCAN_RETRY_INTERVAL_MS)) {
+  // Throttle scan attempts - wait 5 seconds between full scan cycles
+  if (isScanning || (now - lastScanAttempt < 5000)) {
     return;
   }
 
   lastScanAttempt = now;
   isScanning = true;
+  scanResultsReady = false;
 
   if (displayManager) {
     displayManager->showConnectionState(DeviceConnectionState::SCANNING, nullptr);
   }
 
-  LOG_SYSTEM("Scanning for timer devices...");
+  LOG_SYSTEM("Scanning for compatible timer devices...");
 
+  // Unified BLE scan for all device types (MAC-based and UUID-based)
   BLEScan* pScan = BLEDevice::getScan();
   pScan->setActiveScan(true);
   pScan->setInterval(BLE_SCAN_INTERVAL);
   pScan->setWindow(BLE_SCAN_WINDOW);
 
-  // Perform BLE scan - results contain copies of advertised device data
-  BLEScanResults foundDevices = pScan->start(BLE_SCAN_DURATION, false);
+  bool scanStarted = pScan->start(BLE_SCAN_DURATION, onBleScanComplete, false);
+  if (!scanStarted) {
+    LOG_ERROR("BLE", "Failed to start BLE scan");
+    isScanning = false;
+    scanResultsReady = false;
+    return;
+  }
 
-  // Check for SG Timer
-  BLEUUID sgServiceUuid(SGTimerDevice::SERVICE_UUID);
-  // Check for Special Pie Timer
-  BLEUUID specialPieServiceUuid(SpecialPieTimerDevice::SERVICE_UUID);
+  LOG_SYSTEM("BLE scan started (non-blocking)");
+}
+
+void TimerApplication::processScanResults() {
+  scanResultsReady = false;
+
+  BLEScan* pScan = BLEDevice::getScan();
+  BLEScanResults foundDevices = pScan->getResults();
+  LOG_SYSTEM("Scan complete - found %d devices", foundDevices.getCount());
 
   bool deviceFound = false;
 
+  // Check each discovered device against all known device types
   for (int i = 0; i < foundDevices.getCount(); i++) {
     BLEAdvertisedDevice device = foundDevices.getDevice(i);
 
-    // Check for SG Timer (by address)
-    if (device.haveServiceUUID() && device.isAdvertisingService(sgServiceUuid))
-    {
-      LOG_SYSTEM("SG Timer found! Connecting...");
+    // Try MAC-based Special Pie Timer first (highest priority)
+    if (SpecialPieM1A2F::matchesDevice(&device)) {
+      LOG_SYSTEM("Found MAC-based Special Pie Timer (MAC: %s)",
+                 device.getAddress().toString().c_str());
 
-      // Create SG Timer device
-      SGTimerDevice* sgDevice = new SGTimerDevice();
-      timerDevice = std::unique_ptr<ITimerDevice>(sgDevice);
+      SpecialPieM1A2F* macDevice = new SpecialPieM1A2F();
+      timerDevice = std::unique_ptr<ITimerDevice>(macDevice);
       setupCallbacks();
 
-      if (timerDevice->initialize()) {
-        // Attempt connection using SG Timer's connection logic
-        // Device will update state via callbacks (CONNECTING -> CONNECTED)
-        if (sgDevice->attemptConnection(&device)) {
-          LOG_SYSTEM("Successfully connected to SG Timer");
-          deviceFound = true;
-          break;
-        } else {
-          LOG_ERROR("TIMER", "Failed to connect to SG Timer");
-          timerDevice.reset();
-        }
+      if (timerDevice->initialize() && macDevice->attemptConnection(&device)) {
+        LOG_SYSTEM("Successfully connected to Special Pie Timer (MAC-based)");
+        deviceFound = true;
+        break;
       } else {
-        LOG_ERROR("TIMER", "Failed to initialize SG Timer");
+        LOG_ERROR("TIMER", "Failed to connect to MAC-based Special Pie Timer");
         timerDevice.reset();
       }
     }
-    // Check for Special Pie Timer (by service UUID)
-    else if (device.haveServiceUUID() && device.isAdvertisingService(specialPieServiceUuid)) {
-      LOG_SYSTEM("Special Pie Timer found! Connecting...");
+    // Try SG Timer
+    else if (SGTimer::matchesDevice(&device)) {
+      LOG_SYSTEM("Found SG Timer (UUID-based)");
 
-      // Create Special Pie Timer device
-      SpecialPieTimerDevice* specialPieDevice = new SpecialPieTimerDevice();
+      SGTimer* sgDevice = new SGTimer();
+      timerDevice = std::unique_ptr<ITimerDevice>(sgDevice);
+      setupCallbacks();
+
+      if (timerDevice->initialize() && sgDevice->attemptConnection(&device)) {
+        LOG_SYSTEM("Successfully connected to SG Timer");
+        deviceFound = true;
+        break;
+      } else {
+        LOG_ERROR("TIMER", "Failed to connect to SG Timer");
+        timerDevice.reset();
+      }
+    }
+    // Try UUID-based Special Pie Timer
+    else if (SpecialPieM1A2Plus::matchesDevice(&device)) {
+      LOG_SYSTEM("Found UUID-based Special Pie Timer");
+
+      SpecialPieM1A2Plus* specialPieDevice = new SpecialPieM1A2Plus();
       timerDevice = std::unique_ptr<ITimerDevice>(specialPieDevice);
       setupCallbacks();
 
-      if (timerDevice->initialize()) {
-        // Attempt connection
-        // Device will update state via callbacks (CONNECTING -> CONNECTED)
-        if (specialPieDevice->attemptConnection(&device)) {
-          LOG_SYSTEM("Successfully connected to Special Pie Timer");
-          deviceFound = true;
-          break;
-        } else {
-          LOG_ERROR("TIMER", "Failed to connect to Special Pie Timer");
-          timerDevice.reset();
-        }
+      if (timerDevice->initialize() && specialPieDevice->attemptConnection(&device)) {
+        LOG_SYSTEM("Successfully connected to Special Pie Timer");
+        deviceFound = true;
+        break;
       } else {
-        LOG_ERROR("TIMER", "Failed to initialize Special Pie Timer");
+        LOG_ERROR("TIMER", "Failed to connect to Special Pie Timer");
+        timerDevice.reset();
+      }
+    }
+    // Try ASN Tracker
+    else if (ASNTracker::matchesDevice(&device)) {
+      LOG_SYSTEM("Found ASN Tracker");
+
+      ASNTracker* asnDevice = new ASNTracker();
+      timerDevice = std::unique_ptr<ITimerDevice>(asnDevice);
+      setupCallbacks();
+
+      if (timerDevice->initialize() && asnDevice->attemptConnection(&device)) {
+        LOG_SYSTEM("Successfully connected to ASN Tracker");
+        deviceFound = true;
+        break;
+      } else {
+        LOG_ERROR("TIMER", "Failed to connect to ASN Tracker");
         timerDevice.reset();
       }
     }
   }
 
-  // BLEScanResults contains copies of advertised device data
-  // clearResults() properly frees the internal storage after device loop completes
   pScan->clearResults();
 
   if (!deviceFound) {
-    LOG_SYSTEM("No compatible timer devices found. Retrying...");
+    LOG_SYSTEM("No compatible timer devices found. Will retry in 5 seconds...");
   }
 
   isScanning = false;

@@ -1,0 +1,7 @@
+<!-- Simple SVG icon as placeholder - replace with actual icon -->
+<svg width="192" height="192" xmlns="http://www.w3.org/2000/svg">
+  <rect width="192" height="192" fill="#000000"/>
+  <rect x="16" y="64" width="160" height="64" fill="#1a1a1a" stroke="#00ff00" stroke-width="2"/>
+  <text x="96" y="100" font-family="monospace" font-size="20" fill="#00ff00" text-anchor="middle" font-weight="bold">TIMER</text>
+  <text x="96" y="122" font-family="monospace" font-size="16" fill="#ffff00" text-anchor="middle">DISPLAY</text>
+</svg>

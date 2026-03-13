@@ -1,0 +1,285 @@
+#include "SpecialPieM1A2Plus.h"
+#include "Logger.h"
+#include "common.h"
+
+// Static constants
+const char* SpecialPieM1A2Plus::LOG_TAG = "SP-M1A2+";
+const char* SpecialPieM1A2Plus::SERVICE_UUID = "0000FFF0-0000-1000-8000-00805F9B34FB";
+const char* SpecialPieM1A2Plus::CHARACTERISTIC_UUID = "0000FFF1-0000-1000-8000-00805F9B34FB";
+
+// Static instance for callbacks
+SpecialPieM1A2Plus* SpecialPieM1A2Plus::instance = nullptr;
+
+SpecialPieM1A2Plus::SpecialPieM1A2Plus() :
+  BaseTimerDevice("Special Pie Timer"),
+  pNotifyCharacteristic(nullptr),
+  previousTimeSeconds(0),
+  previousTimeCentiseconds(0),
+  hasPreviousShot(false),
+  currentSessionId(0),
+  sessionActiveFlag(false) {
+  instance = this;
+}
+
+SpecialPieM1A2Plus::~SpecialPieM1A2Plus() {
+  disconnect();
+  instance = nullptr;
+}
+
+// Static method to check if advertised device is a Special Pie Timer (UUID-based)
+bool SpecialPieM1A2Plus::matchesDevice(BLEAdvertisedDevice* device) {
+  if (!device || !device->haveServiceUUID()) {
+    return false;
+  }
+
+  BLEUUID serviceUuid(SERVICE_UUID);
+  return device->isAdvertisingService(serviceUuid);
+}
+
+bool SpecialPieM1A2Plus::attemptConnection(BLEAdvertisedDevice* device) {
+  if (!device) {
+    return false;
+  }
+
+  // Disconnect any existing connection before attempting new one
+  disconnect();
+  pNotifyCharacteristic = nullptr;
+  pService = nullptr;
+  isConnectedFlag = false;
+
+  if (device->haveName()) {
+    LOG_INFO(LOG_TAG, "Special Pie Timer found: %s (%s)",
+             device->getName().c_str(),
+             device->getAddress().toString().c_str());
+  } else {
+    LOG_INFO(LOG_TAG, "Special Pie Timer found: %s", device->getAddress().toString().c_str());
+  }
+
+  // Store device info
+  deviceAddress = device->getAddress();
+  if (device->haveName()) {
+    strncpy(deviceName, device->getName().c_str(), sizeof(deviceName)-1);
+    deviceName[sizeof(deviceName)-1] = '\0';
+  } else {
+    strncpy(deviceName, device->getAddress().toString().c_str(), sizeof(deviceName)-1);
+    deviceName[sizeof(deviceName)-1] = '\0';
+  }
+
+  // Brief delay before connection attempt to allow BLE stack to stabilize
+  // Note: This blocking delay is acceptable during initial connection setup
+  LOG_INFO(LOG_TAG, "Waiting %dms before connecting", BLE_CONNECTION_DELAY_MS);
+  delay(BLE_CONNECTION_DELAY_MS);
+
+  setConnectionState(DeviceConnectionState::CONNECTING);
+  pClient = BLEDevice::createClient();
+
+  if (!pClient) {
+    LOG_ERROR(LOG_TAG, "Failed to create BLE client");
+    setConnectionState(DeviceConnectionState::ERROR);
+    return false;
+  }
+
+  LOG_INFO(LOG_TAG, "Attempting connection");
+  if (pClient->connect(device)) {
+    LOG_INFO(LOG_TAG, "Connected to device");
+    BLEUUID serviceUuid(SERVICE_UUID);
+    pService = pClient->getService(serviceUuid);
+
+    if (pService != nullptr) {
+      LOG_INFO(LOG_TAG, "Special Pie Timer service found");
+
+      pNotifyCharacteristic = pService->getCharacteristic(CHARACTERISTIC_UUID);
+
+      if (pNotifyCharacteristic != nullptr) {
+        LOG_INFO(LOG_TAG, "FFF1 characteristic found");
+
+        // Check if characteristic can notify
+        if (pNotifyCharacteristic->canNotify()) {
+          LOG_INFO(LOG_TAG, "Registering for notifications");
+          pNotifyCharacteristic->registerForNotify(notifyCallback);
+          LOG_INFO(LOG_TAG, "Successfully registered for notifications - listening for events");
+          isConnectedFlag = true;
+          lastHeartbeat = millis();
+          setConnectionState(DeviceConnectionState::CONNECTED);
+          return true;
+        } else {
+          LOG_ERROR(LOG_TAG, "Characteristic cannot notify");
+          pClient->disconnect();
+          delete pClient;
+          pClient = nullptr;
+          setConnectionState(DeviceConnectionState::ERROR);
+          return false;
+        }
+      } else {
+        LOG_ERROR(LOG_TAG, "FFF1 characteristic not found");
+        pClient->disconnect();
+        delete pClient;
+        pClient = nullptr;
+        setConnectionState(DeviceConnectionState::ERROR);
+        return false;
+      }
+    } else {
+      LOG_ERROR(LOG_TAG, "Service not found");
+      pClient->disconnect();
+      delete pClient;
+      pClient = nullptr;
+      setConnectionState(DeviceConnectionState::ERROR);
+      return false;
+    }
+  } else {
+    LOG_ERROR(LOG_TAG, "Failed to connect");
+    delete pClient;
+    pClient = nullptr;
+    setConnectionState(DeviceConnectionState::ERROR);
+  }
+
+  return false;
+}
+
+// Static notification callback
+void SpecialPieM1A2Plus::notifyCallback(BLERemoteCharacteristic* pBLERemoteCharacteristic,
+                                          uint8_t* pData, size_t length, bool isNotify) {
+  if (instance && pData && length > 0) {
+    instance->processTimerData(pData, length);
+  }
+}
+
+void SpecialPieM1A2Plus::processTimerData(uint8_t* pData, size_t length) {
+  if (!pData || length == 0) {
+    LOG_WARN(LOG_TAG, "Invalid data received (null or empty)");
+    return;
+  }
+
+  if (Logger::getLevel() <= LogLevel::DEBUG) {
+    LOG_DEBUG(LOG_TAG, "Notification received (%d bytes)", length);
+    for (size_t i = 0; i < length; i++) {
+      Serial.printf("%02X ", pData[i]);
+    }
+    Serial.println();
+  }
+
+  // Special Pie Timer Protocol:
+  // [F8] [F9] [MESSAGE_TYPE] [DATA...] [F9] [F8]
+
+  // Validate frame markers
+  if (length < 6 || pData[0] != 0xF8 || pData[1] != 0xF9 ||
+      pData[length - 2] != 0xF9 || pData[length - 1] != 0xF8) {
+    LOG_WARN(LOG_TAG, "Invalid frame markers");
+    return;
+  }
+
+  SpecialPieMessageType messageType = static_cast<SpecialPieMessageType>(pData[2]);
+
+  switch (messageType) {
+    case SpecialPieMessageType::SESSION_START:
+      if (length >= 6) {
+        currentSessionId = pData[3];
+        LOG_TIMER("SESSION_START - ID: 0x%02X", currentSessionId);
+
+        // Update session state
+        currentSession.sessionId = currentSessionId;
+        currentSession.isActive = true;
+        currentSession.totalShots = 0;
+        currentSession.startTimestamp = millis();
+        currentSession.startDelaySeconds = 0.0f;  // Special Pie doesn't report start delay
+
+        sessionActiveFlag = true;
+        hasPreviousShot = false;
+        previousTimeSeconds = 0;
+        previousTimeCentiseconds = 0;
+
+        // Notify callbacks
+        if (sessionStartedCallback) {
+          sessionStartedCallback(currentSession);
+        }
+
+        // Special Pie doesn't have a separate countdown - immediately signal ready
+        if (countdownCompleteCallback) {
+          countdownCompleteCallback(currentSession);
+        }
+      }
+      break;
+
+    case SpecialPieMessageType::SESSION_STOP:
+      if (length >= 6) {
+        uint8_t sessionId = pData[3];
+        LOG_TIMER("SESSION_STOP - ID: 0x%02X", sessionId);
+
+        currentSession.isActive = false;
+        sessionActiveFlag = false;
+        hasPreviousShot = false;
+
+        if (sessionStoppedCallback) {
+          sessionStoppedCallback(currentSession);
+        }
+      }
+      break;
+
+    case SpecialPieMessageType::SHOT_DETECTED:
+      if (length >= 10) {
+        // Protocol format: F8 F9 36 00 [SEC] [CS] [SHOT#] [CHECKSUM?] F9 F8
+        // Byte 4: Seconds
+        // Byte 5: Centiseconds (0-99)
+        // Byte 6: Shot number
+
+        uint32_t currentSeconds = pData[4];
+        uint32_t currentCentiseconds = pData[5];
+        uint8_t shotNumber = pData[6];
+
+        LOG_DEBUG(LOG_TAG, "SHOT_DETECTED #%u: %u.%02u", shotNumber, currentSeconds, currentCentiseconds);
+
+        // Calculate split time if we have a previous shot
+        uint32_t splitTimeMs = 0;
+        bool isFirstShot = !hasPreviousShot;
+
+        if (hasPreviousShot) {
+          int32_t deltaSeconds = currentSeconds - previousTimeSeconds;
+          int32_t deltaCentiseconds = currentCentiseconds - previousTimeCentiseconds;
+
+          // Handle negative centiseconds (borrow from seconds)
+          if (deltaCentiseconds < 0) {
+            deltaSeconds -= 1;
+            deltaCentiseconds += 100;
+          }
+
+          // Convert to milliseconds (centiseconds = 10ms)
+          splitTimeMs = (deltaSeconds * 1000) + (deltaCentiseconds * 10);
+
+          LOG_DEBUG(LOG_TAG, "Split: %d.%02d", deltaSeconds, deltaCentiseconds);
+        }
+
+        // Store current shot as previous for next split calculation
+        previousTimeSeconds = currentSeconds;
+        previousTimeCentiseconds = currentCentiseconds;
+        hasPreviousShot = true;
+
+        // Convert to milliseconds for absolute time
+        uint32_t absoluteTimeMs = (currentSeconds * 1000) + (currentCentiseconds * 10);
+
+        // Update session shot count
+        // SpecialPieTimer use 0 index shot numbers
+        currentSession.totalShots = shotNumber + 1;
+
+        // Create normalized shot data
+        NormalizedShotData shotData;
+        shotData.sessionId = currentSessionId;
+        shotData.shotNumber = shotNumber + 1;  // Normalize to 1-based
+        shotData.absoluteTimeMs = absoluteTimeMs;
+        shotData.splitTimeMs = splitTimeMs;
+        shotData.timestampMs = millis();
+        strncpy(shotData.deviceModel, deviceModel, sizeof(shotData.deviceModel) - 1);
+        shotData.deviceModel[sizeof(shotData.deviceModel) - 1] = '\0';
+        shotData.isFirstShot = isFirstShot;
+
+        // Notify callback
+        if (shotDetectedCallback) {
+          shotDetectedCallback(shotData);
+        }
+      }
+      break;
+
+    default:
+      LOG_WARN(LOG_TAG, "Unknown message type: 0x%02X", static_cast<uint8_t>(messageType));
+      break;
+  }
+}

@@ -1,16 +1,17 @@
-#include "SGTimerDevice.h"
+#include "SGTimer.h"
 #include "Logger.h"
 #include "common.h"
 
 // Static constants - Service UUIDs for device discovery
-const char* SGTimerDevice::SERVICE_UUID = "7520FFFF-14D2-4CDA-8B6B-697C554C9311";
-const char* SGTimerDevice::CHARACTERISTIC_UUID = "75200001-14D2-4CDA-8B6B-697C554C9311";
-const char* SGTimerDevice::SHOT_LIST_UUID = "75200004-14D2-4CDA-8B6B-697C554C9311";
+const char* SGTimer::LOG_TAG = "SG-TIMER";
+const char* SGTimer::SERVICE_UUID = "7520FFFF-14D2-4CDA-8B6B-697C554C9311";
+const char* SGTimer::CHARACTERISTIC_UUID = "75200001-14D2-4CDA-8B6B-697C554C9311";
+const char* SGTimer::SHOT_LIST_UUID = "75200004-14D2-4CDA-8B6B-697C554C9311";
 
 // Static instance for callbacks
-SGTimerDevice* SGTimerDevice::instance = nullptr;
+SGTimer* SGTimer::instance = nullptr;
 
-SGTimerDevice::SGTimerDevice() :
+SGTimer::SGTimer() :
   BaseTimerDevice("SG Timer"),
   pEventCharacteristic(nullptr),
   previousShotTime(0),
@@ -22,19 +23,25 @@ SGTimerDevice::SGTimerDevice() :
   instance = this;
 }
 
-SGTimerDevice::~SGTimerDevice() {
+SGTimer::~SGTimer() {
   disconnect();
   instance = nullptr;
 }
 
-const char* SGTimerDevice::getLogTag() const {
-  return "SG-TIMER";
+// Static method to check if advertised device is an SG Timer
+bool SGTimer::matchesDevice(BLEAdvertisedDevice* device) {
+  if (!device || !device->haveServiceUUID()) {
+    return false;
+  }
+
+  BLEUUID serviceUuid(SERVICE_UUID);
+  return device->isAdvertisingService(serviceUuid);
 }
 
 // Connect to the already-discovered SG Timer device
-bool SGTimerDevice::attemptConnection(BLEAdvertisedDevice* device) {
+bool SGTimer::attemptConnection(BLEAdvertisedDevice* device) {
   if (!device) {
-    LOG_ERROR("SG-TIMER", "Null device pointer passed to attemptConnection");
+    LOG_ERROR(LOG_TAG, "Null device pointer passed to attemptConnection");
     setConnectionState(DeviceConnectionState::ERROR);
     return false;
   }
@@ -49,69 +56,71 @@ bool SGTimerDevice::attemptConnection(BLEAdvertisedDevice* device) {
   isConnectedFlag = false;
 
   if (device->haveName()) {
-    LOG_BLE("SG Timer found: %s (%s)", device->getAddress().toString().c_str(), device->getName().c_str());
+    LOG_INFO(LOG_TAG, "SG Timer found: %s (%s)", device->getAddress().toString().c_str(), device->getName().c_str());
   } else {
-    LOG_BLE("SG Timer found: %s", device->getAddress().toString().c_str());
+    LOG_INFO(LOG_TAG, "SG Timer found: %s", device->getAddress().toString().c_str());
   }
 
   // Store device information
   deviceAddress = device->getAddress();
   if (device->haveName()) {
-    deviceName = device->getName().c_str();
+    deviceName[sizeof(deviceName)-1] = '\0';
+    strncpy(deviceName, device->getName().c_str(), sizeof(deviceName)-1);
     // Extract model from name (SG-SST4XYYYYY where X is model identifier)
-    if (deviceName.startsWith("SG-SST4") && deviceName.length() > 7) {
-      char modelId = deviceName.charAt(7);
+    if (strncmp(deviceName, "SG-SST4", 7) == 0 && strlen(deviceName) > 7) {
+      char modelId = deviceName[7];
       if (modelId == 'A') {
-        deviceModel = "SG Timer Sport";
+        strncpy(deviceModel, "SG Timer Sport", sizeof(deviceModel)-1);
       } else if (modelId == 'B') {
-        deviceModel = "SG Timer GO";
+        strncpy(deviceModel, "SG Timer GO", sizeof(deviceModel)-1);
       } else {
-        deviceModel = "SG Timer";
+        strncpy(deviceModel, "SG Timer", sizeof(deviceModel)-1);
       }
     }
   } else {
-    deviceName = device->getAddress().toString().c_str();
+    strncpy(deviceName, device->getAddress().toString().c_str(), sizeof(deviceName)-1);
+    deviceName[sizeof(deviceName)-1] = '\0';
   }
 
   // Brief delay before connection attempt to allow BLE stack to stabilize
   // Note: This blocking delay is acceptable during initial connection setup
-  LOG_BLE("Waiting %dms before connecting", BLE_CONNECTION_DELAY_MS);
+  LOG_INFO(LOG_TAG, "Waiting %dms before connecting", BLE_CONNECTION_DELAY_MS);
   delay(BLE_CONNECTION_DELAY_MS);
 
   setConnectionState(DeviceConnectionState::CONNECTING);
   pClient = BLEDevice::createClient();
 
   if (!pClient) {
-    LOG_ERROR("SG-TIMER", "Failed to create BLE client");
+    LOG_ERROR(LOG_TAG, "Failed to create BLE client");
     setConnectionState(DeviceConnectionState::ERROR);
     return false;
   }
 
-  LOG_BLE("Attempting connection");
+  LOG_INFO(LOG_TAG, "Attempting connection");
   if (pClient->connect(device)) {
-    LOG_BLE("Connected to device");
+    LOG_INFO(LOG_TAG, "Connected to device");
     BLEUUID serviceUuid(SERVICE_UUID);
     pService = pClient->getService(serviceUuid);
 
     if (pService != nullptr) {
-      LOG_BLE("Service found");
+      LOG_INFO(LOG_TAG, "Service found");
 
       pEventCharacteristic = pService->getCharacteristic(CHARACTERISTIC_UUID);
 
       if (pEventCharacteristic != nullptr) {
-        LOG_BLE("EVENT characteristic found");
+        LOG_INFO(LOG_TAG, "EVENT characteristic found");
 
         // Check if characteristic can notify
         if (pEventCharacteristic->canNotify()) {
-          LOG_BLE("Registering for notifications");
+          LOG_INFO(LOG_TAG, "Registering for notifications");
           pEventCharacteristic->registerForNotify(notifyCallback);
-          LOG_BLE("Successfully registered for notifications - listening for events");
+          LOG_INFO(LOG_TAG, "Successfully registered for notifications - listening for events");
           isConnectedFlag = true;
           lastHeartbeat = millis();
           setConnectionState(DeviceConnectionState::CONNECTED);
           return true;
         } else {
-          LOG_ERROR("SG-TIMER", "Characteristic cannot notify");
+          LOG_ERROR(LOG_TAG, "Characteristic cannot notify");
           pClient->disconnect();
           delete pClient;
           pClient = nullptr;
@@ -119,7 +128,7 @@ bool SGTimerDevice::attemptConnection(BLEAdvertisedDevice* device) {
           return false;
         }
       } else {
-        LOG_ERROR("SG-TIMER", "EVENT characteristic not found");
+        LOG_ERROR(LOG_TAG, "EVENT characteristic not found");
         pClient->disconnect();
         delete pClient;
         pClient = nullptr;
@@ -127,7 +136,7 @@ bool SGTimerDevice::attemptConnection(BLEAdvertisedDevice* device) {
         return false;
       }
     } else {
-      LOG_ERROR("SG-TIMER", "Service not found");
+      LOG_ERROR(LOG_TAG, "Service not found");
       pClient->disconnect();
       delete pClient;
       pClient = nullptr;
@@ -135,7 +144,7 @@ bool SGTimerDevice::attemptConnection(BLEAdvertisedDevice* device) {
       return false;
     }
   } else {
-    LOG_ERROR("SG-TIMER", "Failed to connect");
+    LOG_ERROR(LOG_TAG, "Failed to connect");
     delete pClient;
     pClient = nullptr;
     setConnectionState(DeviceConnectionState::ERROR);
@@ -144,21 +153,21 @@ bool SGTimerDevice::attemptConnection(BLEAdvertisedDevice* device) {
 }
 
 // Static notification callback
-void SGTimerDevice::notifyCallback(BLERemoteCharacteristic* pBLERemoteCharacteristic,
+void SGTimer::notifyCallback(BLERemoteCharacteristic* pBLERemoteCharacteristic,
                                   uint8_t* pData, size_t length, bool isNotify) {
   if (instance && pData && length > 0) {
     instance->processTimerData(pData, length);
   }
 }
 
-void SGTimerDevice::processTimerData(uint8_t* pData, size_t length) {
+void SGTimer::processTimerData(uint8_t* pData, size_t length) {
   if (!pData || length == 0) {
-    LOG_WARN("SG-TIMER", "Invalid data received (null or empty)");
+    LOG_WARN(LOG_TAG, "Invalid data received (null or empty)");
     return;
   }
 
   if (Logger::getLevel() <= LogLevel::DEBUG) {
-    LOG_DEBUG("SG-TIMER", "Notification received (%d bytes)", length);
+    LOG_DEBUG(LOG_TAG, "Notification received (%d bytes)", length);
     for (size_t i = 0; i < length; i++) {
       Serial.printf("%02X ", pData[i]);
     }
@@ -170,7 +179,7 @@ void SGTimerDevice::processTimerData(uint8_t* pData, size_t length) {
     // Validate packet length field (len = number of bytes after length byte)
     uint8_t len = pData[0];
     if (len != length - 1) {
-      LOG_ERROR("SG-TIMER", "Length mismatch: len field = %u, actual = %u. Discarding packet.", len, length - 1);
+      LOG_ERROR(LOG_TAG, "Length mismatch: len field = %u, actual = %u. Discarding packet.", len, length - 1);
       return;
     }
 
@@ -181,7 +190,7 @@ void SGTimerDevice::processTimerData(uint8_t* pData, size_t length) {
         if (length >= 8) {
           uint32_t sess_id = (pData[2] << 24) | (pData[3] << 16) | (pData[4] << 8) | pData[5];
           uint16_t start_delay = (pData[6] << 8) | pData[7];
-          LOG_TIMER("SESSION_STARTED - ID: %u, Delay: %.1fs", sess_id, start_delay * 0.1);
+          LOG_INFO(LOG_TAG, "SESSION_STARTED - ID: %u, Delay: %.1fs", sess_id, start_delay * 0.1);
 
           // Update session state
           currentSession.sessionId = sess_id;
@@ -205,7 +214,7 @@ void SGTimerDevice::processTimerData(uint8_t* pData, size_t length) {
         if (length >= 8) {
           uint32_t sess_id = (pData[2] << 24) | (pData[3] << 16) | (pData[4] << 8) | pData[5];
           uint16_t total_shots = (pData[6] << 8) | pData[7];
-          LOG_TIMER("SESSION_SUSPENDED - ID: %u, Total shots: %u", sess_id, total_shots);
+          LOG_INFO(LOG_TAG, "SESSION_SUSPENDED - ID: %u, Total shots: %u", sess_id, total_shots);
 
           currentSession.totalShots = total_shots;
           if (sessionSuspendedCallback) {
@@ -218,7 +227,7 @@ void SGTimerDevice::processTimerData(uint8_t* pData, size_t length) {
         if (length >= 8) {
           uint32_t sess_id = (pData[2] << 24) | (pData[3] << 16) | (pData[4] << 8) | pData[5];
           uint16_t total_shots = (pData[6] << 8) | pData[7];
-          LOG_TIMER("SESSION_RESUMED - ID: %u, Total shots: %u", sess_id, total_shots);
+          LOG_INFO(LOG_TAG, "SESSION_RESUMED - ID: %u, Total shots: %u", sess_id, total_shots);
 
           currentSession.totalShots = total_shots;
           if (sessionResumedCallback) {
@@ -232,10 +241,10 @@ void SGTimerDevice::processTimerData(uint8_t* pData, size_t length) {
           uint32_t sess_id = (pData[2] << 24) | (pData[3] << 16) | (pData[4] << 8) | pData[5];
           uint16_t total_shots = (pData[6] << 8) | pData[7];
           if (hasLastShot) {
-            LOG_TIMER("SESSION_STOPPED - ID: %u, Total shots: %u, Last: #%u at %u:%02u",
+            LOG_INFO(LOG_TAG, "SESSION_STOPPED - ID: %u, Total shots: %u, Last: #%u at %u:%02u",
                      sess_id, total_shots, lastShotNum + 1, lastShotSeconds, lastShotHundredths);
           } else {
-            LOG_TIMER("SESSION_STOPPED - ID: %u, Total shots: %u", sess_id, total_shots);
+            LOG_INFO(LOG_TAG, "SESSION_STOPPED - ID: %u, Total shots: %u", sess_id, total_shots);
           }
 
           currentSession.isActive = false;
@@ -262,7 +271,7 @@ void SGTimerDevice::processTimerData(uint8_t* pData, size_t length) {
           uint32_t seconds = shot_time_ms / 1000;
           uint32_t hundredths = (shot_time_ms % 1000) / 10;
 
-          LOG_DEBUG("SG-TIMER", "SHOT_DETECTED #%u: %u:%02u", shot_num + 1, seconds, hundredths);
+          LOG_DEBUG(LOG_TAG, "SHOT_DETECTED #%u: %u:%02u", shot_num + 1, seconds, hundredths);
 
           // Store as last shot
           lastShotNum = shot_num;
@@ -290,7 +299,8 @@ void SGTimerDevice::processTimerData(uint8_t* pData, size_t length) {
           shotData.absoluteTimeMs = shot_time_ms;
           shotData.splitTimeMs = splitTime;
           shotData.timestampMs = millis();
-          shotData.deviceModel = deviceModel.c_str();
+          strncpy(shotData.deviceModel, deviceModel, sizeof(shotData.deviceModel) - 1);
+          shotData.deviceModel[sizeof(shotData.deviceModel) - 1] = '\0';
           shotData.isFirstShot = isFirstShot;
 
           // Notify callback
@@ -303,7 +313,7 @@ void SGTimerDevice::processTimerData(uint8_t* pData, size_t length) {
       case SGTimerEvent::SESSION_SET_BEGIN:
         if (length >= 6) {
           uint32_t sess_id = (pData[2] << 24) | (pData[3] << 16) | (pData[4] << 8) | pData[5];
-          LOG_TIMER("SESSION_SET_BEGIN - ID: %u (countdown complete)", sess_id);
+          LOG_INFO(LOG_TAG, "SESSION_SET_BEGIN - ID: %u (countdown complete)", sess_id);
 
           // Notify callback that countdown has completed
           if (countdownCompleteCallback) {
@@ -313,7 +323,7 @@ void SGTimerDevice::processTimerData(uint8_t* pData, size_t length) {
         break;
 
       default:
-        LOG_WARN("SG-TIMER", "Unknown event ID: 0x%02X", static_cast<uint8_t>(event_id));
+        LOG_WARN(LOG_TAG, "Unknown event ID: 0x%02X", static_cast<uint8_t>(event_id));
         break;
     }
   }

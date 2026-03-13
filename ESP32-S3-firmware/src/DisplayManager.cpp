@@ -1,4 +1,5 @@
 #include "DisplayManager.h"
+#include "WiFiConfig.h"
 #include "Logger.h"
 #include <stdio.h>
 #include <U8g2_for_Adafruit_GFX.h>
@@ -232,7 +233,7 @@ void DisplayManager::showStartup() {
   // Calculate text width for scrolling
   // Uses character count estimate: ~15 pixels per char for u8g2_font_luRS18_tr
   // This is reliable for embedded systems and avoids font metric overhead
-  const char *startupText = STARTUP_TEXT;
+  const char *startupText = WiFiConfig::getStartupText();
   startupTextPixelWidth = strlen(startupText) * 15;
   LOG_DISPLAY("Startup text: \"%s\"", startupText);
   LOG_DISPLAY("Text length: %d chars, estimated width: %d pixels", strlen(startupText), startupTextPixelWidth);
@@ -357,7 +358,7 @@ void DisplayManager::renderStartupMessage() {
   u8g2_for_adafruit_gfx.setForegroundColor(DisplayColors::GREEN);
   u8g2_for_adafruit_gfx.setFont(u8g2_font_luRS18_tr);
 
-  const char *startupText = STARTUP_TEXT;
+  const char *startupText = WiFiConfig::getStartupText();
 
   // If text fits on screen, just display it normally
   if (startupTextPixelWidth <= displayWidth - 8) {
@@ -455,8 +456,9 @@ void DisplayManager::renderConnectionStatus() {
       u8g2_for_adafruit_gfx.print(deviceName);
     }
   } else {
+    const char* startupText = WiFiConfig::getStartupText();
     u8g2_for_adafruit_gfx.setCursor(0, lineY);
-    u8g2_for_adafruit_gfx.print(F(STARTUP_TEXT));
+    u8g2_for_adafruit_gfx.print((startupText && startupText[0] != '\0') ? startupText : STARTUP_TEXT);
   }
 }
 
@@ -477,10 +479,10 @@ void DisplayManager::renderCountdown() {
   u8g2_for_adafruit_gfx.setFontDirection(0);
 
   // Header text
-  u8g2_for_adafruit_gfx.setForegroundColor(DisplayColors::YELLOW);
-  u8g2_for_adafruit_gfx.setFont(u8g2_font_helvR10_tf);
-  u8g2_for_adafruit_gfx.setCursor(0, 12);
-  u8g2_for_adafruit_gfx.print(F("READY"));
+  // u8g2_for_adafruit_gfx.setForegroundColor(DisplayColors::YELLOW);
+  // u8g2_for_adafruit_gfx.setFont(u8g2_font_helvR10_tf);
+  // u8g2_for_adafruit_gfx.setCursor(0, 12);
+  // u8g2_for_adafruit_gfx.print(F("READY"));
 
   // Large countdown timer
   char timeBuffer[16];
@@ -508,7 +510,7 @@ void DisplayManager::renderCountdown() {
   int16_t xPos = (PANEL_WIDTH * PANEL_CHAIN - textWidth) / 2;
   if (xPos < 0) xPos = 0;
 
-  u8g2_for_adafruit_gfx.setCursor(xPos, 30);
+  u8g2_for_adafruit_gfx.setCursor(xPos, 24);
   u8g2_for_adafruit_gfx.print(timeBuffer);
 }
 
@@ -584,7 +586,7 @@ void DisplayManager::formatTime(uint32_t timeMs, char* buffer, size_t bufferSize
   const uint32_t centiseconds = (timeMs % 1000) / 10;  // Get hundredths of a second (0-99)
 
   // Format as "ss:cc" where ss = seconds, cc = centiseconds (always 2 digits each)
-  snprintf(buffer, bufferSize, "%02lu:%02lu", totalSeconds, centiseconds);
+  snprintf(buffer, bufferSize, "%02lu:%02lu", (unsigned long)totalSeconds, (unsigned long)centiseconds);
 }
 
 void DisplayManager::formatSplitTime(uint32_t timeMs, char* buffer, size_t bufferSize) {
@@ -594,8 +596,8 @@ void DisplayManager::formatSplitTime(uint32_t timeMs, char* buffer, size_t buffe
 
   // Format as "s:cc" when < 10 seconds, "ss:cc" when >= 10 seconds
   if (totalSeconds < 10) {
-    snprintf(buffer, bufferSize, "%lu:%02lu", totalSeconds, centiseconds);
+    snprintf(buffer, bufferSize, "%lu:%02lu", (unsigned long)totalSeconds, (unsigned long)centiseconds);
   } else {
-    snprintf(buffer, bufferSize, "%02lu:%02lu", totalSeconds, centiseconds);
+    snprintf(buffer, bufferSize, "%02lu:%02lu", (unsigned long)totalSeconds, (unsigned long)centiseconds);
   }
 }
