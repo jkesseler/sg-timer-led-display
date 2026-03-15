@@ -25,6 +25,9 @@ struct BridgeStatus {
   uint32_t crcErrors = 0;
   bool mqttConnected = false;
   uint16_t bleClients = 0;
+  bool hasLastShot = false;
+  uint16_t lastShotNumber = 0;
+  uint32_t lastShotTimeMs = 0;
 
   // Common
   bool wifiConnected = false;

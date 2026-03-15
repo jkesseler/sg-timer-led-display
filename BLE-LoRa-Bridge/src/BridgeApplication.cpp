@@ -63,6 +63,12 @@ bool BridgeApplication::initialize() {
 
   startupTime = millis();
   lastActivityTime = millis();
+
+  // Force initial OLED draw with role info before the main loop starts
+  bridgeStatus.role = role;
+  bridgeStatus.outputMode = outputMode;
+  oled.update(bridgeStatus);
+
   LOG_SYSTEM("Bridge initialized successfully");
   return true;
 }
@@ -81,8 +87,7 @@ void BridgeApplication::initTransmitter() {
     LOG_ERROR("SYSTEM", "LoRa TX init failed");
   }
 
-  LOG_SYSTEM("Transmitter ready — scanning for timer: %s",
-             BridgeWiFiConfig::getTimerTypeString());
+  LOG_SYSTEM("Transmitter ready — scanning for all timer types (auto)");
 }
 
 // ═════════════════════════════════════════════════════════════
@@ -194,18 +199,12 @@ void BridgeApplication::processScanResults() {
   BLEScanResults found = pScan->getResults();
   LOG_SYSTEM("Scan complete — %d devices found", found.getCount());
 
-  const char* targetType = BridgeWiFiConfig::getTimerTypeString();
   bool deviceFound = false;
 
   for (int i = 0; i < found.getCount(); i++) {
     BLEAdvertisedDevice device = found.getDevice(i);
 
-    // Match based on configured timer type (or try all if unspecified)
-    bool trySpecialPieF   = (strcmp(targetType, "special-pie-m1a2f") == 0 || targetType[0] == '\0');
-    bool trySGTimer       = (strcmp(targetType, "sg-timer") == 0 || targetType[0] == '\0');
-    bool trySpecialPiePlus = (strcmp(targetType, "special-pie-m1a2plus") == 0 || targetType[0] == '\0');
-
-    if (trySpecialPieF && SpecialPieM1A2F::matchesDevice(&device)) {
+    if (SpecialPieM1A2F::matchesDevice(&device)) {
       LOG_SYSTEM("Found Special Pie Timer (MAC: %s)", device.getAddress().toString().c_str());
       SpecialPieM1A2F* dev = new SpecialPieM1A2F();
       timerDevice = std::unique_ptr<ITimerDevice>(dev);
@@ -216,7 +215,7 @@ void BridgeApplication::processScanResults() {
       }
       timerDevice.reset();
     }
-    else if (trySGTimer && SGTimer::matchesDevice(&device)) {
+    else if (SGTimer::matchesDevice(&device)) {
       LOG_SYSTEM("Found SG Timer");
       SGTimer* dev = new SGTimer();
       timerDevice = std::unique_ptr<ITimerDevice>(dev);
@@ -227,7 +226,7 @@ void BridgeApplication::processScanResults() {
       }
       timerDevice.reset();
     }
-    else if (trySpecialPiePlus && SpecialPieM1A2Plus::matchesDevice(&device)) {
+    else if (SpecialPieM1A2Plus::matchesDevice(&device)) {
       LOG_SYSTEM("Found Special Pie Timer (UUID)");
       SpecialPieM1A2Plus* dev = new SpecialPieM1A2Plus();
       timerDevice = std::unique_ptr<ITimerDevice>(dev);
@@ -351,7 +350,9 @@ void BridgeApplication::onLoRaShotReceived(const LoRaProtocol::ParsedPacket& pkt
             pkt.shot.splitTimeMs / 1000.0,
             pkt.sourceId);
 
-  bridgeStatus.shotsRx++;
+  bridgeStatus.hasLastShot = true;
+  bridgeStatus.lastShotNumber = pkt.shot.shotNumber;
+  bridgeStatus.lastShotTimeMs = pkt.shot.absoluteTimeMs;
   lastActivityTime = millis();
 
   if (outputMode == ReceiverOutputMode::MQTT_OUTPUT) {

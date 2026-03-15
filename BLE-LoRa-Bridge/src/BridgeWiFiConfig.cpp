@@ -25,7 +25,6 @@ bool BridgeWiFiConfig::wifiConnected = false;
 unsigned long BridgeWiFiConfig::lastConnectionCheck = 0;
 
 char BridgeWiFiConfig::device_role[12]    = "transmitter";
-char BridgeWiFiConfig::timer_type[24]     = "sg-timer";
 char BridgeWiFiConfig::output_mode[18]    = "mqtt";
 char BridgeWiFiConfig::mqtt_server[41]    = MQTT_BROKER_IP;
 char BridgeWiFiConfig::mqtt_port[7]       = "1883";
@@ -33,7 +32,6 @@ char BridgeWiFiConfig::mqtt_user[41]      = MQTT_USER;
 char BridgeWiFiConfig::mqtt_password[41]  = MQTT_PASSWORD;
 
 WiFiManagerParameter* BridgeWiFiConfig::customDeviceRole   = nullptr;
-WiFiManagerParameter* BridgeWiFiConfig::customTimerType    = nullptr;
 WiFiManagerParameter* BridgeWiFiConfig::customOutputMode   = nullptr;
 WiFiManagerParameter* BridgeWiFiConfig::customMqttServer   = nullptr;
 WiFiManagerParameter* BridgeWiFiConfig::customMqttPort     = nullptr;
@@ -52,7 +50,6 @@ void BridgeWiFiConfig::loadConfiguration() {
   prefs.begin("bridge-cfg", true);
 
   prefs.getString("device_role", "transmitter").toCharArray(device_role, sizeof(device_role));
-  prefs.getString("timer_type",  "sg-timer").toCharArray(timer_type, sizeof(timer_type));
   prefs.getString("output_mode", "mqtt").toCharArray(output_mode, sizeof(output_mode));
   prefs.getString("mqtt_server", MQTT_BROKER_IP).toCharArray(mqtt_server, sizeof(mqtt_server));
   prefs.getString("mqtt_port",   String(MQTT_BROKER_PORT)).toCharArray(mqtt_port, sizeof(mqtt_port));
@@ -63,7 +60,6 @@ void BridgeWiFiConfig::loadConfiguration() {
 
   LOG_SYSTEM("Bridge configuration loaded from NVS:");
   LOG_SYSTEM("  Role: %s", device_role);
-  LOG_SYSTEM("  Timer Type: %s", timer_type);
   LOG_SYSTEM("  Output Mode: %s", output_mode);
   LOG_SYSTEM("  MQTT Server: %s", mqtt_server);
   LOG_SYSTEM("  MQTT Port: %s", mqtt_port);
@@ -78,7 +74,6 @@ void BridgeWiFiConfig::saveConfiguration() {
   Preferences prefs;
   prefs.begin("bridge-cfg", false);
   prefs.putString("device_role", device_role);
-  prefs.putString("timer_type",  timer_type);
   prefs.putString("output_mode", output_mode);
   prefs.putString("mqtt_server", mqtt_server);
   prefs.putString("mqtt_port",   mqtt_port);
@@ -98,7 +93,6 @@ void BridgeWiFiConfig::initialize() {
   // Create custom parameters for the web portal
   // Descriptions guide the user on valid values
   customDeviceRole   = new WiFiManagerParameter("device_role",   "Role (transmitter/receiver)",          device_role,   sizeof(device_role) - 1);
-  customTimerType    = new WiFiManagerParameter("timer_type",    "Timer (sg-timer/special-pie-m1a2plus/special-pie-m1a2f)", timer_type, sizeof(timer_type) - 1);
   customOutputMode   = new WiFiManagerParameter("output_mode",   "Output (mqtt/ble-special-pie)",        output_mode,   sizeof(output_mode) - 1);
   customMqttServer   = new WiFiManagerParameter("mqtt_server",   "MQTT Server",                          mqtt_server,   sizeof(mqtt_server) - 1);
   customMqttPort     = new WiFiManagerParameter("mqtt_port",     "MQTT Port",                            mqtt_port,     sizeof(mqtt_port) - 1);
@@ -106,7 +100,6 @@ void BridgeWiFiConfig::initialize() {
   customMqttPassword = new WiFiManagerParameter("mqtt_password", "MQTT Password",                        mqtt_password, sizeof(mqtt_password) - 1);
 
   wifiManager.addParameter(customDeviceRole);
-  wifiManager.addParameter(customTimerType);
   wifiManager.addParameter(customOutputMode);
   wifiManager.addParameter(customMqttServer);
   wifiManager.addParameter(customMqttPort);
@@ -115,7 +108,6 @@ void BridgeWiFiConfig::initialize() {
 
   wifiManager.setSaveParamsCallback([]() {
     copyIfProvided(device_role,   sizeof(device_role),   customDeviceRole,   "device_role");
-    copyIfProvided(timer_type,    sizeof(timer_type),    customTimerType,    "timer_type");
     copyIfProvided(output_mode,   sizeof(output_mode),   customOutputMode,   "output_mode");
     copyIfProvided(mqtt_server,   sizeof(mqtt_server),   customMqttServer,   "mqtt_server");
     copyIfProvided(mqtt_port,     sizeof(mqtt_port),     customMqttPort,     "mqtt_port");
@@ -185,10 +177,6 @@ BridgeRole BridgeWiFiConfig::getDeviceRole() {
 ReceiverOutputMode BridgeWiFiConfig::getOutputMode() {
   if (strcmp(output_mode, "ble-special-pie") == 0) return ReceiverOutputMode::BLE_SPECIAL_PIE;
   return ReceiverOutputMode::MQTT_OUTPUT;
-}
-
-const char* BridgeWiFiConfig::getTimerTypeString() {
-  return timer_type;
 }
 
 const char* BridgeWiFiConfig::getMqttServer() {

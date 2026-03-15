@@ -107,13 +107,11 @@ enum class ReceiverOutputMode : uint8_t {
 #define SHOT_LIST_READ_DELAY  10
 
 #define STARTUP_TEXT  "J.K. PewPew LoRa"
-
-#define EMPTY_DEVICE_ID "000000"
 #define EMPTY_DEVICE_ID "000000"
 
 // Timer type defines (referenced by shared ESP32-S3-firmware code)
 #define TIMER_TYPE_BLE  1
 #define TIMER_TYPE_MQTT 2
-#define TIMER_TYPE      TIMER_TYPE_BLE
+#define TIMER_TYPE TIMER_TYPE_BLE
 
 #endif // COMMON_H

@@ -89,32 +89,37 @@ void OledDisplay::drawTransmitterView(const BridgeStatus& status) {
 }
 
 void OledDisplay::drawReceiverView(const BridgeStatus& status) {
-  // Row 0: Role + output mode
+  // Row 0: Role + output mode (large)
   display->setFont(ArialMT_Plain_16);
-  if (status.outputMode == ReceiverOutputMode::MQTT_OUTPUT) {
-    display->drawString(0, 0, "RX  LoRa->MQTT");
-  } else {
-    display->drawString(0, 0, "RX  LoRa->BLE");
-  }
+  String heading = (status.outputMode == ReceiverOutputMode::MQTT_OUTPUT)
+    ? "RX  LoRa->MQTT"
+    : "RX  LoRa->BLE";
+  display->drawString(0, 0, heading);
 
   display->setFont(ArialMT_Plain_10);
 
-  // Row 1: LoRa status
-  String rssiStr = (status.shotsRx > 0)
-    ? String("RSSI: ") + String(status.lastRssi) + "dBm"
-    : "Waiting for LoRa...";
-  display->drawString(0, 18, rssiStr);
+  // Row 1: Last shot or waiting message
+  if (status.hasLastShot) {
+    char shotBuf[24];
+    snprintf(shotBuf, sizeof(shotBuf), "#%u  %.3fs",
+             status.lastShotNumber, status.lastShotTimeMs / 1000.0f);
+    display->drawString(0, 18, shotBuf);
+  } else {
+    display->drawString(0, 18, "Waiting for LoRa...");
+  }
 
-  // Row 2: Counters
-  display->drawString(0, 30, String("Shots RX: ") + String(status.shotsRx));
+  // Row 2: Shot count + RSSI
+  String row2 = String("RX:") + String(status.shotsRx);
+  if (status.shotsRx > 0) {
+    row2 += String("  ") + String(status.lastRssi) + "dBm";
+  }
+  display->drawString(0, 30, row2);
 
   // Row 2 right: output-specific status
   if (status.outputMode == ReceiverOutputMode::MQTT_OUTPUT) {
-    String mqttStr = status.mqttConnected ? "MQTT: OK" : "MQTT: --";
-    display->drawString(80, 30, mqttStr);
+    display->drawString(80, 30, status.mqttConnected ? "MQTT:OK" : "MQTT:--");
   } else {
-    String bleStr = String("Clients: ") + String(status.bleClients);
-    display->drawString(80, 30, bleStr);
+    display->drawString(80, 30, String("BLE:") + String(status.bleClients));
   }
 }
 
@@ -148,6 +153,8 @@ bool OledDisplay::statusChanged(const BridgeStatus& a, const BridgeStatus& b) co
   if (a.bleClients != b.bleClients) return true;
   if (a.wifiConnected != b.wifiConnected) return true;
   if (a.crcErrors != b.crcErrors) return true;
+  if (a.hasLastShot != b.hasLastShot) return true;
+  if (a.lastShotNumber != b.lastShotNumber) return true;
 
   // Uptime changes every second — throttle redraw to 1s
   if ((a.uptimeMs / 1000) != (b.uptimeMs / 1000)) return true;

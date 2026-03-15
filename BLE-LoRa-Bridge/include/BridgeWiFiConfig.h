@@ -21,7 +21,6 @@ private:
 
   // Runtime configuration values (NVS-backed)
   static char device_role[12];     // "transmitter" / "receiver"
-  static char timer_type[24];      // "sg-timer" / "special-pie-m1a2plus" / "special-pie-m1a2f"
   static char output_mode[18];     // "mqtt" / "ble-special-pie"
   static char mqtt_server[41];
   static char mqtt_port[7];
@@ -36,7 +35,6 @@ private:
 
   // WiFiManager custom parameters (persistent while portal is active)
   static WiFiManagerParameter* customDeviceRole;
-  static WiFiManagerParameter* customTimerType;
   static WiFiManagerParameter* customOutputMode;
   static WiFiManagerParameter* customMqttServer;
   static WiFiManagerParameter* customMqttPort;
@@ -58,7 +56,6 @@ public:
   // Accessors
   static BridgeRole getDeviceRole();
   static ReceiverOutputMode getOutputMode();
-  static const char* getTimerTypeString();
 
   // MQTT settings (Receiver MQTT mode)
   static const char* getMqttServer();
