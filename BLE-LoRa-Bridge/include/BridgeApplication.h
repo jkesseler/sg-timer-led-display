@@ -54,7 +54,6 @@ private:
   BridgeStatus bridgeStatus;
 
   // Health
-  unsigned long lastHealthCheck = 0;
   unsigned long lastActivityTime = 0;
 
   // ─── Transmitter helpers ───

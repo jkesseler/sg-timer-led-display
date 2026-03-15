@@ -12,7 +12,7 @@
  * and MQTT settings. Configuration is stored in NVS under "bridge-cfg".
  *
  * Configuration portal available at 192.168.4.1 when in AP mode.
- * AP SSID: "J.K. PewPew LoRa Bridge AP"
+ * AP SSID: "J.K. PewPew Bridge AP"
  */
 class BridgeWiFiConfig {
 private:
@@ -20,8 +20,8 @@ private:
   static unsigned long lastConnectionCheck;
 
   // Runtime configuration values (NVS-backed)
-  static char device_role[12];     // "transmitter" / "receiver"
-  static char output_mode[18];     // "mqtt" / "ble-special-pie"
+  static char device_role[4];      // "0" = transmitter, "1" = receiver
+  static char output_mode[4];      // "0" = mqtt, "1" = ble-special-pie
   static char mqtt_server[41];
   static char mqtt_port[7];
   static char mqtt_user[41];
@@ -30,7 +30,7 @@ private:
   static constexpr unsigned long CONNECTION_CHECK_INTERVAL = 5000;
   static constexpr unsigned long WIFI_CONNECT_TIMEOUT = 60;
   static constexpr unsigned long WIFI_PORTAL_TIMEOUT = 0;
-  static constexpr const char* AP_SSID = "J.K. PewPew LoRa Bridge AP";
+  static char apSsid[52];  // Built at runtime: base name + device ID
   static constexpr int WIFI_TX_POWER = 80;
 
   // WiFiManager custom parameters (persistent while portal is active)

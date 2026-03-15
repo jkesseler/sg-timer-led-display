@@ -4,7 +4,7 @@
 #include <cstdint>
 
 // =============================================================================
-// BLE-LoRa Bridge — LilyGo LoRa32 T3 v1.6.1 Hardware & Application Constants
+// BLE-Bridge — LilyGo LoRa32 T3 v1.6.1 Hardware & Application Constants
 // =============================================================================
 
 // =============================================================================
@@ -82,7 +82,7 @@ enum class ReceiverOutputMode : uint8_t {
 // =============================================================================
 // BLE Configuration (Transmitter role — shared with ESP32-S3-firmware headers)
 // =============================================================================
-#define BLE_DEVICE_NAME           "J.K. PewPew LoRa Bridge"
+#define BLE_DEVICE_NAME           "J.K. PewPew Bridge"
 #define BLE_SCAN_DURATION         10
 #define BLE_RECONNECT_INTERVAL    5000
 #define BLE_SCAN_INTERVAL         1349
@@ -108,10 +108,5 @@ enum class ReceiverOutputMode : uint8_t {
 
 #define STARTUP_TEXT  "J.K. PewPew LoRa"
 #define EMPTY_DEVICE_ID "000000"
-
-// Timer type defines (referenced by shared ESP32-S3-firmware code)
-#define TIMER_TYPE_BLE  1
-#define TIMER_TYPE_MQTT 2
-#define TIMER_TYPE TIMER_TYPE_BLE
 
 #endif // COMMON_H

@@ -209,7 +209,7 @@ bool deserialize(const uint8_t* data, size_t len, ParsedPacket& out) {
       out.shot.isFirstShot    = (payload[14] != 0);
       // Copy model string (16 bytes, may not be null-terminated in packet)
       memcpy(out.shot.deviceModel, &payload[15], 16);
-      out.shot.deviceModel[sizeof(out.shot.deviceModel) - 1] = '\0';
+      out.shot.deviceModel[16] = '\0';
       out.shot.timestampMs = millis();  // Local receive timestamp
       // sessionId also stored at packet level
       out.sessionId = out.shot.sessionId;

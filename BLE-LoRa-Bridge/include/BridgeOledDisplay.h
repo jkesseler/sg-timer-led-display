@@ -42,6 +42,7 @@ struct BridgeStatus {
  */
 class OledDisplay {
 public:
+  ~OledDisplay();
   bool initialize();
   void update(const BridgeStatus& status);
   void showStartupMessage(const char* message);

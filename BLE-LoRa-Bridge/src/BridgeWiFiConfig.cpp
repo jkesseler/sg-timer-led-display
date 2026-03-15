@@ -2,6 +2,7 @@
 #include <Preferences.h>
 #include <WiFi.h>
 #include "common.h"
+#include "DeviceId.h"
 
 namespace {
 int sanitizeMqttPort(int port) {
@@ -23,9 +24,10 @@ void copyIfProvided(char* dest, size_t destSize, const WiFiManagerParameter* par
 // Static member initialization
 bool BridgeWiFiConfig::wifiConnected = false;
 unsigned long BridgeWiFiConfig::lastConnectionCheck = 0;
+char BridgeWiFiConfig::apSsid[52] = "J.K. PewPew Long Range Bridge AP";
 
-char BridgeWiFiConfig::device_role[12]    = "transmitter";
-char BridgeWiFiConfig::output_mode[18]    = "mqtt";
+char BridgeWiFiConfig::device_role[4]     = "0";
+char BridgeWiFiConfig::output_mode[4]     = "0";
 char BridgeWiFiConfig::mqtt_server[41]    = MQTT_BROKER_IP;
 char BridgeWiFiConfig::mqtt_port[7]       = "1883";
 char BridgeWiFiConfig::mqtt_user[41]      = MQTT_USER;
@@ -49,8 +51,8 @@ void BridgeWiFiConfig::loadConfiguration() {
   Preferences prefs;
   prefs.begin("bridge-cfg", true);
 
-  prefs.getString("device_role", "transmitter").toCharArray(device_role, sizeof(device_role));
-  prefs.getString("output_mode", "mqtt").toCharArray(output_mode, sizeof(output_mode));
+  prefs.getString("device_role", "0").toCharArray(device_role, sizeof(device_role));
+  prefs.getString("output_mode", "0").toCharArray(output_mode, sizeof(output_mode));
   prefs.getString("mqtt_server", MQTT_BROKER_IP).toCharArray(mqtt_server, sizeof(mqtt_server));
   prefs.getString("mqtt_port",   String(MQTT_BROKER_PORT)).toCharArray(mqtt_port, sizeof(mqtt_port));
   prefs.getString("mqtt_user",   MQTT_USER).toCharArray(mqtt_user, sizeof(mqtt_user));
@@ -88,12 +90,13 @@ void BridgeWiFiConfig::initialize() {
   if (wifiManagerInitialized) return;
 
   LOG_SYSTEM("Initializing Bridge WiFi Manager");
+  snprintf(apSsid, sizeof(apSsid), "J.K. PewPew Long Range Bridge AP %s", deviceId.get().c_str());
   loadConfiguration();
 
   // Create custom parameters for the web portal
   // Descriptions guide the user on valid values
-  customDeviceRole   = new WiFiManagerParameter("device_role",   "Role (transmitter/receiver)",          device_role,   sizeof(device_role) - 1);
-  customOutputMode   = new WiFiManagerParameter("output_mode",   "Output (mqtt/ble-special-pie)",        output_mode,   sizeof(output_mode) - 1);
+  customDeviceRole   = new WiFiManagerParameter("device_role",   "Role: 0=Lora Transmitter, 1=Lora Receiver",      device_role,   sizeof(device_role) - 1);
+  customOutputMode   = new WiFiManagerParameter("output_mode",   "Rx. Output: 0=MQTT, 1=Emulate Special Pie device",    output_mode,   sizeof(output_mode) - 1);
   customMqttServer   = new WiFiManagerParameter("mqtt_server",   "MQTT Server",                          mqtt_server,   sizeof(mqtt_server) - 1);
   customMqttPort     = new WiFiManagerParameter("mqtt_port",     "MQTT Port",                            mqtt_port,     sizeof(mqtt_port) - 1);
   customMqttUser     = new WiFiManagerParameter("mqtt_user",     "MQTT User",                            mqtt_user,     sizeof(mqtt_user) - 1);
@@ -120,7 +123,7 @@ void BridgeWiFiConfig::initialize() {
   wifiManager.setConfigPortalBlocking(false);
   wifiManager.setConnectTimeout(WIFI_CONNECT_TIMEOUT);
   wifiManager.setConfigPortalTimeout(WIFI_PORTAL_TIMEOUT);
-  wifiManager.autoConnect(AP_SSID);
+  wifiManager.autoConnect(apSsid);
 
   wifiManagerInitialized = true;
   wifiConnected = (WiFi.status() == WL_CONNECTED);
@@ -156,7 +159,7 @@ String BridgeWiFiConfig::getLocalIP() {
 }
 
 void BridgeWiFiConfig::startConfigPortal() {
-  wifiManager.startConfigPortal(AP_SSID);
+  wifiManager.startConfigPortal(apSsid);
 }
 
 void BridgeWiFiConfig::resetSettings() {
@@ -170,12 +173,15 @@ void BridgeWiFiConfig::resetSettings() {
 }
 
 BridgeRole BridgeWiFiConfig::getDeviceRole() {
-  if (strcmp(device_role, "receiver") == 0) return BridgeRole::RECEIVER;
+  if (strcmp(device_role, "1") == 0) return BridgeRole::RECEIVER;
   return BridgeRole::TRANSMITTER;
 }
 
 ReceiverOutputMode BridgeWiFiConfig::getOutputMode() {
-  if (strcmp(output_mode, "ble-special-pie") == 0) return ReceiverOutputMode::BLE_SPECIAL_PIE;
+  if (strcmp(output_mode, "1") == 0) {
+    return ReceiverOutputMode::BLE_SPECIAL_PIE;
+  }
+
   return ReceiverOutputMode::MQTT_OUTPUT;
 }
 

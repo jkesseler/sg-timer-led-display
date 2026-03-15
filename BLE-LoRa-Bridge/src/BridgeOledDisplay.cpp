@@ -1,5 +1,10 @@
 #include "BridgeOledDisplay.h"
 
+OledDisplay::~OledDisplay() {
+  delete display;
+  display = nullptr;
+}
+
 bool OledDisplay::initialize() {
   display = new SSD1306Wire(OLED_I2C_ADDR, OLED_SDA_PIN, OLED_SCL_PIN);
 
@@ -155,6 +160,8 @@ bool OledDisplay::statusChanged(const BridgeStatus& a, const BridgeStatus& b) co
   if (a.crcErrors != b.crcErrors) return true;
   if (a.hasLastShot != b.hasLastShot) return true;
   if (a.lastShotNumber != b.lastShotNumber) return true;
+  if (a.lastShotTimeMs != b.lastShotTimeMs) return true;
+  if (a.timerModel != b.timerModel) return true;
 
   // Uptime changes every second — throttle redraw to 1s
   if ((a.uptimeMs / 1000) != (b.uptimeMs / 1000)) return true;

@@ -29,7 +29,7 @@ bool BridgeApplication::initialize() {
   Serial.begin(SERIAL_BAUD_RATE);
   Logger::setLevel(LogLevel::INFO);
 
-  LOG_SYSTEM("=== J.K. PewPew LoRa Bridge ===");
+  LOG_SYSTEM("=== J.K. PewPew Long Range Bridge ===");
   LOG_SYSTEM("LilyGo LoRa32 T3 v1.6.1 Starting...");
 
   // Initialize device ID (NVS-backed unique identifier)
@@ -79,8 +79,10 @@ bool BridgeApplication::initialize() {
 
 void BridgeApplication::initTransmitter() {
   // Initialize BLE as central (client) for connecting to timers
-  BLEDevice::init(BLE_DEVICE_NAME);
-  LOG_BLE("BLE Client initialized");
+  char bleName[32];
+  snprintf(bleName, sizeof(bleName), "%s-%s", BLE_DEVICE_NAME, deviceId.get().c_str());
+  BLEDevice::init(bleName);
+  LOG_BLE("BLE Client initialized as: %s", bleName);
 
   // Initialize LoRa transmitter
   if (!loraTx.initialize()) {
@@ -110,7 +112,9 @@ void BridgeApplication::initReceiver() {
     LOG_SYSTEM("Receiver ready (MQTT output)");
   } else {
     // BLE Special Pie output — no WiFi needed for BLE
-    BLEDevice::init("Special Pie M1A2+");
+    char bleName[32];
+    snprintf(bleName, sizeof(bleName), "Special Pie M1A2+-%s", deviceId.get().c_str());
+    BLEDevice::init(bleName);
     if (!bleServer.initialize()) {
       LOG_ERROR("SYSTEM", "BLE server init failed");
     }
@@ -164,6 +168,12 @@ void BridgeApplication::runTransmitter() {
   // Process BLE events
   if (timerDevice) {
     timerDevice->update();
+
+    // Deferred cleanup: if device disconnected during update(), reset for next scan
+    if (timerDevice->getConnectionState() == DeviceConnectionState::DISCONNECTED) {
+      LOG_BLE("Device disconnected — releasing for rescan");
+      timerDevice.reset();
+    }
   }
 
   // LoRa TX heartbeat
@@ -279,6 +289,7 @@ void BridgeApplication::onSessionStarted(const SessionData& session) {
 void BridgeApplication::onCountdownComplete(const SessionData& session) {
   LOG_TIMER("Countdown complete");
   loraTx.sendCountdownComplete(session.sessionId);
+  lastActivityTime = millis();
 }
 
 void BridgeApplication::onSessionStopped(const SessionData& session) {
@@ -290,19 +301,17 @@ void BridgeApplication::onSessionStopped(const SessionData& session) {
 void BridgeApplication::onSessionSuspended(const SessionData& session) {
   LOG_TIMER("Session suspended");
   loraTx.sendSessionSuspended(session.sessionId);
+  lastActivityTime = millis();
 }
 
 void BridgeApplication::onSessionResumed(const SessionData& session) {
   LOG_TIMER("Session resumed");
   loraTx.sendSessionResumed(session.sessionId);
+  lastActivityTime = millis();
 }
 
 void BridgeApplication::onConnectionStateChanged(DeviceConnectionState state) {
   LOG_BLE("Connection state: %d", (int)state);
-
-  if (state == DeviceConnectionState::DISCONNECTED) {
-    timerDevice.reset();
-  }
 
   bridgeStatus.bleConnected = (state == DeviceConnectionState::CONNECTED);
   bridgeStatus.bleScanning  = (state == DeviceConnectionState::SCANNING);
@@ -353,6 +362,7 @@ void BridgeApplication::onLoRaShotReceived(const LoRaProtocol::ParsedPacket& pkt
   bridgeStatus.hasLastShot = true;
   bridgeStatus.lastShotNumber = pkt.shot.shotNumber;
   bridgeStatus.lastShotTimeMs = pkt.shot.absoluteTimeMs;
+  bridgeStatus.shotsRx++;
   lastActivityTime = millis();
 
   if (outputMode == ReceiverOutputMode::MQTT_OUTPUT) {
@@ -437,14 +447,13 @@ void BridgeApplication::updateOledStatus() {
   if (role == BridgeRole::RECEIVER) {
     bridgeStatus.lastRssi   = loraRx.getLastRssi();
     bridgeStatus.crcErrors  = loraRx.getCrcErrors();
-    bridgeStatus.shotsRx    = loraRx.getPacketsReceived();  // Use actual counter
+    // shotsRx is incremented in onLoRaShotReceived(), not overwritten with total packets
 
     if (outputMode == ReceiverOutputMode::MQTT_OUTPUT) {
       bridgeStatus.mqttConnected = mqttManager && mqttManager->isHealthy();
     } else {
       bridgeStatus.bleClients = bleServer.getConnectedCount();
     }
-  } else {
-    bridgeStatus.shotsTx = loraTx.getPacketsSent();  // Use actual counter
   }
+  // shotsTx is incremented in onShotDetected(), not overwritten with total packets
 }

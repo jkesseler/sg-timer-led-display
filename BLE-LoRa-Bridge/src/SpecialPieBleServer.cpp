@@ -1,7 +1,8 @@
 #include "SpecialPieBleServer.h"
 
 bool SpecialPieBleServer::initialize() {
-  BLEDevice::init("Special Pie M1A2+");
+  // BLEDevice::init() is called by the caller (BridgeApplication::initReceiver)
+  // before this method — do NOT call it again here.
 
   pServer = BLEDevice::createServer();
   serverCallbacks.parent = this;
@@ -21,7 +22,7 @@ bool SpecialPieBleServer::initialize() {
   pAdvertising->addServiceUUID(SERVICE_UUID);
   pAdvertising->setScanResponse(true);
   pAdvertising->setMinPreferred(0x06);
-  pAdvertising->setMinPreferred(0x12);
+  pAdvertising->setMaxPreferred(0x12);
   BLEDevice::startAdvertising();
 
   LOG_INFO("BLE", "Special Pie BLE server started (service %s)", SERVICE_UUID);
@@ -29,10 +30,7 @@ bool SpecialPieBleServer::initialize() {
 }
 
 void SpecialPieBleServer::update() {
-  // Re-start advertising if no clients connected (auto-reconnect)
-  if (connectedCount == 0) {
-    BLEDevice::startAdvertising();
-  }
+  // No-op — advertising is restarted in onConnect/onDisconnect callbacks
 }
 
 void SpecialPieBleServer::sendSessionStart(uint8_t sessionId) {
@@ -48,11 +46,20 @@ void SpecialPieBleServer::sendSessionStart(uint8_t sessionId) {
 
 void SpecialPieBleServer::sendShotDetected(uint32_t absoluteTimeMs, uint16_t shotNumber) {
   // Convert milliseconds → seconds + centiseconds (reverse of client parsing)
-  uint8_t seconds = (uint8_t)(absoluteTimeMs / 1000);
+  // Special Pie protocol uses a single byte for seconds — cap at 255 to prevent silent overflow
+  uint32_t totalSeconds = absoluteTimeMs / 1000;
+  if (totalSeconds > 255) {
+    LOG_WARN("BLE", "Shot time %lu ms exceeds protocol limit (255s), clamping", (unsigned long)absoluteTimeMs);
+    totalSeconds = 255;
+  }
+  uint8_t seconds = (uint8_t)totalSeconds;
   uint8_t centiseconds = (uint8_t)((absoluteTimeMs % 1000) / 10);
 
-  // Shot number: Special Pie uses 0-indexed
-  uint8_t shotIdx = (shotNumber > 0) ? (uint8_t)(shotNumber - 1) : 0;
+  // Shot number: Special Pie uses 0-indexed, single byte (max 255)
+  if (shotNumber > 255) {
+    LOG_WARN("BLE", "Shot number %u exceeds protocol limit (255), truncating", shotNumber);
+  }
+  uint8_t shotIdx = (shotNumber > 0) ? (uint8_t)((shotNumber - 1) & 0xFF) : 0;
 
   // Checksum byte (simple XOR of data bytes, matching observed protocol behavior)
   uint8_t checksum = seconds ^ centiseconds ^ shotIdx;
@@ -104,5 +111,7 @@ void SpecialPieBleServer::ServerCallbacks::onDisconnect(BLEServer* /*pServer*/) 
   if (parent && parent->connectedCount > 0) {
     parent->connectedCount--;
     LOG_INFO("BLE", "Client disconnected (remaining: %u)", parent->connectedCount);
+    // Restart advertising so new clients can connect
+    BLEDevice::startAdvertising();
   }
 }
