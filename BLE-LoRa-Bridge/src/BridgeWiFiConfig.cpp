@@ -19,6 +19,20 @@ void copyIfProvided(char* dest, size_t destSize, const WiFiManagerParameter* par
   dest[destSize - 1] = '\0';
   LOG_SYSTEM("Portal value updated for %s: %s", name, sensitive ? "[redacted]" : dest);
 }
+
+void copyOrClear(char* dest, size_t destSize, const WiFiManagerParameter* param, const char* name, bool sensitive = false) {
+  if (!param) return;
+  const char* val = param->getValue();
+  if (!val) return;
+  if (strncmp(dest, val, destSize - 1) == 0) return;
+  strncpy(dest, val, destSize - 1);
+  dest[destSize - 1] = '\0';
+  if (dest[0] == '\0') {
+    LOG_SYSTEM("Portal value cleared for %s", name);
+  } else {
+    LOG_SYSTEM("Portal value updated for %s: %s", name, sensitive ? "[redacted]" : dest);
+  }
+}
 }  // namespace
 
 // Static member initialization
@@ -112,10 +126,10 @@ void BridgeWiFiConfig::initialize() {
   wifiManager.setSaveParamsCallback([]() {
     copyIfProvided(device_role,   sizeof(device_role),   customDeviceRole,   "device_role");
     copyIfProvided(output_mode,   sizeof(output_mode),   customOutputMode,   "output_mode");
-    copyIfProvided(mqtt_server,   sizeof(mqtt_server),   customMqttServer,   "mqtt_server");
-    copyIfProvided(mqtt_port,     sizeof(mqtt_port),     customMqttPort,     "mqtt_port");
-    copyIfProvided(mqtt_user,     sizeof(mqtt_user),     customMqttUser,     "mqtt_user");
-    copyIfProvided(mqtt_password, sizeof(mqtt_password), customMqttPassword, "mqtt_password", true);
+    copyOrClear   (mqtt_server,   sizeof(mqtt_server),   customMqttServer,   "mqtt_server");
+    copyOrClear   (mqtt_port,     sizeof(mqtt_port),     customMqttPort,     "mqtt_port");
+    copyOrClear   (mqtt_user,     sizeof(mqtt_user),     customMqttUser,     "mqtt_user");
+    copyOrClear   (mqtt_password, sizeof(mqtt_password), customMqttPassword, "mqtt_password", true);
     saveConfiguration();
   });
 

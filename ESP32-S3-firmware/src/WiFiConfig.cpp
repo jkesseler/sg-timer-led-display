@@ -34,6 +34,32 @@ void copyIfProvided(char* destination, size_t destinationSize, const WiFiManager
   destination[destinationSize - 1] = '\0';
   LOG_SYSTEM("Portal value updated for %s: %s", fieldName, destination);
 }
+
+void copyOrClear(char* destination, size_t destinationSize, const WiFiManagerParameter* parameter, const char* fieldName) {
+  if (!parameter) {
+    LOG_DEBUG("SYSTEM", "Portal parameter missing for %s; keeping existing value", fieldName);
+    return;
+  }
+
+  const char* value = parameter->getValue();
+  if (!value) {
+    LOG_DEBUG("SYSTEM", "Portal value missing for %s; keeping existing value: %s", fieldName, destination);
+    return;
+  }
+
+  if (strncmp(destination, value, destinationSize - 1) == 0) {
+    LOG_DEBUG("SYSTEM", "Portal value unchanged for %s: %s", fieldName, value);
+    return;
+  }
+
+  strncpy(destination, value, destinationSize - 1);
+  destination[destinationSize - 1] = '\0';
+  if (destination[0] == '\0') {
+    LOG_SYSTEM("Portal value cleared for %s", fieldName);
+  } else {
+    LOG_SYSTEM("Portal value updated for %s: %s", fieldName, destination);
+  }
+}
 }
 
 // Static member initialization
@@ -136,12 +162,12 @@ void WiFiConfig::initialize() {
   // Set save params callback — fires when the user clicks Save on the custom params form
   wifiManager.setSaveParamsCallback([]() {
     LOG_SYSTEM("WiFiManager params saved — persisting to NVS");
-    copyIfProvided(mqtt_server, sizeof(mqtt_server), customMqttServer, "mqtt_server");
-    copyIfProvided(mqtt_port,   sizeof(mqtt_port),   customMqttPort,   "mqtt_port");
+    copyOrClear(mqtt_server, sizeof(mqtt_server), customMqttServer, "mqtt_server");
+    copyOrClear(mqtt_port,   sizeof(mqtt_port),   customMqttPort,   "mqtt_port");
     int sanitizedPort = sanitizeMqttPort(atoi(mqtt_port));
     snprintf(mqtt_port, sizeof(mqtt_port), "%d", sanitizedPort);
-    copyIfProvided(mqtt_user,     sizeof(mqtt_user),     customMqttUser,     "mqtt_user");
-    copyIfProvided(mqtt_password, sizeof(mqtt_password), customMqttPassword, "mqtt_password");
+    copyOrClear   (mqtt_user,     sizeof(mqtt_user),     customMqttUser,     "mqtt_user");
+    copyOrClear   (mqtt_password, sizeof(mqtt_password), customMqttPassword, "mqtt_password");
     copyIfProvided(timer_type,    sizeof(timer_type),    customTimerType,    "timer_type");
     copyIfProvided(startup_text,  sizeof(startup_text),  customStartupText,  "startup_text");
     WiFiConfig::saveConfiguration();
