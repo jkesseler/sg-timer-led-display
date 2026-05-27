@@ -10,20 +10,11 @@ int sanitizeMqttPort(int port) {
   return port;
 }
 
-void copyIfProvided(char* dest, size_t destSize, const WiFiManagerParameter* param, const char* name, bool sensitive = false) {
-  if (!param) return;
-  const char* val = param->getValue();
-  if (!val || val[0] == '\0') return;
-  if (strncmp(dest, val, destSize - 1) == 0) return;
-  strncpy(dest, val, destSize - 1);
-  dest[destSize - 1] = '\0';
-  LOG_SYSTEM("Portal value updated for %s: %s", name, sensitive ? "[redacted]" : dest);
-}
-
-void copyOrClear(char* dest, size_t destSize, const WiFiManagerParameter* param, const char* name, bool sensitive = false) {
+void copyParam(char* dest, size_t destSize, const WiFiManagerParameter* param, const char* name, bool allowBlank, bool sensitive = false) {
   if (!param) return;
   const char* val = param->getValue();
   if (!val) return;
+  if (!allowBlank && val[0] == '\0') return;
   if (strncmp(dest, val, destSize - 1) == 0) return;
   strncpy(dest, val, destSize - 1);
   dest[destSize - 1] = '\0';
@@ -84,7 +75,11 @@ void BridgeWiFiConfig::loadConfiguration() {
 void BridgeWiFiConfig::saveConfiguration() {
   LOG_SYSTEM("Saving bridge configuration to NVS");
 
-  int port = sanitizeMqttPort(atoi(mqtt_port));
+  int submittedPort = atoi(mqtt_port);
+  int port = sanitizeMqttPort(submittedPort);
+  if (port != submittedPort) {
+    LOG_SYSTEM("MQTT port reset to default %d", port);
+  }
   snprintf(mqtt_port, sizeof(mqtt_port), "%d", port);
 
   Preferences prefs;
@@ -124,12 +119,12 @@ void BridgeWiFiConfig::initialize() {
   wifiManager.addParameter(customMqttPassword);
 
   wifiManager.setSaveParamsCallback([]() {
-    copyIfProvided(device_role,   sizeof(device_role),   customDeviceRole,   "device_role");
-    copyIfProvided(output_mode,   sizeof(output_mode),   customOutputMode,   "output_mode");
-    copyOrClear   (mqtt_server,   sizeof(mqtt_server),   customMqttServer,   "mqtt_server");
-    copyOrClear   (mqtt_port,     sizeof(mqtt_port),     customMqttPort,     "mqtt_port");
-    copyOrClear   (mqtt_user,     sizeof(mqtt_user),     customMqttUser,     "mqtt_user");
-    copyOrClear   (mqtt_password, sizeof(mqtt_password), customMqttPassword, "mqtt_password", true);
+    copyParam(device_role,   sizeof(device_role),   customDeviceRole,   "device_role",   /*allowBlank=*/false);
+    copyParam(output_mode,   sizeof(output_mode),   customOutputMode,   "output_mode",   /*allowBlank=*/false);
+    copyParam(mqtt_server,   sizeof(mqtt_server),   customMqttServer,   "mqtt_server",   /*allowBlank=*/true);
+    copyParam(mqtt_port,     sizeof(mqtt_port),     customMqttPort,     "mqtt_port",     /*allowBlank=*/true);
+    copyParam(mqtt_user,     sizeof(mqtt_user),     customMqttUser,     "mqtt_user",     /*allowBlank=*/true);
+    copyParam(mqtt_password, sizeof(mqtt_password), customMqttPassword, "mqtt_password", /*allowBlank=*/true, /*sensitive=*/true);
     saveConfiguration();
   });
 
