@@ -2,6 +2,7 @@
 #include "SGTimer.h"
 #include "SpecialPieM1A2Plus.h"
 #include "SpecialPieM1A2F.h"
+#include "ASNTracker.h"
 #include "DeviceId.h"
 #include "common.h"
 #include <BLEDevice.h>
@@ -247,6 +248,17 @@ void BridgeApplication::processScanResults() {
       }
       timerDevice.reset();
     }
+    else if (ASNTracker::matchesDevice(&device)) {
+      LOG_SYSTEM("Found ASN Tracker");
+      ASNTracker* dev = new ASNTracker();
+      timerDevice = std::unique_ptr<ITimerDevice>(dev);
+      setupBleCallbacks();
+      if (timerDevice->initialize() && dev->attemptConnection(&device)) {
+        deviceFound = true;
+        break;
+      }
+      timerDevice.reset();
+    }
   }
 
   pScan->clearResults();
@@ -277,6 +289,9 @@ void BridgeApplication::onShotDetected(const NormalizedShotData& shot) {
             shot.shotNumber, shot.absoluteTimeMs / 1000.0, shot.splitTimeMs / 1000.0);
   loraTx.sendShotDetected(shot);
   bridgeStatus.shotsTx++;
+  bridgeStatus.hasLastShot = true;
+  bridgeStatus.lastShotNumber = shot.shotNumber;
+  bridgeStatus.lastShotTimeMs = shot.absoluteTimeMs;
   lastActivityTime = millis();
 }
 
@@ -294,7 +309,7 @@ void BridgeApplication::onCountdownComplete(const SessionData& session) {
 
 void BridgeApplication::onSessionStopped(const SessionData& session) {
   LOG_TIMER("Session stopped: ID %u, %d shots", session.sessionId, session.totalShots);
-  loraTx.sendSessionStopped(session.sessionId, session.totalShots, 0);
+  loraTx.sendSessionStopped(session.sessionId, session.totalShots, bridgeStatus.lastShotTimeMs);
   lastActivityTime = millis();
 }
 
