@@ -45,6 +45,20 @@ All of these implement `ITimerDevice` via `BaseTimerDevice`, and all shot times 
 - Optional MQTT republish path: `ESP32-S3-firmware/src/MqttManager.cpp`
 - Wi-Fi runtime config portal + NVS persistence: `ESP32-S3-firmware/src/WiFiConfig.cpp`
 
+## BLE-LoRa Bridge
+
+Standalone firmware for a LilyGo LoRa32 T3 v1.6.1 board that relays BLE timer events over a long-range LoRa radio link. Same binary; role (Transmitter / Receiver) is selected at runtime via a WiFi portal.
+
+- [ble-lora-bridge/README.md](ble-lora-bridge/README.md) — start here: what it is, deployment model
+- [ble-lora-bridge/build-and-configure.md](ble-lora-bridge/build-and-configure.md) — build, flash, WiFi portal, troubleshooting
+- [ble-lora-bridge/hardware.md](ble-lora-bridge/hardware.md) — board, pin mapping, LoRa radio parameters
+- [ble-lora-bridge/architecture.md](ble-lora-bridge/architecture.md) — dual-role design, data flow, class reference
+- [ble-lora-bridge/lora-protocol.md](ble-lora-bridge/lora-protocol.md) — binary packet format and CRC specification
+
+Source: `BLE-LoRa-Bridge/`
+
+---
+
 ## Related project areas
 
 - `../pwa-display-app/` - browser display client
