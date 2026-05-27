@@ -10,14 +10,14 @@ int sanitizeMqttPort(int port) {
   return port;
 }
 
-void copyIfProvided(char* dest, size_t destSize, const WiFiManagerParameter* param, const char* name) {
+void copyIfProvided(char* dest, size_t destSize, const WiFiManagerParameter* param, const char* name, bool sensitive = false) {
   if (!param) return;
   const char* val = param->getValue();
   if (!val || val[0] == '\0') return;
   if (strncmp(dest, val, destSize - 1) == 0) return;
   strncpy(dest, val, destSize - 1);
   dest[destSize - 1] = '\0';
-  LOG_SYSTEM("Portal value updated for %s: %s", name, dest);
+  LOG_SYSTEM("Portal value updated for %s: %s", name, sensitive ? "[redacted]" : dest);
 }
 }  // namespace
 
@@ -115,7 +115,7 @@ void BridgeWiFiConfig::initialize() {
     copyIfProvided(mqtt_server,   sizeof(mqtt_server),   customMqttServer,   "mqtt_server");
     copyIfProvided(mqtt_port,     sizeof(mqtt_port),     customMqttPort,     "mqtt_port");
     copyIfProvided(mqtt_user,     sizeof(mqtt_user),     customMqttUser,     "mqtt_user");
-    copyIfProvided(mqtt_password, sizeof(mqtt_password), customMqttPassword, "mqtt_password");
+    copyIfProvided(mqtt_password, sizeof(mqtt_password), customMqttPassword, "mqtt_password", true);
     saveConfiguration();
   });
 
