@@ -1,8 +1,7 @@
 #include "LoRaTransmitter.h"
 #include "DeviceId.h"
+#include "LoRaRadio.h"
 #include "common.h"
-#include <LoRa.h>
-#include <SPI.h>
 
 bool LoRaTransmitter::initialize() {
   // Store device ID for packet source field
@@ -10,22 +9,10 @@ bool LoRaTransmitter::initialize() {
   strncpy(sourceId, id.c_str(), sizeof(sourceId) - 1);
   sourceId[sizeof(sourceId) - 1] = '\0';
 
-  // Configure SPI pins for LoRa32 T3 v1.6.1
-  SPI.begin(LORA_SCK_PIN, LORA_MISO_PIN, LORA_MOSI_PIN, LORA_CS_PIN);
-  LoRa.setPins(LORA_CS_PIN, LORA_RST_PIN, LORA_DIO0_PIN);
-
-  if (!LoRa.begin(LORA_FREQUENCY)) {
+  if (!LoRaRadio::initialize(LORA_TX_POWER)) {
     LOG_ERROR("LORA", "SX1276 init failed");
     return false;
   }
-
-  LoRa.setSpreadingFactor(LORA_SPREADING_FACTOR);
-  LoRa.setSignalBandwidth(LORA_BANDWIDTH);
-  LoRa.setCodingRate4(LORA_CODING_RATE);
-  LoRa.setTxPower(LORA_TX_POWER);
-  LoRa.setSyncWord(LORA_SYNC_WORD);
-  LoRa.setPreambleLength(LORA_PREAMBLE_LENGTH);
-  LoRa.enableCrc();  // Hardware CRC in addition to our packet-level CRC
 
   LOG_INFO("LORA", "Transmitter initialized (SF%d BW%.0fkHz %ddBm) src=%s",
            LORA_SPREADING_FACTOR, LORA_BANDWIDTH / 1000.0,
