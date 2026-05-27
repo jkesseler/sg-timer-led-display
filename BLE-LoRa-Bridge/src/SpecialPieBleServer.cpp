@@ -45,14 +45,20 @@ void SpecialPieBleServer::sendSessionStart(uint8_t sessionId) {
 }
 
 void SpecialPieBleServer::sendShotDetected(uint32_t absoluteTimeMs, uint16_t shotNumber) {
-  // Convert milliseconds → seconds + centiseconds (reverse of client parsing)
-  // Special Pie protocol uses a single byte for seconds — cap at 255 to prevent silent overflow
-  uint32_t totalSeconds = absoluteTimeMs / 1000;
-  if (totalSeconds > 255) {
-    LOG_WARN("BLE", "Shot time %lu ms exceeds protocol limit (255s), clamping", (unsigned long)absoluteTimeMs);
-    totalSeconds = 255;
+  // Convert milliseconds → seconds + centiseconds (reverse of client parsing in
+  // SpecialPieM1A2F/Plus::processTimerData: absoluteTimeMs = (sec * 1000) + (cs * 10)).
+  //
+  // The wire format uses a single byte each for seconds (0–255) and centiseconds
+  // (0–99), so the maximum representable time is 255 990 ms. Clamp the composite
+  // value first so seconds and centiseconds always describe the same moment —
+  // otherwise the receiver decodes a time inconsistent with what we computed.
+  static const uint32_t MAX_PROTOCOL_MS = 255u * 1000u + 99u * 10u;  // 255 990 ms
+  if (absoluteTimeMs > MAX_PROTOCOL_MS) {
+    LOG_WARN("BLE", "Shot time %lu ms exceeds protocol limit (255.99 s), clamping",
+             (unsigned long)absoluteTimeMs);
+    absoluteTimeMs = MAX_PROTOCOL_MS;
   }
-  uint8_t seconds = (uint8_t)totalSeconds;
+  uint8_t seconds = (uint8_t)(absoluteTimeMs / 1000);
   uint8_t centiseconds = (uint8_t)((absoluteTimeMs % 1000) / 10);
 
   // Shot number: Special Pie uses 0-indexed, single byte (max 255)
