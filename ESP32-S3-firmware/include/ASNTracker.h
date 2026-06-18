@@ -1,36 +1,21 @@
 #pragma once
 
-#include "BaseTimerDevice.h"
+#include "FrameProtocolTimerDevice.h"
 #include <BLEDevice.h>
 #include <BLEClient.h>
 #include <BLEUtils.h>
 #include <BLEScan.h>
 
-// ASN Tracker Protocol Message Types (matches Special Pie)
-enum class ASNMessageType : uint8_t {
-  SESSION_STOP = 0x18,    // 24 decimal
-  SESSION_START = 0x34,   // 52 decimal
-  SHOT_DETECTED = 0x36    // 54 decimal
-};
-
-class ASNTracker : public BaseTimerDevice {
+/**
+ * @brief ASN Tracker device.
+ *
+ * Uses the same F8/F9 frame protocol as the Special Pie timers (handled by
+ * FrameProtocolTimerDevice) with its own service/characteristic UUIDs.
+ */
+class ASNTracker : public FrameProtocolTimerDevice {
 private:
-  // ASN Tracker specific configuration
   static const char* LOG_TAG;
   static const char* CHARACTERISTIC_UUID;
-
-  // BLE components
-  BLERemoteCharacteristic* pNotifyCharacteristic;
-
-  // Shot tracking for split calculation
-  uint32_t previousTimeSeconds;
-  uint32_t previousTimeCentiseconds;
-  bool hasPreviousShot;
-  uint8_t currentSessionId;
-  bool sessionActiveFlag;
-
-  // Internal methods
-  void processTimerData(uint8_t* data, size_t length);
 
   // Static callback for BLE notifications
   static void notifyCallback(BLERemoteCharacteristic* pBLERemoteCharacteristic,
