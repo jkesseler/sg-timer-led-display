@@ -46,13 +46,15 @@ private:
   bool scanResultsReady;
   unsigned long startupTime;
 
+  // Set when a disconnect is detected; the device is torn down from the main
+  // loop (never from inside the device's own callback) to avoid deleting an
+  // object whose method is still executing on the call stack.
+  bool deviceResetPending;
+
   // Health monitoring
   unsigned long lastHealthCheck;
   unsigned long lastActivityTime;
   bool hadDeviceConnected;
-
-  // MQTT warning throttle
-  unsigned long lastMqttWarningTime;
 
   // Event handlers
   void onShotDetected(const NormalizedShotData& shotData);

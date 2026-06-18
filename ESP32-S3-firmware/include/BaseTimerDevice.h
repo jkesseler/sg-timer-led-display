@@ -77,13 +77,13 @@ public:
 
   // Common ITimerDevice implementations
   bool initialize() override {
-    LOG_INFO("Initializing %s device interface", deviceModel);
+    LOG_INFO("DEVICE", "Initializing %s device interface", deviceModel);
     setConnectionState(DeviceConnectionState::DISCONNECTED);
     return true;
   }
 
   bool startScanning() override {
-    LOG_INFO("Will start scanning for %s devices", deviceModel);
+    LOG_INFO("DEVICE", "Will start scanning for %s devices", deviceModel);
     setConnectionState(DeviceConnectionState::SCANNING);
     return true;
   }

@@ -64,8 +64,8 @@ bool SGTimer::attemptConnection(BLEAdvertisedDevice* device) {
   // Store device information
   deviceAddress = device->getAddress();
   if (device->haveName()) {
-    deviceName[sizeof(deviceName)-1] = '\0';
     strncpy(deviceName, device->getName().c_str(), sizeof(deviceName)-1);
+    deviceName[sizeof(deviceName)-1] = '\0';
     // Extract model from name (SG-SST4XYYYYY where X is model identifier)
     if (strncmp(deviceName, "SG-SST4", 7) == 0 && strlen(deviceName) > 7) {
       char modelId = deviceName[7];

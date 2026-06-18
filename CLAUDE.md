@@ -33,6 +33,32 @@ pio run -e tools-scanner -t upload
 pio run -e tools-wifi-config -t upload
 ```
 
+## File layout
+
+```
+ESP32-S3-firmware/
+├── include/          # Header files (.h)
+│   ├── ITimerDevice.h
+│   ├── BaseTimerDevice.h
+│   ├── common.h      # Pin definitions, compile-time constants
+│   ├── Logger.h
+│   ├── DisplayManager.h
+│   └── <DeviceName>.h
+├── src/              # Implementation files (.cpp)
+│   ├── main.cpp
+│   ├── TimerApplication.cpp
+│   └── <DeviceName>.cpp
+└── test/
+    ├── stubs/        # Arduino/BLE header stubs for host builds
+    ├── test_protocol_parsing/
+    ├── test_ring_buffer/
+    └── test_time_formatting/
+docs/                 # Hardware & protocol reference
+memory-bank/          # Architecture decision records
+```
+
+> Exclude `__NO_COMMIT__` files from code generation suggestions.
+
 ## Architecture
 
 ### Data flow
@@ -44,6 +70,22 @@ BLE Timer Device
               └─► TimerApplication (coordinator)
                     ├─► FreeRTOS queue  ──►  MqttManager  ──►  MQTT broker
                     └─► DisplayManager  ──►  HUB75 128×32 panels
+```
+
+### NormalizedShotData
+
+All device implementations convert native formats into this struct:
+
+```cpp
+struct NormalizedShotData {
+  uint32_t sessionId;
+  uint16_t shotNumber;
+  uint32_t absoluteTimeMs;  // ALWAYS milliseconds
+  uint32_t splitTimeMs;     // Time since previous shot (ms)
+  uint64_t timestampMs;     // System timestamp when detected
+  const char* deviceModel;
+  bool isFirstShot;
+};
 ```
 
 **Key constraint:** BLE notification callbacks run on the BLE stack — they must be fast and non-blocking. `onShotDetected` enqueues shot data into a FreeRTOS queue (`xQueueSend`); the main loop drains it in `publishQueuedEvents()` via batch publish.
@@ -86,6 +128,8 @@ Use `SGTimer` as reference for UUID-based devices; `SpecialPieM1A2F` for name-pa
 ### DisplayManager
 
 Uses the dirty-flag pattern: callers invoke `showXxx()` methods to update internal state, which sets `displayDirty = true`. `update()` (called every loop) redraws only when dirty. The display renders at 128×32 in RGB565. Time is formatted as `SS:CC` (seconds:centiseconds) for absolute times and `S:CC` / `SS:CC` for splits.
+
+`DisplayState` enum values: `STARTUP`, `DISCONNECTED`, `SCANNING`, `CONNECTED`, `WAITING_FOR_SHOTS`, `SHOWING_SHOT`, `SESSION_ENDED`. Colors are defined in the `DisplayColors` struct (RGB565).
 
 `DisplayManager::formatTime` and `DisplayManager::formatSplitTime` are replicated in `test_time_formatting.cpp` — **keep them in sync** if you change the production implementations.
 
@@ -135,6 +179,21 @@ class MyDevice : public BaseTimerDevice {
 
 No reconnection attempts without a rate-limiting delay (`BLE_RECONNECT_INTERVAL_MS`).
 
+## Hardware configuration
+
+Key constants defined in `common.h`:
+
+```cpp
+#define POTENTIOMETER_PIN A0       // GPIO1, 12-bit ADC (0–4095)
+#define RESET_BUTTON_PIN  4
+#define BUTTON_DEBOUNCE_MS 50
+#define PANEL_WIDTH  64
+#define PANEL_HEIGHT 32
+#define PANEL_CHAIN  2             // Two panels = 128×32 total
+```
+
+HUB75 full pin mapping: `docs/HUB75_WIRING.md`. Power: 5 V / 10 A for the LED panels.
+
 ## Embedded constraints
 
 - No heap allocation in notification callbacks or inside `publishQueuedEvents()`.
@@ -150,6 +209,29 @@ No reconnection attempts without a rate-limiting delay (`BLE_RECONNECT_INTERVAL_
 - `#pragma once` for all headers
 - Validate BLE payload length before parsing; null-check all BLE objects (`pClient`, `pService`, `pChar`) before use
 - Keep device-specific protocol logic isolated inside the device class — nothing device-specific leaks into `TimerApplication`
+
+## Documentation structure
+
+```
+docs/
+├── BUILD_AND_TEST.md          # Build and test procedures
+├── HUB75_WIRING.md            # Hardware wiring diagrams
+├── DISPLAY_REFERENCE.md       # Display states and layouts
+├── DEVICE_COMPARISON.md       # Supported device feature matrix
+└── sg-timer-reference/        # Protocol specifications
+    └── sg_timer_public_bt_api_32.md
+
+memory-bank/                   # Architecture decision records
+├── Device-Implementation-Guide.md
+├── project-state-analysis.md
+└── special-pie-implementation-notes.md
+```
+
+When to update:
+- Protocol quirks → inline comments in the device `.cpp`
+- Hardware changes → `docs/HUB75_WIRING.md`
+- New display states → `docs/DISPLAY_REFERENCE.md`
+- Architectural decisions → `memory-bank/`
 
 ## Commit messages
 
