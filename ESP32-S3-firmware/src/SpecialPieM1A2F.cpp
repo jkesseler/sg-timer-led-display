@@ -62,10 +62,13 @@ bool SpecialPieM1A2F::attemptConnection(BLEAdvertisedDevice* device) {
     LOG_INFO(LOG_TAG, "Timer found: %s", device->getAddress().toString().c_str());
   }
 
-  // Store name/address, then connect by MAC address (this device is discovered
-  // by name pattern and does not advertise its service UUID).
+  // Connect via the advertised device object, not the raw MAC. These units use
+  // a random-static BLE address (MSB top bits = 0b11, e.g. F4:..), and the
+  // BLEAddress overload defaults to BLE_ADDR_TYPE_PUBLIC, which fails to connect
+  // to a random-address peer. Passing the device preserves its address type.
+  // (Discovery is still by name pattern; that's independent of how we connect.)
   storeDeviceInfo(device);
-  return connectAndSubscribe(LOG_TAG, device->getAddress(), SERVICE_UUID,
+  return connectAndSubscribe(LOG_TAG, device, SERVICE_UUID,
                              CHARACTERISTIC_UUID, notifyCallback, &pNotifyCharacteristic);
 }
 
