@@ -1,36 +1,21 @@
 #pragma once
 
-#include "BaseTimerDevice.h"
+#include "FrameProtocolTimerDevice.h"
 #include <BLEDevice.h>
 #include <BLEClient.h>
 #include <BLEUtils.h>
 #include <BLEScan.h>
 
-// Special Pie Timer Protocol Message Types
-enum class SpecialPieMessageType : uint8_t {
-  SESSION_STOP = 0x18,    // 24 decimal
-  SESSION_START = 0x34,   // 52 decimal
-  SHOT_DETECTED = 0x36    // 54 decimal
-};
-
-class SpecialPieM1A2Plus : public BaseTimerDevice {
+/**
+ * @brief Special Pie Timer M1A2+ with service-UUID based discovery.
+ *
+ * Shares the F8/F9 frame protocol parsing with FrameProtocolTimerDevice;
+ * only discovery, connection, and UUIDs are device-specific.
+ */
+class SpecialPieM1A2Plus : public FrameProtocolTimerDevice {
 private:
-  // Special Pie Timer specific configuration
   static const char* LOG_TAG;
   static const char* CHARACTERISTIC_UUID;
-
-  // BLE components
-  BLERemoteCharacteristic* pNotifyCharacteristic;
-
-  // Shot tracking for split calculation
-  uint32_t previousTimeSeconds;
-  uint32_t previousTimeCentiseconds;
-  bool hasPreviousShot;
-  uint8_t currentSessionId;
-  bool sessionActiveFlag;
-
-  // Internal methods
-  void processTimerData(uint8_t* data, size_t length);
 
   // Static callback for BLE notifications
   static void notifyCallback(BLERemoteCharacteristic* pBLERemoteCharacteristic,
@@ -51,4 +36,3 @@ public:
   // Static instance for callbacks
   static SpecialPieM1A2Plus* instance;
 };
-

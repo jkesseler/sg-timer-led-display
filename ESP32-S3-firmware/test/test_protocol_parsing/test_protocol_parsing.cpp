@@ -596,6 +596,51 @@ TEST_F(SpecialPieMacProtocolTest, ShotResetsOnNewSession) {
   EXPECT_EQ(receivedShot.splitTimeMs, 0u);  // First shot — no split
 }
 
+// ── Regression: replay of real captured BLE bytes ─────────────────
+//
+// Raw notifications captured over BLE from a physical "SP M1A2 Timer 2003"
+// unit (fff1 characteristic). Two things this pins down that the synthetic
+// tests above do not:
+//   1. pData[7] is 0x0B here (a non-zero trailing byte the parser must
+//      ignore) — the crafted frames all used 0x00.
+//   2. The exact seconds/centiseconds → milliseconds and split arithmetic
+//      against a known-good real-world sequence.
+TEST_F(SpecialPieMacProtocolTest, RealCaptureReplay_DecodesShotsAndSplits) {
+  struct Frame {
+    uint8_t bytes[10];        // F8 F9 36 00 <sec> <cs> <shot#> 0B F9 F8
+    uint16_t expectShotNumber;
+    uint32_t expectAbsoluteMs;
+    uint32_t expectSplitMs;
+    bool expectFirst;
+  };
+
+  const Frame frames[] = {
+    {{0xF8,0xF9,0x36,0x00, 0x0C,0x4A,0x02,0x0B, 0xF9,0xF8},  3, 12740,    0, true},
+    {{0xF8,0xF9,0x36,0x00, 0x0C,0x4B,0x03,0x0B, 0xF9,0xF8},  4, 12750,   10, false},
+    {{0xF8,0xF9,0x36,0x00, 0x0E,0x22,0x04,0x0B, 0xF9,0xF8},  5, 14340, 1590, false},
+    {{0xF8,0xF9,0x36,0x00, 0x0E,0x26,0x05,0x0B, 0xF9,0xF8},  6, 14380,   40, false},
+    {{0xF8,0xF9,0x36,0x00, 0x0F,0x10,0x06,0x0B, 0xF9,0xF8},  7, 15160,  780, false},
+    {{0xF8,0xF9,0x36,0x00, 0x10,0x24,0x07,0x0B, 0xF9,0xF8},  8, 16360, 1200, false},
+    {{0xF8,0xF9,0x36,0x00, 0x10,0x28,0x08,0x0B, 0xF9,0xF8},  9, 16400,   40, false},
+    {{0xF8,0xF9,0x36,0x00, 0x10,0x33,0x09,0x0B, 0xF9,0xF8}, 10, 16510,  110, false},
+    {{0xF8,0xF9,0x36,0x00, 0x11,0x53,0x0A,0x0B, 0xF9,0xF8}, 11, 17830, 1320, false},
+    {{0xF8,0xF9,0x36,0x00, 0x11,0x55,0x0B,0x0B, 0xF9,0xF8}, 12, 17850,   20, false},
+    {{0xF8,0xF9,0x36,0x00, 0x14,0x0B,0x0C,0x0B, 0xF9,0xF8}, 13, 20110, 2260, false},
+    {{0xF8,0xF9,0x36,0x00, 0x14,0x0C,0x0D,0x0B, 0xF9,0xF8}, 14, 20120,   10, false},
+  };
+
+  for (const auto& f : frames) {
+    callbackCalled = false;
+    device.processTimerData(const_cast<uint8_t*>(f.bytes), sizeof(f.bytes));
+
+    ASSERT_TRUE(callbackCalled) << "shot #" << f.expectShotNumber << " not parsed";
+    EXPECT_EQ(receivedShot.shotNumber, f.expectShotNumber);
+    EXPECT_EQ(receivedShot.absoluteTimeMs, f.expectAbsoluteMs);
+    EXPECT_EQ(receivedShot.splitTimeMs, f.expectSplitMs);
+    EXPECT_EQ(receivedShot.isFirstShot, f.expectFirst);
+  }
+}
+
 
 // ═════════════════════════════════════════════════════════════════
 //  Cross-device consistency tests

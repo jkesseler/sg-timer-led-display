@@ -38,6 +38,7 @@ DisplayManager::DisplayManager()
     lastUpdateTime(0),
     connectionState(DeviceConnectionState::DISCONNECTED),
     deviceName(nullptr),
+    deviceNameStorage{},
     countdownStartTime(0),
     countdownDurationSeconds(0.0f),
     displayDirty(true),
@@ -243,7 +244,17 @@ void DisplayManager::showStartup() {
 
 void DisplayManager::showConnectionState(DeviceConnectionState state, const char* name) {
   connectionState = state;
-  deviceName = name;
+
+  // Copy the name into our own storage. The caller's pointer references the
+  // timer device object, which is destroyed on disconnect; retaining it would
+  // dangle. An empty/null name leaves deviceName == nullptr (handled below).
+  if (name && name[0] != '\0') {
+    strncpy(deviceNameStorage, name, sizeof(deviceNameStorage) - 1);
+    deviceNameStorage[sizeof(deviceNameStorage) - 1] = '\0';
+    deviceName = deviceNameStorage;
+  } else {
+    deviceName = nullptr;
+  }
 
   // Reset scroll when state changes
   scrollOffset = 0;

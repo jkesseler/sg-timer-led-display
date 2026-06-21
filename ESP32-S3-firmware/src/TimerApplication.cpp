@@ -30,10 +30,10 @@ TimerApplication::TimerApplication()
     isScanning(false),
     scanResultsReady(false),
     startupTime(0),
+    deviceResetPending(false),
     lastHealthCheck(0),
     lastActivityTime(0),
-    hadDeviceConnected(false),
-    lastMqttWarningTime(0) {
+    hadDeviceConnected(false) {
   gTimerApplicationInstance = this;
 }
 
@@ -128,6 +128,16 @@ void TimerApplication::run() {
     // Process BLE events - this may trigger callbacks that enqueue shots
     if (timerDevice) {
       timerDevice->update();
+    }
+
+    // Tear down a disconnected device here, in the main loop, rather than
+    // inside the device's own connection-state callback. Destroying it from
+    // within its callback would free the object whose method is still on the
+    // call stack (use-after-free). See onConnectionStateChanged().
+    if (deviceResetPending) {
+      deviceResetPending = false;
+      timerDevice.reset();
+      LOG_BLE("Timer device released - ready to rescan");
     }
   }
 
@@ -339,7 +349,10 @@ void TimerApplication::onConnectionStateChanged(DeviceConnectionState state) {
     if (sessionActive) {
       sessionActive = false;
     }
-    timerDevice.reset();  // Clean up so we can scan again
+    // Defer the actual teardown to run(): this callback may be invoked from
+    // within the device's own update()/handleConnectionLost(), so deleting it
+    // here would destroy the object mid-method (use-after-free).
+    deviceResetPending = true;
   }
 
   if (displayManager) {
@@ -472,8 +485,8 @@ void TimerApplication::scanForDevices() {
     return;
   }
 
-  // Throttle scan attempts - wait 5 seconds between full scan cycles
-  if (isScanning || (now - lastScanAttempt < 5000)) {
+  // Throttle scan attempts - wait between full scan cycles
+  if (isScanning || (now - lastScanAttempt < BLE_SCAN_RETRY_INTERVAL_MS)) {
     return;
   }
 

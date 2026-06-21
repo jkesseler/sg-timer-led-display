@@ -369,7 +369,7 @@ bool MqttManager::publishShotDetected(const NormalizedShotData& shotData) {
     shotData.shotNumber,
     (unsigned long)shotData.absoluteTimeMs,
     (unsigned long)shotData.splitTimeMs,
-    shotData.deviceModel ? shotData.deviceModel : "unknown",
+    shotData.deviceModel,  // fixed-size char[] member, always a valid C-string
     shotData.isFirstShot ? "true" : "false",
     (unsigned long)millis()
   );

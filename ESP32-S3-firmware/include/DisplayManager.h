@@ -38,7 +38,10 @@ private:
   NormalizedShotData lastShotData;
   SessionData currentSessionData;
   DeviceConnectionState connectionState;
-  const char* deviceName;
+  // Owned copy of the device name. The source pointer belongs to the timer
+  // device object, which is destroyed on disconnect, so we must not retain it.
+  const char* deviceName;       // points at deviceNameStorage, or nullptr
+  char deviceNameStorage[64];
 
   // Countdown tracking
   unsigned long countdownStartTime;

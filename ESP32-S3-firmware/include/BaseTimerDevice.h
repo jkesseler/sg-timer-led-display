@@ -57,6 +57,144 @@ protected:
     }
   }
 
+  // ---------------------------------------------------------------------------
+  // Shared BLE connection helpers
+  //
+  // These centralize the connect -> getService -> getCharacteristic ->
+  // registerForNotify sequence (and its failure cleanup) that every concrete
+  // device repeated. Keeping the teardown in one place avoids the leaked-client
+  // bugs that came from copy-pasted error paths.
+  // ---------------------------------------------------------------------------
+
+  // BLE notification callback signature required by the ESP32 BLE library.
+  typedef void (*BLENotifyCallback)(BLERemoteCharacteristic*, uint8_t*, size_t, bool);
+
+  // Disconnect and free the active client, if any. Safe when already null.
+  void cleanupClient() {
+    if (pClient) {
+      pClient->disconnect();
+      delete pClient;
+      pClient = nullptr;
+    }
+  }
+
+  // Copy the advertised device's identity into the owned buffers, falling back
+  // to the address string when no name is advertised.
+  void storeDeviceInfo(BLEAdvertisedDevice* device) {
+    if (!device) return;
+    deviceAddress = device->getAddress();
+    if (device->haveName()) {
+      strncpy(deviceName, device->getName().c_str(), sizeof(deviceName) - 1);
+    } else {
+      strncpy(deviceName, device->getAddress().toString().c_str(), sizeof(deviceName) - 1);
+    }
+    deviceName[sizeof(deviceName) - 1] = '\0';
+  }
+
+  // Dump a raw notification payload as hex when DEBUG logging is enabled.
+  static void logNotificationBytes(const char* tag, const uint8_t* data, size_t length) {
+    if (Logger::getLevel() > LogLevel::DEBUG) return;
+    LOG_DEBUG(tag, "Notification received (%d bytes)", (int)length);
+    for (size_t i = 0; i < length; i++) {
+      Serial.printf("%02X ", data[i]);
+    }
+    Serial.println();
+  }
+
+  // Tear down any existing connection, pause for the BLE stack to settle, then
+  // create a fresh client. Reports ERROR state and returns false on failure.
+  bool beginConnection(const char* tag) {
+    disconnect();
+
+    // Blocking delay is acceptable here: connection setup is not on a hot path.
+    LOG_INFO(tag, "Waiting %dms before connecting", BLE_CONNECTION_DELAY_MS);
+    delay(BLE_CONNECTION_DELAY_MS);
+
+    setConnectionState(DeviceConnectionState::CONNECTING);
+    pClient = BLEDevice::createClient();
+    if (!pClient) {
+      LOG_ERROR(tag, "Failed to create BLE client");
+      setConnectionState(DeviceConnectionState::ERROR);
+      return false;
+    }
+    return true;
+  }
+
+  // Resolve the service + notify characteristic on an already-connected client
+  // and register the callback. Cleans up the client on any failure.
+  bool subscribeAfterConnect(const char* tag, const char* serviceUuid,
+                             const char* charUuid, BLENotifyCallback notifyCb,
+                             BLERemoteCharacteristic** outChar) {
+    pService = pClient->getService(BLEUUID(serviceUuid));
+    if (!pService) {
+      LOG_ERROR(tag, "Service not found");
+      cleanupClient();
+      setConnectionState(DeviceConnectionState::ERROR);
+      return false;
+    }
+
+    BLERemoteCharacteristic* characteristic = pService->getCharacteristic(charUuid);
+    if (!characteristic) {
+      LOG_ERROR(tag, "Notify characteristic not found");
+      cleanupClient();
+      setConnectionState(DeviceConnectionState::ERROR);
+      return false;
+    }
+
+    if (!characteristic->canNotify()) {
+      LOG_ERROR(tag, "Characteristic cannot notify");
+      cleanupClient();
+      setConnectionState(DeviceConnectionState::ERROR);
+      return false;
+    }
+
+    LOG_INFO(tag, "Registering for notifications");
+    characteristic->registerForNotify(notifyCb);
+    if (outChar) *outChar = characteristic;
+
+    isConnectedFlag = true;
+    lastHeartbeat = millis();
+    setConnectionState(DeviceConnectionState::CONNECTED);
+    LOG_INFO(tag, "Connected - listening for events");
+    return true;
+  }
+
+  // Connect to an advertised device, then subscribe to its notify characteristic.
+  bool connectAndSubscribe(const char* tag, BLEAdvertisedDevice* device,
+                           const char* serviceUuid, const char* charUuid,
+                           BLENotifyCallback notifyCb,
+                           BLERemoteCharacteristic** outChar = nullptr) {
+    if (outChar) *outChar = nullptr;
+    if (!beginConnection(tag)) return false;
+
+    LOG_INFO(tag, "Attempting connection");
+    if (!pClient->connect(device)) {
+      LOG_ERROR(tag, "Failed to connect");
+      cleanupClient();
+      setConnectionState(DeviceConnectionState::ERROR);
+      return false;
+    }
+    return subscribeAfterConnect(tag, serviceUuid, charUuid, notifyCb, outChar);
+  }
+
+  // Connect to a raw BLE address, then subscribe (for MAC/name-pattern devices).
+  bool connectAndSubscribe(const char* tag, BLEAddress address,
+                           const char* serviceUuid, const char* charUuid,
+                           BLENotifyCallback notifyCb,
+                           BLERemoteCharacteristic** outChar = nullptr) {
+    if (outChar) *outChar = nullptr;
+    if (!beginConnection(tag)) return false;
+
+    LOG_INFO(tag, "Attempting connection");
+    if (!pClient->connect(address)) {
+      LOG_ERROR(tag, "Failed to connect");
+      cleanupClient();
+      setConnectionState(DeviceConnectionState::ERROR);
+      return false;
+    }
+    return subscribeAfterConnect(tag, serviceUuid, charUuid, notifyCb, outChar);
+  }
+
 public:
   BaseTimerDevice(const char* model)
     : pClient(nullptr),
@@ -77,13 +215,13 @@ public:
 
   // Common ITimerDevice implementations
   bool initialize() override {
-    LOG_INFO("Initializing %s device interface", deviceModel);
+    LOG_INFO("DEVICE", "Initializing %s device interface", deviceModel);
     setConnectionState(DeviceConnectionState::DISCONNECTED);
     return true;
   }
 
   bool startScanning() override {
-    LOG_INFO("Will start scanning for %s devices", deviceModel);
+    LOG_INFO("DEVICE", "Will start scanning for %s devices", deviceModel);
     setConnectionState(DeviceConnectionState::SCANNING);
     return true;
   }
@@ -94,11 +232,7 @@ public:
   }
 
   void disconnect() override {
-    if (pClient) {
-      pClient->disconnect();
-      delete pClient;
-      pClient = nullptr;
-    }
+    cleanupClient();
     isConnectedFlag = false;
     pService = nullptr;
     setConnectionState(DeviceConnectionState::DISCONNECTED);
@@ -183,14 +317,7 @@ protected:
     LOG_WARN("BLE", "Connection lost");
     isConnectedFlag = false;
     pService = nullptr;
-
-    if (pClient) {
-      if (pClient->isConnected()) {
-        pClient->disconnect();
-      }
-      delete pClient;
-      pClient = nullptr;
-    }
+    cleanupClient();
 
     setConnectionState(DeviceConnectionState::DISCONNECTED);
 
