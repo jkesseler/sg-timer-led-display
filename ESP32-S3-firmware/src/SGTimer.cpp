@@ -155,7 +155,7 @@ void SGTimer::processTimerData(uint8_t* pData, size_t length) {
           uint16_t total_shots = (pData[6] << 8) | pData[7];
           if (hasLastShot) {
             LOG_INFO(LOG_TAG, "SESSION_STOPPED - ID: %u, Total shots: %u, Last: #%u at %u:%02u",
-                     sess_id, total_shots, lastShotNum + 1, lastShotSeconds, lastShotHundredths);
+                     sess_id, total_shots, lastShotNum - SHOT_INDEX_BASE + 1, lastShotSeconds, lastShotHundredths);
           } else {
             LOG_INFO(LOG_TAG, "SESSION_STOPPED - ID: %u, Total shots: %u", sess_id, total_shots);
           }
@@ -184,7 +184,8 @@ void SGTimer::processTimerData(uint8_t* pData, size_t length) {
           uint32_t seconds = shot_time_ms / 1000;
           uint32_t hundredths = (shot_time_ms % 1000) / 10;
 
-          LOG_DEBUG(LOG_TAG, "SHOT_DETECTED #%u: %u:%02u", shot_num + 1, seconds, hundredths);
+          LOG_DEBUG(LOG_TAG, "SHOT_DETECTED #%u (wire %u): %u:%02u",
+                    shot_num - SHOT_INDEX_BASE + 1, shot_num, seconds, hundredths);
 
           // Store as last shot
           lastShotNum = shot_num;
@@ -208,7 +209,7 @@ void SGTimer::processTimerData(uint8_t* pData, size_t length) {
           // Create normalized shot data
           NormalizedShotData shotData;
           shotData.sessionId = sess_id;
-          shotData.shotNumber = shot_num + 1;  // SG Timer reports 0-based, convert to 1-based
+          shotData.shotNumber = shot_num - SHOT_INDEX_BASE + 1;  // normalize to 1-based
           shotData.absoluteTimeMs = shot_time_ms;
           shotData.splitTimeMs = splitTime;
           shotData.timestampMs = millis();

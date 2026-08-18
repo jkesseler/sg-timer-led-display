@@ -117,7 +117,7 @@ Scan priority in `processScanResults()`: SpecialPieM1A2F → SGTimer → Special
 
 ### Adding a new timer device
 
-1. `include/YourDevice.h` — extend `BaseTimerDevice`; define service/characteristic UUIDs as `static const char*`
+1. `include/YourDevice.h` — extend `BaseTimerDevice`; define service/characteristic UUIDs as `static const char*`, and declare `static constexpr uint8_t SHOT_INDEX_BASE` = the shot number the device puts on the wire for the first shot of a session (0 or 1). Frame-protocol devices pass it to the `FrameProtocolTimerDevice` constructor; direct `BaseTimerDevice` subclasses apply it in `processTimerData()`.
 2. `src/YourDevice.cpp` — implement `matchesDevice()`, `attemptConnection()`, `processTimerData()`; convert all times to ms
 3. Register in `TimerApplication::processScanResults()` alongside existing devices
 4. Add tests in `ESP32-S3-firmware/test/test_protocol_parsing/` following `ProtocolTestBase` pattern

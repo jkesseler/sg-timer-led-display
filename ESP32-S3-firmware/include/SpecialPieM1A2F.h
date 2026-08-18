@@ -31,6 +31,10 @@ public:
 
   static const char* SERVICE_UUID;
 
+  // Shot number the device puts on the wire for the first shot of a session.
+  // Special Pie M1A2 counts from 1; the base class normalizes to 1-based.
+  static constexpr uint8_t SHOT_INDEX_BASE = 1;
+
   // Public connection method for TimerApplication
   bool attemptConnection(BLEAdvertisedDevice* device);
 

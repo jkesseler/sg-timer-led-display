@@ -11,7 +11,7 @@ const char *ASNTracker::CHARACTERISTIC_UUID = "E5A10002-F1A2-4B63-9F8C-D7B781E35
 ASNTracker* ASNTracker::instance = nullptr;
 
 ASNTracker::ASNTracker()
-  : FrameProtocolTimerDevice("ASN Tracker", LOG_TAG) {
+  : FrameProtocolTimerDevice("ASN Tracker", LOG_TAG, SHOT_INDEX_BASE) {
   instance = this;
 }
 

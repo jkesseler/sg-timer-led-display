@@ -27,6 +27,10 @@ public:
 
   static const char *SERVICE_UUID;
 
+  // Shot number the device puts on the wire for the first shot of a session.
+  // Special Pie M1A2+ counts from 1; the base class normalizes to 1-based.
+  static constexpr uint8_t SHOT_INDEX_BASE = 1;
+
   // Device identification - check if advertised device is a Special Pie Timer
   static bool matchesDevice(BLEAdvertisedDevice* device);
 

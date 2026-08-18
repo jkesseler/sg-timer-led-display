@@ -41,7 +41,13 @@ protected:
   uint8_t currentSessionId;
   bool sessionActiveFlag;
 
-  FrameProtocolTimerDevice(const char* model, const char* tag)
+  // First shot number this device puts on the wire (0 or 1). Shot numbers are
+  // normalized to 1-based by subtracting this base and adding 1, so a device
+  // that starts counting at 1 is passed through unchanged. Supplied by the
+  // concrete device via its SHOT_INDEX_BASE constant.
+  uint8_t shotIndexBase;
+
+  FrameProtocolTimerDevice(const char* model, const char* tag, uint8_t indexBase)
     : BaseTimerDevice(model),
       logTag(tag),
       pNotifyCharacteristic(nullptr),
@@ -49,7 +55,8 @@ protected:
       previousTimeCentiseconds(0),
       hasPreviousShot(false),
       currentSessionId(0),
-      sessionActiveFlag(false) {}
+      sessionActiveFlag(false),
+      shotIndexBase(indexBase) {}
 
   // Parse one notification frame and fire the matching normalized callback.
   void processTimerData(uint8_t* pData, size_t length) {
@@ -134,15 +141,18 @@ private:
     previousTimeCentiseconds = centiseconds;
     hasPreviousShot = true;
 
-    LOG_DEBUG(logTag, "SHOT_DETECTED #%u: %u.%02u (split %u ms)",
-              shotNumber, seconds, centiseconds, splitTimeMs);
+    // Normalize to 1-based regardless of where the device starts counting.
+    uint16_t normalizedShotNumber = (uint16_t)(shotNumber - shotIndexBase + 1);
 
-    currentSession.totalShots = shotNumber + 1;  // device shot numbers are 0-based
+    LOG_DEBUG(logTag, "SHOT_DETECTED #%u (wire %u): %u.%02u (split %u ms)",
+              normalizedShotNumber, shotNumber, seconds, centiseconds, splitTimeMs);
+
+    currentSession.totalShots = normalizedShotNumber;
 
     if (shotDetectedCallback) {
       NormalizedShotData shotData;
       shotData.sessionId = currentSessionId;
-      shotData.shotNumber = shotNumber + 1;  // normalize to 1-based
+      shotData.shotNumber = normalizedShotNumber;
       shotData.absoluteTimeMs = absoluteTimeMs;
       shotData.splitTimeMs = splitTimeMs;
       shotData.timestampMs = millis();

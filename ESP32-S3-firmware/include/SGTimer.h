@@ -46,6 +46,10 @@ public:
 
   static const char *SERVICE_UUID;
 
+  // Shot number the device puts on the wire for the first shot of a session.
+  // The SG Timer counts from 0; shot numbers are normalized to 1-based.
+  static constexpr uint8_t SHOT_INDEX_BASE = 0;
+
   // Device identification - check if advertised device is an SG Timer
   static bool matchesDevice(BLEAdvertisedDevice* device);
 

@@ -170,7 +170,7 @@ Sent for every detected shot during an active session.
 | Field | Size | Description |
 |---|---|---|
 | `sess_id` | 4 B | Session ID (Unix timestamp) |
-| `shot_num` | 2 B | Shot number (1-based) |
+| `shot_num` | 2 B | Shot number. The vendor spec does not state the base; the firmware treats it as 0-based (`SGTimer::SHOT_INDEX_BASE`) and normalises to 1-based |
 | `shot_time` | 4 B | Shot time in **milliseconds** |
 
 ### 2.6 SESSION_SET_BEGIN (0x05)
