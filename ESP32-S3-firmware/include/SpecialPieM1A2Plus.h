@@ -9,8 +9,16 @@
 /**
  * @brief Special Pie Timer M1A2+ with service-UUID based discovery.
  *
- * Shares the F8/F9 frame protocol parsing with FrameProtocolTimerDevice;
- * only discovery, connection, and UUIDs are device-specific.
+ * These units advertise their service UUID, so they are matched on that rather
+ * than on the device name.
+ *
+ * Distinct hardware from the M1A2 (see SpecialPieM1A2F), which advertises no
+ * service UUID and is matched by name pattern instead. The two models are
+ * separate devices that happen to share the same GATT profile (FFF0/FFF1) and
+ * the same F8/F9 frame protocol, so the UUIDs below match that device's.
+ *
+ * Frame protocol parsing is shared via FrameProtocolTimerDevice; only
+ * discovery, connection, and UUIDs live here.
  */
 class SpecialPieM1A2Plus : public FrameProtocolTimerDevice {
 private:

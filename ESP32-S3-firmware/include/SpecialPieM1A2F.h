@@ -7,11 +7,17 @@
 #include <BLEScan.h>
 
 /**
- * @brief Special Pie Timer M1A2+ device implementation with name-based identification
+ * @brief Special Pie Timer M1A2 device implementation with name-based identification
  *
- * Identifies Special Pie Timer by device name pattern "SP M1A2 Timer <xxxx>"
- * where <xxxx> is a 4-character identifier (e.g., "SP M1A2 Timer 2196").
- * Does not rely on service UUID advertising like other timer devices.
+ * Identifies the timer by device name pattern "SP M1A2 Timer <xxxx>" where
+ * <xxxx> is a 4-character identifier (e.g., "SP M1A2 Timer 2196"). These units
+ * do not advertise their service UUID, so name matching is the only way to
+ * recognise them during a scan.
+ *
+ * Distinct hardware from the M1A2+ (see SpecialPieM1A2Plus), which advertises
+ * its service UUID and is discovered that way. The two models are separate
+ * devices that happen to share the same GATT profile (FFF0/FFF1) and the same
+ * F8/F9 frame protocol - hence the identical UUIDs here and there.
  *
  * Protocol: Frame-based with markers [F8 F9] [MESSAGE_TYPE] [DATA...] [F9 F8]
  * (shared with FrameProtocolTimerDevice).
