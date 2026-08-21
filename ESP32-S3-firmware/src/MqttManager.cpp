@@ -5,6 +5,7 @@
 #include <WiFi.h>
 #include <PubSubClient.h>
 #include <ArduinoJson.h>
+#include <algorithm>
 
 // Global static for PubSubClient (required for callback)
 static WiFiClient espClient;
@@ -41,7 +42,12 @@ static const char* connectionStateToString(DeviceConnectionState state) {
 MqttManager::MqttManager()
   : mqttConnected(false),
     wifiWasConnected(false),
-    lastMqttCheck(0) {
+    lastMqttCheck(0),
+    reconnectBackoffMs(MQTT_FAST_CHECK_INTERVAL),
+    taskHandle(nullptr),
+    eventQueue(nullptr),
+    totalEventsPublished(0),
+    publishFailures(0) {
   // Zero-initialise all topic buffers
   memset(topicPresence, 0, sizeof(topicPresence));
   memset(topicConnectionState, 0, sizeof(topicConnectionState));
@@ -83,6 +89,14 @@ void MqttManager::publishPresence(bool online) {
 }
 
 MqttManager::~MqttManager() {
+  if (taskHandle) {
+    vTaskDelete(taskHandle);
+    taskHandle = nullptr;
+  }
+  if (eventQueue) {
+    vQueueDelete(eventQueue);
+    eventQueue = nullptr;
+  }
   if (mqttConnected) {
     disconnectMqtt();
   }
@@ -111,15 +125,32 @@ bool MqttManager::initialize() {
   // Set a reasonable buffer size for our messages
   mqttClient.setBufferSize(512);
 
-  // Shorter socket timeout for faster failure detection
-  mqttClient.setSocketTimeout(3);  // 3 seconds
+  // PubSubClient's connect() busy-waits for CONNACK with no yield() call
+  // (unlike its readByte() path, which does), pinned here on MqttTask at
+  // priority 1 - a socketTimeout much above the ESP-IDF task watchdog's
+  // ~5s idle-task window would risk a WDT reset on a slow/failed connect.
+  // Leave it as-is; a burst of BLE notifications during loop()'s keepalive
+  // wait (which does yield) is the actual failure mode, so widen that
+  // instead of the connect() timeout.
+  mqttClient.setSocketTimeout(4);  // 4 seconds
 
-  // Keep-alive interval
-  mqttClient.setKeepAlive(5);  // 5 seconds keep-alive
+  // BLE and WiFi timeshare one radio - a burst of BLE notifications can
+  // delay a PINGRESP by more than a second without the link actually being
+  // down. 5s was manufacturing disconnects during active shot sessions.
+  mqttClient.setKeepAlive(30);  // 30 seconds keep-alive
 
   LOG_SYSTEM("MQTT configured for %s:%d", mqttServer, mqttPort);
   LOG_SYSTEM("MQTT client ID: %s", mqttClientId);
   LOG_SYSTEM("Note: MQTT will connect when WiFi becomes available");
+
+  // All MQTT socket I/O happens on this dedicated task from here on -
+  // nothing else may call tryConnect()/mqttClient.loop()/publish*().
+  eventQueue = xQueueCreate(EVENT_QUEUE_SIZE, sizeof(MqttEvent));
+  if (!eventQueue) {
+    LOG_ERROR("MQTT", "Failed to create MQTT event queue");
+    return false;
+  }
+  startTask();
 
   return true;
 }
@@ -188,15 +219,27 @@ bool MqttManager::tryConnect() {
 
   if (connected) {
     mqttConnected = true;
+    reconnectBackoffMs = MQTT_FAST_CHECK_INTERVAL;  // Reset backoff on success
     LOG_INFO("MQTT", "MQTT connected successfully");
     // Announce presence. Retained so late-joining displays see "online" immediately.
     publishPresence(true);
     return true;
   }
 
-  // Connection failed - log error (but don't spam)
+  // Connection failed - back off before the next attempt, capped at the idle
+  // interval, so a still-contended radio gets progressively more room.
+  reconnectBackoffMs = std::min(reconnectBackoffMs * 2, MQTT_IDLE_CHECK_INTERVAL);
+
+  // Log error (but don't spam)
   int state = mqttClient.state();
-  LOG_ERROR("MQTT", "Connection failed (state: %d)", state);
+  // WiFiConfig::update() only logs WiFi state on a change it catches at its
+  // own 5s check interval, so a drop-and-recover (or a silent re-associate
+  // with a new/lost DHCP lease) between checks leaves no trace anywhere else.
+  // Capture link state right here, at the point of failure, to tell a radio-
+  // arbitration problem (status/RSSI/IP all fine, TCP just can't complete)
+  // apart from an actual WiFi-side link problem.
+  LOG_ERROR("MQTT", "Connection failed (state: %d, wifi status: %d, RSSI: %d dBm, IP: %s)",
+            state, (int)WiFi.status(), WiFi.RSSI(), WiFi.localIP().toString().c_str());
 
   // Only log detailed diagnostics occasionally
   static unsigned long lastDiagnosticLog = 0;
@@ -231,23 +274,212 @@ void MqttManager::disconnectMqtt() {
   mqttConnected = false;
 }
 
-void MqttManager::update() {
-  unsigned long now = millis();
+void MqttManager::startTask() {
+  if (taskHandle) return;  // Already running
+  xTaskCreatePinnedToCore(taskEntry, "MqttTask", TASK_STACK_SIZE, this,
+                           TASK_PRIORITY, &taskHandle, TASK_CORE);
+}
 
-  // Determine check interval based on activity
-  // When disconnected, check more frequently to reconnect faster
-  unsigned long checkInterval = mqttConnected ? MQTT_IDLE_CHECK_INTERVAL : MQTT_FAST_CHECK_INTERVAL;
+void MqttManager::taskEntry(void* param) {
+  static_cast<MqttManager*>(param)->taskLoop();
+}
 
-  if (now - lastMqttCheck >= checkInterval) {
-    lastMqttCheck = now;
-    tryConnect();
+void MqttManager::taskLoop() {
+  for (;;) {
+    unsigned long now = millis();
+
+    // Determine check interval based on activity. When disconnected, back
+    // off exponentially instead of retrying at a fixed fast interval -
+    // repeatedly reconnecting the same client ID into a still-contended
+    // radio just delays the CONNACK further and keeps failing.
+    unsigned long checkInterval = mqttConnected ? MQTT_IDLE_CHECK_INTERVAL : reconnectBackoffMs;
+
+    if (now - lastMqttCheck >= checkInterval) {
+      lastMqttCheck = now;
+      tryConnect();
+    }
+
+    // CRITICAL: Always call loop() when connected to handle incoming messages
+    // and maintain the connection (ping/pong). This must happen every iteration.
+    if (mqttClient.connected()) {
+      mqttClient.loop();
+    }
+
+    drainEventQueue();
+
+    vTaskDelay(pdMS_TO_TICKS(TASK_LOOP_DELAY_MS));
+  }
+}
+
+void MqttManager::drainEventQueue() {
+  if (!eventQueue || uxQueueMessagesWaiting(eventQueue) == 0) {
+    return;
   }
 
-  // CRITICAL: Always call loop() when connected to handle incoming messages
-  // and maintain the connection (ping/pong). This must happen every iteration.
-  if (mqttClient.connected()) {
-    mqttClient.loop();
+  // Not connected - leave events queued rather than discard them. They
+  // publish in order once the connection is restored; EVENT_QUEUE_SIZE
+  // bounds how much can build up during an outage.
+  if (!mqttClient.connected()) {
+    return;
   }
+
+  uint16_t processed = 0;
+  MqttEvent event;
+  while (processed < MAX_EVENTS_PER_DRAIN_CYCLE &&
+         xQueueReceive(eventQueue, &event, 0) == pdTRUE) {
+    bool published = dispatchEvent(event);
+    processed++;
+
+    if (!published) {
+      // The write that just failed already paid WiFiClient::write()'s full
+      // internal retry budget (WIFI_CLIENT_MAX_WRITE_RETRY x
+      // WIFI_CLIENT_SELECT_TIMEOUT_US - up to ~10s, and NOT affected by our
+      // setSocketTimeout()) while mqttClient.connected() kept reporting
+      // true the whole time, because the socket only looks dead once the OS
+      // notices independently. Don't let every other already-queued event
+      // pay that same ~10s tax one at a time - close the socket directly
+      // (not via mqttClient.disconnect(), which would attempt one more
+      // write - the MQTT DISCONNECT packet - and risk the same stall again)
+      // and force an immediate reconnect. The rest of the backlog stays
+      // queued for the next drain once that succeeds.
+      espClient.stop();
+      mqttConnected = false;
+      lastMqttCheck = 0;
+      reconnectBackoffMs = MQTT_FAST_CHECK_INTERVAL;
+      break;
+    }
+  }
+}
+
+bool MqttManager::dispatchEvent(const MqttEvent& event) {
+  switch (event.type) {
+    case MqttEventType::SHOT_DETECTED:
+      if (doPublishShotDetected(event.shot)) {
+        totalEventsPublished++;
+        return true;
+      }
+      publishFailures++;
+      LOG_WARN("MQTT", "Failed to publish shot #%u", event.shot.shotNumber);
+      return false;
+
+    case MqttEventType::SESSION_STARTED:
+      return doPublishSessionStarted(event.sessionStarted.sessionId, event.sessionStarted.startDelaySeconds);
+
+    case MqttEventType::SESSION_STOPPED:
+      return doPublishSessionStopped(event.sessionStopped.sessionId, event.sessionStopped.totalShots,
+                                      event.sessionStopped.lastShotTimeMs);
+
+    case MqttEventType::SESSION_SUSPENDED:
+      return doPublishSessionSuspended(event.sessionSimple.sessionId);
+
+    case MqttEventType::SESSION_RESUMED:
+      return doPublishSessionResumed(event.sessionSimple.sessionId);
+
+    case MqttEventType::COUNTDOWN_COMPLETE:
+      return doPublishCountdownComplete(event.sessionSimple.sessionId);
+
+    case MqttEventType::CONNECTION_STATE:
+      return doPublishConnectionState(event.connectionState.state,
+                                       event.connectionState.hasDeviceName ? event.connectionState.deviceName : nullptr,
+                                       event.connectionState.hasDeviceModel ? event.connectionState.deviceModel : nullptr);
+
+    case MqttEventType::DEVICE_INFO:
+      return doPublishDeviceInfo(event.deviceInfo.hasDeviceName ? event.deviceInfo.deviceName : nullptr,
+                                  event.deviceInfo.hasDeviceModel ? event.deviceInfo.deviceModel : nullptr,
+                                  event.deviceInfo.hasFirmwareVersion ? event.deviceInfo.firmwareVersion : nullptr);
+  }
+  return true;
+}
+
+bool MqttManager::enqueueShot(const NormalizedShotData& shotData) {
+  if (!eventQueue) return false;
+  MqttEvent event;
+  event.type = MqttEventType::SHOT_DETECTED;
+  event.shot = shotData;
+  return xQueueSend(eventQueue, &event, 0) == pdTRUE;
+}
+
+bool MqttManager::enqueueSessionStarted(uint32_t sessionId, float startDelaySeconds) {
+  if (!eventQueue) return false;
+  MqttEvent event;
+  event.type = MqttEventType::SESSION_STARTED;
+  event.sessionStarted.sessionId = sessionId;
+  event.sessionStarted.startDelaySeconds = startDelaySeconds;
+  return xQueueSend(eventQueue, &event, 0) == pdTRUE;
+}
+
+bool MqttManager::enqueueSessionStopped(uint32_t sessionId, uint16_t totalShots, uint32_t lastShotTimeMs) {
+  if (!eventQueue) return false;
+  MqttEvent event;
+  event.type = MqttEventType::SESSION_STOPPED;
+  event.sessionStopped.sessionId = sessionId;
+  event.sessionStopped.totalShots = totalShots;
+  event.sessionStopped.lastShotTimeMs = lastShotTimeMs;
+  return xQueueSend(eventQueue, &event, 0) == pdTRUE;
+}
+
+bool MqttManager::enqueueSessionSuspended(uint32_t sessionId) {
+  if (!eventQueue) return false;
+  MqttEvent event;
+  event.type = MqttEventType::SESSION_SUSPENDED;
+  event.sessionSimple.sessionId = sessionId;
+  return xQueueSend(eventQueue, &event, 0) == pdTRUE;
+}
+
+bool MqttManager::enqueueSessionResumed(uint32_t sessionId) {
+  if (!eventQueue) return false;
+  MqttEvent event;
+  event.type = MqttEventType::SESSION_RESUMED;
+  event.sessionSimple.sessionId = sessionId;
+  return xQueueSend(eventQueue, &event, 0) == pdTRUE;
+}
+
+bool MqttManager::enqueueCountdownComplete(uint32_t sessionId) {
+  if (!eventQueue) return false;
+  MqttEvent event;
+  event.type = MqttEventType::COUNTDOWN_COMPLETE;
+  event.sessionSimple.sessionId = sessionId;
+  return xQueueSend(eventQueue, &event, 0) == pdTRUE;
+}
+
+bool MqttManager::enqueueConnectionState(DeviceConnectionState state, const char* deviceName, const char* deviceModel) {
+  if (!eventQueue) return false;
+  MqttEvent event;
+  event.type = MqttEventType::CONNECTION_STATE;
+  event.connectionState.state = state;
+  event.connectionState.hasDeviceName = (deviceName != nullptr);
+  event.connectionState.hasDeviceModel = (deviceModel != nullptr);
+  if (deviceName) {
+    strncpy(event.connectionState.deviceName, deviceName, sizeof(event.connectionState.deviceName) - 1);
+    event.connectionState.deviceName[sizeof(event.connectionState.deviceName) - 1] = '\0';
+  }
+  if (deviceModel) {
+    strncpy(event.connectionState.deviceModel, deviceModel, sizeof(event.connectionState.deviceModel) - 1);
+    event.connectionState.deviceModel[sizeof(event.connectionState.deviceModel) - 1] = '\0';
+  }
+  return xQueueSend(eventQueue, &event, 0) == pdTRUE;
+}
+
+bool MqttManager::enqueueDeviceInfo(const char* deviceName, const char* deviceModel, const char* firmwareVersion) {
+  if (!eventQueue) return false;
+  MqttEvent event;
+  event.type = MqttEventType::DEVICE_INFO;
+  event.deviceInfo.hasDeviceName = (deviceName != nullptr);
+  event.deviceInfo.hasDeviceModel = (deviceModel != nullptr);
+  event.deviceInfo.hasFirmwareVersion = (firmwareVersion != nullptr);
+  if (deviceName) {
+    strncpy(event.deviceInfo.deviceName, deviceName, sizeof(event.deviceInfo.deviceName) - 1);
+    event.deviceInfo.deviceName[sizeof(event.deviceInfo.deviceName) - 1] = '\0';
+  }
+  if (deviceModel) {
+    strncpy(event.deviceInfo.deviceModel, deviceModel, sizeof(event.deviceInfo.deviceModel) - 1);
+    event.deviceInfo.deviceModel[sizeof(event.deviceInfo.deviceModel) - 1] = '\0';
+  }
+  if (firmwareVersion) {
+    strncpy(event.deviceInfo.firmwareVersion, firmwareVersion, sizeof(event.deviceInfo.firmwareVersion) - 1);
+    event.deviceInfo.firmwareVersion[sizeof(event.deviceInfo.firmwareVersion) - 1] = '\0';
+  }
+  return xQueueSend(eventQueue, &event, 0) == pdTRUE;
 }
 
 bool MqttManager::publishJson(const char* topic, const char* jsonPayload, bool retain) {
@@ -275,7 +507,7 @@ bool MqttManager::publishJson(const char* topic, const char* jsonPayload, bool r
   return false;
 }
 
-void MqttManager::publishConnectionState(DeviceConnectionState state, const char* deviceName, const char* deviceModel) {
+bool MqttManager::doPublishConnectionState(DeviceConnectionState state, const char* deviceName, const char* deviceModel) {
   JsonDocument doc;
   doc["state"] = connectionStateToString(state);
   if (deviceName) {
@@ -288,10 +520,10 @@ void MqttManager::publishConnectionState(DeviceConnectionState state, const char
 
   serializeJson(doc, jsonBuffer, JSON_BUFFER_SIZE);
   // Retained: displays that connect later see the current BLE connection state.
-  publishJson(topicConnectionState, jsonBuffer, /*retain=*/true);
+  return publishJson(topicConnectionState, jsonBuffer, /*retain=*/true);
 }
 
-void MqttManager::publishDeviceInfo(const char* deviceName, const char* deviceModel, const char* firmwareVersion) {
+bool MqttManager::doPublishDeviceInfo(const char* deviceName, const char* deviceModel, const char* firmwareVersion) {
   JsonDocument doc;
   if (deviceName) {
     doc["deviceName"] = deviceName;
@@ -307,20 +539,20 @@ void MqttManager::publishDeviceInfo(const char* deviceName, const char* deviceMo
 
   serializeJson(doc, jsonBuffer, JSON_BUFFER_SIZE);
   // Retained: late-joining displays learn device identity without a re-announce.
-  publishJson(topicDeviceInfo, jsonBuffer, /*retain=*/true);
+  return publishJson(topicDeviceInfo, jsonBuffer, /*retain=*/true);
 }
 
-void MqttManager::publishSessionStarted(uint32_t sessionId, float startDelaySeconds) {
+bool MqttManager::doPublishSessionStarted(uint32_t sessionId, float startDelaySeconds) {
   JsonDocument doc;
   doc["sessionId"] = sessionId;
   doc["startDelaySeconds"] = startDelaySeconds;
   doc["timestamp"] = millis();
 
   serializeJson(doc, jsonBuffer, JSON_BUFFER_SIZE);
-  publishJson(topicSessionStarted, jsonBuffer);  // ephemeral event - not retained
+  return publishJson(topicSessionStarted, jsonBuffer);  // ephemeral event - not retained
 }
 
-void MqttManager::publishSessionStopped(uint32_t sessionId, uint16_t totalShots, uint32_t lastShotTimeMs) {
+bool MqttManager::doPublishSessionStopped(uint32_t sessionId, uint16_t totalShots, uint32_t lastShotTimeMs) {
   JsonDocument doc;
   doc["sessionId"] = sessionId;
   doc["totalShots"] = totalShots;
@@ -330,28 +562,28 @@ void MqttManager::publishSessionStopped(uint32_t sessionId, uint16_t totalShots,
   doc["timestamp"] = millis();
 
   serializeJson(doc, jsonBuffer, JSON_BUFFER_SIZE);
-  publishJson(topicSessionStopped, jsonBuffer);  // ephemeral event - not retained
+  return publishJson(topicSessionStopped, jsonBuffer);  // ephemeral event - not retained
 }
 
-void MqttManager::publishSessionSuspended(uint32_t sessionId) {
+bool MqttManager::doPublishSessionSuspended(uint32_t sessionId) {
   JsonDocument doc;
   doc["sessionId"] = sessionId;
   doc["timestamp"] = millis();
 
   serializeJson(doc, jsonBuffer, JSON_BUFFER_SIZE);
-  publishJson(topicSessionSuspended, jsonBuffer);
+  return publishJson(topicSessionSuspended, jsonBuffer);
 }
 
-void MqttManager::publishSessionResumed(uint32_t sessionId) {
+bool MqttManager::doPublishSessionResumed(uint32_t sessionId) {
   JsonDocument doc;
   doc["sessionId"] = sessionId;
   doc["timestamp"] = millis();
 
   serializeJson(doc, jsonBuffer, JSON_BUFFER_SIZE);
-  publishJson(topicSessionResumed, jsonBuffer);
+  return publishJson(topicSessionResumed, jsonBuffer);
 }
 
-bool MqttManager::publishShotDetected(const NormalizedShotData& shotData) {
+bool MqttManager::doPublishShotDetected(const NormalizedShotData& shotData) {
   // OPTIMIZED: This is the hot path for fast BLE events
   // Uses pre-allocated buffer and minimal overhead
 
@@ -389,19 +621,20 @@ bool MqttManager::publishShotDetected(const NormalizedShotData& shotData) {
   return false;
 }
 
-void MqttManager::publishCountdownComplete(uint32_t sessionId) {
+bool MqttManager::doPublishCountdownComplete(uint32_t sessionId) {
   JsonDocument doc;
   doc["sessionId"] = sessionId;
   doc["timestamp"] = millis();
 
   serializeJson(doc, jsonBuffer, JSON_BUFFER_SIZE);
-  publishJson(topicCountdownComplete, jsonBuffer);
+  return publishJson(topicCountdownComplete, jsonBuffer);
 }
 
 void MqttManager::reconnect() {
   LOG_SYSTEM("Manually triggering MQTT reconnection");
   disconnectMqtt();
   lastMqttCheck = 0;  // Force immediate reconnection attempt
+  reconnectBackoffMs = MQTT_FAST_CHECK_INTERVAL;
   tryConnect();
 }
 

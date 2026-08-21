@@ -13,7 +13,7 @@ const char* SpecialPieM1A2F::CHARACTERISTIC_UUID = "0000FFF1-0000-1000-8000-0080
 SpecialPieM1A2F* SpecialPieM1A2F::instance = nullptr;
 
 SpecialPieM1A2F::SpecialPieM1A2F()
-  : FrameProtocolTimerDevice("SP M1A2 Timer", LOG_TAG) {
+  : FrameProtocolTimerDevice("SP M1A2 Timer", LOG_TAG, SHOT_INDEX_BASE) {
   instance = this;
 }
 

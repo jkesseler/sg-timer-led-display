@@ -344,10 +344,9 @@ void BridgeApplication::runReceiver() {
   // Poll LoRa radio
   loraRx.update();
 
-  // Output-specific maintenance
-  if (outputMode == ReceiverOutputMode::MQTT_OUTPUT) {
-    if (mqttManager) mqttManager->update();
-  } else {
+  // Output-specific maintenance. MqttManager runs its own background task
+  // (started from initialize()) for all MQTT socket I/O - nothing to pump here.
+  if (outputMode != ReceiverOutputMode::MQTT_OUTPUT) {
     bleServer.update();
   }
 }
@@ -382,7 +381,7 @@ void BridgeApplication::onLoRaShotReceived(const LoRaProtocol::ParsedPacket& pkt
 
   if (outputMode == ReceiverOutputMode::MQTT_OUTPUT) {
     if (mqttManager && mqttManager->canPublish()) {
-      mqttManager->publishShotDetected(pkt.shot);
+      mqttManager->enqueueShot(pkt.shot);
     }
   } else {
     bleServer.sendShotDetected(pkt.shot.absoluteTimeMs, pkt.shot.shotNumber);
@@ -395,7 +394,7 @@ void BridgeApplication::onLoRaSessionStarted(const LoRaProtocol::ParsedPacket& p
 
   if (outputMode == ReceiverOutputMode::MQTT_OUTPUT) {
     if (mqttManager && mqttManager->canPublish()) {
-      mqttManager->publishSessionStarted(pkt.sessionId, pkt.startDelaySeconds);
+      mqttManager->enqueueSessionStarted(pkt.sessionId, pkt.startDelaySeconds);
     }
   } else {
     bleServer.sendSessionStart((uint8_t)(pkt.sessionId & 0xFF));
@@ -408,7 +407,7 @@ void BridgeApplication::onLoRaSessionStopped(const LoRaProtocol::ParsedPacket& p
 
   if (outputMode == ReceiverOutputMode::MQTT_OUTPUT) {
     if (mqttManager && mqttManager->canPublish()) {
-      mqttManager->publishSessionStopped(pkt.sessionId, pkt.totalShots, pkt.lastShotTimeMs);
+      mqttManager->enqueueSessionStopped(pkt.sessionId, pkt.totalShots, pkt.lastShotTimeMs);
     }
   } else {
     bleServer.sendSessionStop((uint8_t)(pkt.sessionId & 0xFF));
@@ -421,7 +420,7 @@ void BridgeApplication::onLoRaCountdownComplete(const LoRaProtocol::ParsedPacket
 
   if (outputMode == ReceiverOutputMode::MQTT_OUTPUT) {
     if (mqttManager && mqttManager->canPublish()) {
-      mqttManager->publishCountdownComplete(pkt.sessionId);
+      mqttManager->enqueueCountdownComplete(pkt.sessionId);
     }
   }
   // No Special Pie equivalent for countdown
@@ -433,7 +432,7 @@ void BridgeApplication::onLoRaSessionSuspended(const LoRaProtocol::ParsedPacket&
 
   if (outputMode == ReceiverOutputMode::MQTT_OUTPUT) {
     if (mqttManager && mqttManager->canPublish()) {
-      mqttManager->publishSessionSuspended(pkt.sessionId);
+      mqttManager->enqueueSessionSuspended(pkt.sessionId);
     }
   }
 }
@@ -444,7 +443,7 @@ void BridgeApplication::onLoRaSessionResumed(const LoRaProtocol::ParsedPacket& p
 
   if (outputMode == ReceiverOutputMode::MQTT_OUTPUT) {
     if (mqttManager && mqttManager->canPublish()) {
-      mqttManager->publishSessionResumed(pkt.sessionId);
+      mqttManager->enqueueSessionResumed(pkt.sessionId);
     }
   }
 }

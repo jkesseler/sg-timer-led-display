@@ -4,7 +4,18 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-ESP32-S3 firmware that acts as a BLE bridge between competitive shooting sport timers and a HUB75 LED matrix display. The device auto-discovers supported BLE timers, normalizes their data, renders shot times on a 128×32 LED panel, and optionally republishes events via MQTT.
+The repository is a monorepo with four components that interoperate over a shared MQTT contract:
+
+| Directory | What it is | Toolchain |
+|---|---|---|
+| `ESP32-S3-firmware/` | Main display-board firmware (the bridge described above) | PlatformIO / C++ |
+| `BLE-LoRa-Bridge/` | Second firmware for LilyGo LoRa32 boards — relays timer events over LoRa for long range. **Reuses source files from `ESP32-S3-firmware/`** (see below) | PlatformIO / C++ |
+| `mqtt-simulator/` | Node/TypeScript tool that emulates firmware MQTT output for testing | `npm` / tsx |
+| `pwa-display-app/` | React + Vite PWA that consumes the same MQTT events as an alternative display | `npm` / Vite |
+
+All three other components agree on the firmware's MQTT topic contract `timer/<deviceId>/<event>` — the simulator *produces* those events, the PWA *consumes* them.
+
+**Ignore `__NO_COMMIT__/` directories** (at repo root and under `docs/`) — they are local scratch files, excluded from context and never committed.
 
 ## Build & test commands
 
@@ -117,7 +128,7 @@ Scan priority in `processScanResults()`: SpecialPieM1A2F → SGTimer → Special
 
 ### Adding a new timer device
 
-1. `include/YourDevice.h` — extend `BaseTimerDevice`; define service/characteristic UUIDs as `static const char*`
+1. `include/YourDevice.h` — extend `BaseTimerDevice`; define service/characteristic UUIDs as `static const char*`, and declare `static constexpr uint8_t SHOT_INDEX_BASE` = the shot number the device puts on the wire for the first shot of a session (0 or 1). Frame-protocol devices pass it to the `FrameProtocolTimerDevice` constructor; direct `BaseTimerDevice` subclasses apply it in `processTimerData()`.
 2. `src/YourDevice.cpp` — implement `matchesDevice()`, `attemptConnection()`, `processTimerData()`; convert all times to ms
 3. Register in `TimerApplication::processScanResults()` alongside existing devices
 4. Add tests in `ESP32-S3-firmware/test/test_protocol_parsing/` following `ProtocolTestBase` pattern

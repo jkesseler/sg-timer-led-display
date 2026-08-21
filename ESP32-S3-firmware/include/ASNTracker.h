@@ -27,6 +27,11 @@ public:
 
   static const char *SERVICE_UUID;
 
+  // Shot number the device puts on the wire for the first shot of a session.
+  // Assumed 1 to match the Special Pie timers it shares the F8/F9 protocol
+  // with - NOT yet verified against real ASN Tracker hardware.
+  static constexpr uint8_t SHOT_INDEX_BASE = 1;
+
   // Device identification - check if advertised device is an ASN Tracker
   static bool matchesDevice(BLEAdvertisedDevice* device);
 

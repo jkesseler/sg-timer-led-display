@@ -226,6 +226,20 @@
   background: #444;
 }
 
+.button-danger {
+  background: #ff3333;
+  color: #fff;
+}
+
+.button-danger:hover {
+  background: #cc0000;
+}
+
+.connection-button {
+  width: 100%;
+  margin-top: 12px;
+}
+
 /* Scrollbar styling */
 .settings-panel::-webkit-scrollbar {
   width: 8px;
