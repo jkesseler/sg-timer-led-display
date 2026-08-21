@@ -31,6 +31,11 @@ private:
   // requested near-maximum power despite the "minimize BLE interference"
   // intent below it - WIFI_POWER_19_5dBm (78) is this chip's max. 44 = 11dBm,
   // a starting point for coexistence tuning; raise it if MQTT range suffers.
+  //
+  // NOT the cause of the "shots held until session stop" latency pattern -
+  // that ruled out a simple weak-signal/retransmit theory (see MqttManager.h
+  // publishFailures counter for how to tell radio-starvation-but-succeeding
+  // apart from outright drops). Leave at 44 until that's isolated.
   static constexpr int WIFI_TX_POWER = 44;
 
   // WiFiManager custom parameters must persist while the portal is active

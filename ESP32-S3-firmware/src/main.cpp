@@ -13,7 +13,10 @@ void setup() {
   Serial.begin(SERIAL_BAUD_RATE);
 
   // Set logging level
-  Logger::setLevel(LogLevel::INFO);
+  // TEMPORARY: DEBUG to read publishFailures out of performHealthCheck() while
+  // diagnosing the "shots held until session stop" MQTT latency pattern -
+  // revert to INFO once that's isolated.
+  Logger::setLevel(LogLevel::DEBUG);
 
   deviceId.initialize();
 

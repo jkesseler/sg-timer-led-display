@@ -149,13 +149,15 @@ private:
 
   // Actual publishers - touch PubSubClient/jsonBuffer directly, so these may
   // only run on the background task. dispatchEvent() is their sole caller.
-  void doPublishConnectionState(DeviceConnectionState state, const char* deviceName, const char* deviceModel);
-  void doPublishDeviceInfo(const char* deviceName, const char* deviceModel, const char* firmwareVersion);
-  void doPublishSessionStarted(uint32_t sessionId, float startDelaySeconds);
-  void doPublishSessionStopped(uint32_t sessionId, uint16_t totalShots, uint32_t lastShotTimeMs);
-  void doPublishSessionSuspended(uint32_t sessionId);
-  void doPublishSessionResumed(uint32_t sessionId);
-  void doPublishCountdownComplete(uint32_t sessionId);
+  // All return the underlying write's success so a stalled/dead connection
+  // (see drainEventQueue()) can be detected regardless of event type.
+  bool doPublishConnectionState(DeviceConnectionState state, const char* deviceName, const char* deviceModel);
+  bool doPublishDeviceInfo(const char* deviceName, const char* deviceModel, const char* firmwareVersion);
+  bool doPublishSessionStarted(uint32_t sessionId, float startDelaySeconds);
+  bool doPublishSessionStopped(uint32_t sessionId, uint16_t totalShots, uint32_t lastShotTimeMs);
+  bool doPublishSessionSuspended(uint32_t sessionId);
+  bool doPublishSessionResumed(uint32_t sessionId);
+  bool doPublishCountdownComplete(uint32_t sessionId);
   bool doPublishShotDetected(const NormalizedShotData& shotData);
 
   // Background task - the only code allowed to call the doPublish*() methods
@@ -163,7 +165,7 @@ private:
   static void taskEntry(void* param);
   void taskLoop();
   void drainEventQueue();
-  void dispatchEvent(const MqttEvent& event);
+  bool dispatchEvent(const MqttEvent& event);
 
 public:
   MqttManager();
