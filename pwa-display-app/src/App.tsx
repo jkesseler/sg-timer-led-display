@@ -188,6 +188,8 @@ function App() {
         <Settings
           onSave={handleSaveSettings}
           onClose={() => setShowSettings(false)}
+          onConnect={() => dispatch(startConnecting())}
+          onDisconnect={disconnectMqttClient}
         />
       )}
 

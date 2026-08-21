@@ -9,9 +9,11 @@ import './Settings.css';
 interface SettingsProps {
   onSave: (settings: MqttSettings) => void;
   onClose: () => void;
+  onConnect: () => void;
+  onDisconnect: () => void;
 }
 
-const Settings: React.FC<SettingsProps> = ({ onSave, onClose }) => {
+const Settings: React.FC<SettingsProps> = ({ onSave, onClose, onConnect, onDisconnect }) => {
   const settings = useSelector(selectSettings);
   const isConnected = useSelector(selectIsConnected);
 
@@ -111,6 +113,15 @@ const Settings: React.FC<SettingsProps> = ({ onSave, onClose }) => {
                 <span className="info-value">{settings.clientId}</span>
               </div>
             </div>
+            {isConnected ? (
+              <button className="button button-danger connection-button" onClick={onDisconnect}>
+                Disconnect
+              </button>
+            ) : (
+              <button className="button button-primary connection-button" onClick={onConnect}>
+                Connect
+              </button>
+            )}
           </div>
         </div>
 
