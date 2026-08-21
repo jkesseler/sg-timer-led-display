@@ -5,19 +5,15 @@
 #include "MqttManager.h"
 #include "Logger.h"
 #include <memory>
-#include "freertos/queue.h"
 
 // Application configuration
 namespace AppConfig {
   constexpr uint32_t WATCHDOG_TIMEOUT_MS = 10000;  // 10 seconds
   constexpr uint32_t HEALTH_CHECK_INTERVAL_MS = 5000;  // 5 seconds
 
-  // FreeRTOS queue configuration for shot events
-  constexpr uint16_t EVENT_QUEUE_SIZE = 32;
-  constexpr uint16_t QUEUE_DEPTH_WARN_THRESHOLD = EVENT_QUEUE_SIZE / 4;  // Warn at ~25% capacity
-
-  // Batch processing configuration
-  constexpr uint16_t MAX_SHOTS_PER_PUBLISH_CYCLE = 8;  // Max shots to publish per loop iteration
+  // Warn when MqttManager's event queue crosses this depth - see
+  // MqttManager::EVENT_QUEUE_SIZE, which owns the queue itself.
+  constexpr uint16_t QUEUE_DEPTH_WARN_THRESHOLD = 8;
 }
 
 class TimerApplication {
@@ -31,14 +27,11 @@ private:
   uint16_t lastShotNumber;
   uint32_t lastShotTime;
 
-  // FreeRTOS queue for shot events (written by BLE callback, read by main loop)
-  QueueHandle_t shotEventQueue;
-
-  // Diagnostics
+  // Diagnostics for events handed to MqttManager's queue (the queue itself,
+  // and the task that drains it, live in MqttManager - see its header).
   uint16_t maxQueueDepth;
   uint32_t totalShotsQueued;
-  uint32_t totalShotsPublished;
-  uint32_t publishFailures;
+  uint32_t shotEnqueueFailures;
 
   // Device scanning state
   unsigned long lastScanAttempt;
@@ -72,7 +65,6 @@ private:
   void updateActivityTime();
   void scanForDevices();
   void processScanResults();
-  void publishQueuedEvents();
 
 public:
   TimerApplication();

@@ -27,7 +27,11 @@ private:
   static constexpr unsigned long WIFI_CONNECT_TIMEOUT = 60;         // WiFi connect timeout (seconds)
   static constexpr unsigned long WIFI_PORTAL_TIMEOUT = 0;           // 0 = no portal timeout
   static constexpr const char* AP_SSID = "J.K. PewPewTimer AP";      // Access point name
-  static constexpr int WIFI_TX_POWER = 80;                          // TX power (0-84)
+  // TX power, in wifi_power_t units (quarter-dBm). The previous value of 80
+  // requested near-maximum power despite the "minimize BLE interference"
+  // intent below it - WIFI_POWER_19_5dBm (78) is this chip's max. 44 = 11dBm,
+  // a starting point for coexistence tuning; raise it if MQTT range suffers.
+  static constexpr int WIFI_TX_POWER = 44;
 
   // WiFiManager custom parameters must persist while the portal is active
   static WiFiManagerParameter* customMqttServer;

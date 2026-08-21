@@ -6,6 +6,7 @@
 #include "WiFiConfig.h"
 #include "common.h"
 #include <BLEDevice.h>
+#include <esp_coexist.h>
 
 namespace {
 TimerApplication* gTimerApplicationInstance = nullptr;
@@ -21,11 +22,9 @@ TimerApplication::TimerApplication()
   : sessionActive(false),
     lastShotNumber(0),
     lastShotTime(0),
-    shotEventQueue(nullptr),
     maxQueueDepth(0),
     totalShotsQueued(0),
-    totalShotsPublished(0),
-    publishFailures(0),
+    shotEnqueueFailures(0),
     lastScanAttempt(0),
     isScanning(false),
     scanResultsReady(false),
@@ -41,11 +40,6 @@ TimerApplication::~TimerApplication() {
   if (gTimerApplicationInstance == this) {
     gTimerApplicationInstance = nullptr;
   }
-
-  if (shotEventQueue) {
-    vQueueDelete(shotEventQueue);
-    shotEventQueue = nullptr;
-  }
   // Smart pointers will handle cleanup automatically
 }
 
@@ -57,13 +51,6 @@ bool TimerApplication::initialize() {
   // before BLE setup and device scanning begin.
   // Non-blocking mode keeps startup responsive even without WiFi credentials.
   WiFiConfig::initialize();
-
-  // Create FreeRTOS queue for shot events
-  shotEventQueue = xQueueCreate(AppConfig::EVENT_QUEUE_SIZE, sizeof(NormalizedShotData));
-  if (!shotEventQueue) {
-    LOG_ERROR("SYSTEM", "Failed to create shot event queue");
-    return false;
-  }
 
   // Initialize display manager
   displayManager = std::unique_ptr<DisplayManager>(new DisplayManager());
@@ -89,6 +76,15 @@ bool TimerApplication::initialize() {
   if (TIMER_TYPE == TIMER_TYPE_BLE) {
     BLEDevice::init(BLE_DEVICE_NAME);
     LOG_BLE("ESP32-S3 BLE Client initialized");
+
+    // BT and WiFi share one radio on the ESP32-S3; ask the coexistence
+    // arbiter for a balanced time-share instead of the SDK's WiFi-preferred
+    // default, since this firmware needs both to work at once.
+    esp_err_t coexResult = esp_coex_preference_set(ESP_COEX_PREFER_BALANCE);
+    if (coexResult != ESP_OK) {
+      LOG_WARN("BLE", "Failed to set coexistence preference (err %d)", (int)coexResult);
+    }
+
     LOG_SYSTEM("Ready to scan for timer devices (SG Timer or Special Pie Timer)");
   } else {
     // MQTT client not implemented yet
@@ -142,15 +138,10 @@ void TimerApplication::run() {
   }
 
   // ============================================================
-  // PHASE 3: MQTT Queue Processing (Batch publish)
+  // PHASE 3: MQTT
   // ============================================================
-  // Process queued events AFTER BLE update to minimize latency
-  publishQueuedEvents();
-
-  // MQTT connection maintenance
-  if (mqttManager) {
-    mqttManager->update();
-  }
+  // MqttManager owns its own background task (core 0) for all socket I/O
+  // and queue draining - nothing to pump from this loop.
 
   // ============================================================
   // PHASE 4: Display Update
@@ -209,30 +200,32 @@ void TimerApplication::onShotDetected(const NormalizedShotData& shotData) {
   logShotData(shotData);
 
   // ============================================================
-  // CRITICAL: Enqueue for async MQTT publishing using ring buffer
-  // This is called from BLE callback context - must be fast!
+  // CRITICAL: Enqueue for async MQTT publishing.
+  // This is called from BLE callback context - must be fast! enqueueShot()
+  // only touches a FreeRTOS queue; the actual publish happens later on
+  // MqttManager's own background task.
   // Only queue if MQTT is available - don't buffer when unavailable
   // ============================================================
   // Only publish to MQTT if TIMER_TYPE == TIMER_TYPE_BLE and connected to MQTT broker
   bool shouldPublishMqtt = (TIMER_TYPE == TIMER_TYPE_BLE) && mqttManager && mqttManager->canPublish();
 
   if (shouldPublishMqtt) {
-    if (xQueueSend(shotEventQueue, &shotData, 0) == pdTRUE) {
+    if (mqttManager->enqueueShot(shotData)) {
       totalShotsQueued++;
 
       // Track max queue depth for diagnostics
-      uint16_t depth = (uint16_t)uxQueueMessagesWaiting(shotEventQueue);
+      uint16_t depth = (uint16_t)mqttManager->getQueueDepth();
       if (depth > maxQueueDepth) {
         maxQueueDepth = depth;
         if (maxQueueDepth > AppConfig::QUEUE_DEPTH_WARN_THRESHOLD) {
-          LOG_WARN("QUEUE", "Peak queue depth: %u/%u", maxQueueDepth, AppConfig::EVENT_QUEUE_SIZE);
+          LOG_WARN("QUEUE", "Peak queue depth: %u", maxQueueDepth);
         }
       }
     } else {
       // Queue full - this indicates MQTT can't keep up
-      publishFailures++;
+      shotEnqueueFailures++;
       LOG_ERROR("QUEUE", "Buffer full! Shot #%u dropped (failures: %lu)",
-                shotData.shotNumber, (unsigned long)publishFailures);
+                shotData.shotNumber, (unsigned long)shotEnqueueFailures);
     }
   }
 
@@ -250,9 +243,9 @@ void TimerApplication::onSessionStarted(const SessionData& sessionData) {
   lastShotNumber = 0;
   lastShotTime = 0;
 
-  // Publish directly (session events are infrequent)
+  // Enqueue for the MQTT task to publish (this callback runs on the BLE task)
   if (mqttManager && mqttManager->canPublish()) {
-    mqttManager->publishSessionStarted(sessionData.sessionId, sessionData.startDelaySeconds);
+    mqttManager->enqueueSessionStarted(sessionData.sessionId, sessionData.startDelaySeconds);
   }
 
   if (displayManager) {
@@ -268,7 +261,7 @@ void TimerApplication::onCountdownComplete(const SessionData& sessionData) {
   LOG_TIMER("Countdown complete - ready for shots");
 
   if (mqttManager && mqttManager->canPublish()) {
-    mqttManager->publishCountdownComplete(sessionData.sessionId);
+    mqttManager->enqueueCountdownComplete(sessionData.sessionId);
   }
 
   if (displayManager) {
@@ -282,17 +275,11 @@ void TimerApplication::onSessionStopped(const SessionData& sessionData) {
 
   sessionActive = false;
 
-  // Clear any remaining queued shots on session end
-  // Stale shots arriving after session end should be discarded
-  UBaseType_t remaining = uxQueueMessagesWaiting(shotEventQueue);
-  if (remaining > 0) {
-    LOG_WARN("QUEUE", "Discarding %u queued shots on session end", (unsigned)remaining);
-    xQueueReset(shotEventQueue);
-  }
-
-  // Publish session ended directly (not queued)
+  // Enqueue session-stopped behind whatever shots are already queued: they
+  // were detected before this event fired, so the single ordered queue
+  // publishes them first and this event after - no separate discard needed.
   if (mqttManager && mqttManager->canPublish()) {
-    mqttManager->publishSessionStopped(sessionData.sessionId, sessionData.totalShots, lastShotTime);
+    mqttManager->enqueueSessionStopped(sessionData.sessionId, sessionData.totalShots, lastShotTime);
   }
 
   if (displayManager) {
@@ -305,7 +292,7 @@ void TimerApplication::onSessionSuspended(const SessionData& sessionData) {
             sessionData.sessionId, sessionData.totalShots);
 
   if (mqttManager && mqttManager->canPublish()) {
-    mqttManager->publishSessionSuspended(sessionData.sessionId);
+    mqttManager->enqueueSessionSuspended(sessionData.sessionId);
   }
 }
 
@@ -316,7 +303,7 @@ void TimerApplication::onSessionResumed(const SessionData& sessionData) {
   sessionActive = true;
 
   if (mqttManager && mqttManager->canPublish()) {
-    mqttManager->publishSessionResumed(sessionData.sessionId);
+    mqttManager->enqueueSessionResumed(sessionData.sessionId);
   }
 
   if (displayManager) {
@@ -341,7 +328,7 @@ void TimerApplication::onConnectionStateChanged(DeviceConnectionState state) {
   }
 
   if (mqttManager && mqttManager->canPublish()) {
-    mqttManager->publishConnectionState(state, deviceName, deviceModel);
+    mqttManager->enqueueConnectionState(state, deviceName, deviceModel);
   }
 
   // Handle disconnection
@@ -392,13 +379,14 @@ void TimerApplication::performHealthCheck() {
     LOG_WARN("HEALTH", "No BLE activity for %lu ms", currentTime - lastActivityTime);
   }
 
-  // Queue metrics (only if there's been activity)
-  if (totalShotsQueued > 0) {
-    LOG_DEBUG("HEALTH", "Queue: %u/%u, Published: %lu/%lu, Failures: %lu, Peak: %u",
-              (unsigned)uxQueueMessagesWaiting(shotEventQueue), AppConfig::EVENT_QUEUE_SIZE,
-              (unsigned long)totalShotsPublished,
-              (unsigned long)totalShotsQueued,
-              (unsigned long)publishFailures,
+  // Queue metrics (only if there's been activity). The queue itself and its
+  // draining now live in MqttManager, running on its own background task.
+  if (totalShotsQueued > 0 && mqttManager) {
+    LOG_DEBUG("HEALTH", "Queue depth: %u, Published: %lu, EnqueueFailures: %lu, PublishFailures: %lu, Peak: %u",
+              (unsigned)mqttManager->getQueueDepth(),
+              (unsigned long)mqttManager->getTotalPublished(),
+              (unsigned long)shotEnqueueFailures,
+              (unsigned long)mqttManager->getPublishFailures(),
               maxQueueDepth);
   }
 
@@ -408,54 +396,6 @@ void TimerApplication::performHealthCheck() {
 
 void TimerApplication::updateActivityTime() {
   lastActivityTime = millis();
-}
-
-void TimerApplication::publishQueuedEvents() {
-  // Fast path - nothing to publish
-  if (!shotEventQueue || uxQueueMessagesWaiting(shotEventQueue) == 0) {
-    return;
-  }
-
-  // Check MQTT availability
-  bool mqttReady = mqttManager && mqttManager->canPublish();
-
-  if (!mqttReady) {
-    // MQTT not available - discard buffered events (don't queue when offline)
-    UBaseType_t discarded = uxQueueMessagesWaiting(shotEventQueue);
-    if (discarded > 0) {
-      xQueueReset(shotEventQueue);
-      LOG_DEBUG("QUEUE", "MQTT unavailable - discarded %u queued shots", (unsigned)discarded);
-    }
-    return;
-  }
-
-  // ============================================================
-  // BATCH PUBLISH: Process multiple shots per loop iteration
-  // This is the key optimization for fast BLE events
-  // ============================================================
-  uint16_t processed = 0;
-  NormalizedShotData shot;
-  while (xQueueReceive(shotEventQueue, &shot, 0) == pdTRUE &&
-         processed < AppConfig::MAX_SHOTS_PER_PUBLISH_CYCLE) {
-    // Attempt to publish
-    if (mqttManager->publishShotDetected(shot)) {
-      totalShotsPublished++;
-      LOG_DEBUG("QUEUE", "Published shot #%u", shot.shotNumber);
-    } else {
-      // Publish failed - MQTT might have disconnected
-      publishFailures++;
-      LOG_WARN("QUEUE", "Failed to publish shot #%u", shot.shotNumber);
-      // Stop processing this cycle - let MQTT reconnect
-      break;
-    }
-
-    processed++;
-  }
-
-  // Log batch processing stats
-  if (processed > 1) {
-    LOG_DEBUG("QUEUE", "Batch published %u shots", processed);
-  }
 }
 
 bool TimerApplication::isHealthy() const {

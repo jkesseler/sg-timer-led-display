@@ -1,15 +1,15 @@
 /**
  * @file test_ring_buffer.cpp
- * @brief Native tests for the shot event ring buffer logic.
+ * @brief Native tests for power-of-2 ring buffer index math.
  *
- * Tests the power-of-2 ring buffer used in TimerApplication for
- * lock-free BLE→MQTT shot event queuing. The formulas are taken
- * directly from TimerApplication.h (AppConfig namespace).
+ * Models the same head/tail/mask arithmetic FreeRTOS's queue uses
+ * internally for MqttManager's event queue (size 32, see
+ * MqttManager::EVENT_QUEUE_SIZE), which carries shot and session events
+ * from any task into MqttManager's background MQTT task.
  *
- * We test the math standalone rather than including TimerApplication.h
- * (which pulls in DisplayManager, MqttManager, and many hardware
- * dependencies). This keeps the test lightweight and isolates the
- * ring buffer logic.
+ * We test the math standalone rather than including MqttManager.h (which
+ * pulls in PubSubClient, ArduinoJson, and many hardware dependencies).
+ * This keeps the test lightweight and isolates the ring buffer logic.
  *
  * Runner:  GoogleTest (native)
  * Command: pio test -e native-tests --filter test_ring_buffer
@@ -250,7 +250,10 @@ TEST(RingBuffer, ClearByMovingTailToHead) {
   }
   EXPECT_EQ(RingBuffer::queueSize(head, tail), 15);
 
-  // Clear queue (as done in TimerApplication::onSessionStopped)
+  // Generic clear-by-collapsing-tail-to-head operation. Not currently used
+  // in production: MqttManager's queue is never force-reset mid-flight,
+  // since a single ordered queue already preserves correct event ordering
+  // (e.g. session-stopped always drains after shots queued before it).
   tail = head;
 
   EXPECT_TRUE(RingBuffer::queueEmpty(head, tail));

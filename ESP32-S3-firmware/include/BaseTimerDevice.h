@@ -299,9 +299,11 @@ public:
   void update() override {
     if (isConnectedFlag) {
       if (pClient && pClient->isConnected()) {
-        // Print heartbeat at regular intervals
+        // Print heartbeat at regular intervals. Wording must not read like a
+        // fresh connection - this fires on a fixed cadence from initial
+        // connect regardless of shot activity, including mid-session.
         if (millis() - lastHeartbeat > BLE_HEARTBEAT_INTERVAL_MS) {
-          LOG_BLE("%s connected - waiting for events", deviceModel);
+          LOG_BLE("%s heartbeat - connection alive", deviceModel);
           lastHeartbeat = millis();
         }
       } else {
