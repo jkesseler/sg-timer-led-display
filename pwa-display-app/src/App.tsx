@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
-import LEDMatrix from './components/LEDMatrix';
+import TimerDisplay from './components/TimerDisplay';
 import Settings from './components/Settings';
+import { STARTUP_DISPLAY_MS } from './constants';
 import {
   startConnecting,
   startupComplete,
@@ -33,9 +34,10 @@ function App() {
   const isCurrentDeviceConnected = useSelector(selectIsCurrentDeviceConnected);
   const settings = useSelector(selectSettings);
 
-  // Local UI state
+  // Local UI state — status bar starts hidden so a freshly booted kiosk
+  // shows a clean display; press "I" to check connection details.
   const [showSettings, setShowSettings] = useState(false);
-  const [showStatus, setShowStatus] = useState(true);
+  const [showStatus, setShowStatus] = useState(false);
 
   // Track whether this is the initial mount so the reconnect effect
   // doesn't fire on first render (the startup effect handles that).
@@ -49,7 +51,7 @@ function App() {
 
     const timer = setTimeout(() => {
       dispatch(startupComplete());
-    }, 3000);
+    }, STARTUP_DISPLAY_MS);
 
     // Teardown on unmount
     return () => {
@@ -101,8 +103,10 @@ function App() {
     return () => window.removeEventListener('keydown', handleKeyPress);
   }, []);
 
+  const brightnessFilter = `brightness(${(settings.brightness / 255).toFixed(2)})`;
+
   return (
-    <div className="app">
+    <div className="app" style={{ filter: brightnessFilter }}>
       {/* Status Bar */}
       {showStatus && (
         <div className="status-bar">
@@ -144,43 +148,45 @@ function App() {
         </div>
       )}
 
-      {isCurrentDeviceConnected && <LEDMatrix />}
-      {!isCurrentDeviceConnected && (
-        <div className="no-device">
-          <p>Selected display is offline</p>
-        </div>
-      )
-      }
+      <div className="stage">
+        {isCurrentDeviceConnected ? (
+          <TimerDisplay />
+        ) : (
+          <div className="no-device">
+            <span className="no-device__title">No display found</span>
+            <span className="no-device__detail">Waiting for a bridge device to come online</span>
+          </div>
+        )}
+      </div>
+
       {/* Controls */}
       <div className="controls">
-        <button
-          className="control-button"
-          onClick={() => setShowSettings(true)}
-          title="Settings (S)"
-        >
-          ⚙️ Settings
+        <button className="control-button" onClick={() => setShowSettings(true)} title="Open settings (S)">
+          Settings
         </button>
         <button
           className="control-button"
           onClick={() => setShowStatus((prev) => !prev)}
-          title="Toggle Status (I)"
+          title="Toggle status bar (I)"
         >
-          {showStatus ? '🔼' : '🔽'} Status
+          {showStatus ? 'Hide status' : 'Show status'}
         </button>
-        <button
-          className="control-button"
-          onClick={() => dispatch(increaseBrightness())}
-          title="Increase Brightness"
-        >
-          🔆 +
-        </button>
-        <button
-          className="control-button"
-          onClick={() => dispatch(decreaseBrightness())}
-          title="Decrease Brightness"
-        >
-          🔅 -
-        </button>
+        <div className="brightness-control" title="Screen brightness">
+          <button
+            className="control-button control-button--icon"
+            onClick={() => dispatch(decreaseBrightness())}
+            aria-label="Dim screen"
+          >
+            −
+          </button>
+          <button
+            className="control-button control-button--icon"
+            onClick={() => dispatch(increaseBrightness())}
+            aria-label="Brighten screen"
+          >
+            +
+          </button>
+        </div>
       </div>
 
       {/* Settings Modal */}
@@ -192,13 +198,6 @@ function App() {
           onDisconnect={disconnectMqttClient}
         />
       )}
-
-      {/* Instructions */}
-      <div className="instructions">
-        <p>
-          Press <kbd>S</kbd> for Settings • <kbd>I</kbd> to toggle status bar
-        </p>
-      </div>
     </div>
   );
 }

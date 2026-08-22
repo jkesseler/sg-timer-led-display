@@ -1,17 +1,14 @@
 # SG Timer PWA Display
 
-A Progressive Web App (PWA) that mimics the HUB75 LED matrix display for shot timer data. Instead of using BLE, this app receives data via MQTT from an ESP32 bridge device.
-
-![Display States](docs/screenshots/display-states-preview.png)
+A Progressive Web App (PWA) that shows live shot timer data as a full-screen scoreboard, designed for a TV running in kiosk mode rather than for mimicking the physical HUB75 LED matrix. Instead of using BLE, this app receives data via MQTT from an ESP32 bridge device.
 
 ## Features
 
-### 🎯 LED Matrix Simulation
-- **Pixel-perfect 128x32 display** matching physical HUB75 panels
-- **Canvas-based rendering** with authentic LED appearance
-- **Color-accurate RGB565** matching ESP32 firmware
+### 🎯 TV Kiosk Scoreboard
+- **Full-screen DOM/CSS display**, built for a TV viewed from several meters away rather than a fixed pixel grid
+- **Live split-times ladder** — every shot of the current session, newest first, with a relative-magnitude bar per split
+- **State-driven layout**: idle status cards pre-session, a two-pane hero + splits view once a stage is running
 - **Responsive scaling** adapts to any screen size
-- **Scrolling text** for long messages
 
 ### 📡 Real-time MQTT Integration
 - **WebSocket MQTT client** for real-time updates
@@ -185,7 +182,8 @@ Requires WebSocket support for MQTT over WebSocket connection.
 pwa-display-app/
 ├── src/
 │   ├── components/
-│   │   ├── LEDMatrix.jsx       # Canvas-based LED display
+│   │   ├── TimerDisplay.jsx    # State-driven scoreboard display
+│   │   ├── SplitList.jsx       # Live split-times ladder
 │   │   └── Settings.jsx        # Configuration modal
 │   ├── hooks/
 │   │   └── useMqtt.js          # MQTT connection management

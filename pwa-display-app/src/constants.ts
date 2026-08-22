@@ -1,37 +1,15 @@
 import { DisplayState, ConnectionState } from './types';
-import type { DisplayColors as IDisplayColors, DisplayConfig as IDisplayConfig, MqttTopics as IMqttTopics } from './types';
+import type { MqttTopics as IMqttTopics } from './types';
 
 // Display state enumeration matching ESP32 firmware
 export { DisplayState, ConnectionState };
 
-// RGB565 color constants matching ESP32 firmware
-export const DisplayColors: IDisplayColors = {
-  RED: '#FF0000',        // Error, session end
-  GREEN: '#00FF00',      // Shot times, ready, success
-  BLUE: '#0000FF',       // Unused
-  YELLOW: '#FFFF00',     // Shot numbers, session info
-  WHITE: '#FFFFFF',      // General text
-  LIGHT_BLUE: '#6464FF', // Waiting state (100, 100, 255)
-  GRAY: '#808080'        // Disabled/inactive
-};
+// Wordmark shown on the STARTUP screen
+export const STARTUP_TEXT = 'J.K. PewPew Timer';
 
-// Display configuration
-export const DisplayConfig: IDisplayConfig = {
-  PANEL_WIDTH: 64,
-  PANEL_HEIGHT: 32,
-  PANEL_CHAIN: 2,
-  TOTAL_WIDTH: 128,  // 64 * 2
-  TOTAL_HEIGHT: 32,
-  PIXEL_SIZE: 4,     // CSS pixels per LED pixel (adjustable for screen size)
-
-  // Timing
-  STARTUP_MESSAGE_DELAY: 20000, // 20 seconds like firmware
-  SCROLL_SPEED_MS: 25,
-  SCROLL_PAUSE_MS: 1000,
-
-  // Text
-  STARTUP_TEXT: 'J.K. PewPew Timer'
-};
+// How long the STARTUP screen holds before falling back to DISCONNECTED,
+// in case no connection/state message arrives sooner.
+export const STARTUP_DISPLAY_MS = 3000;
 
 // MQTT topics
 // '+' is the single-level MQTT wildcard; it matches exactly one topic segment.

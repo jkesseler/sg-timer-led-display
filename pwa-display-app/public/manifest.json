@@ -1,12 +1,12 @@
 {
   "name": "SG Timer LED Display",
   "short_name": "Timer Display",
-  "description": "LED matrix display for shot timer data",
+  "description": "Live shot timer scoreboard for TV kiosk display",
   "start_url": "/",
   "display": "standalone",
   "orientation": "landscape",
-  "background_color": "#000000",
-  "theme_color": "#000000",
+  "background_color": "#0a0d10",
+  "theme_color": "#0a0d10",
   "icons": [
     {
       "src": "/vite.svg",

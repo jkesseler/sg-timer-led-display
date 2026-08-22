@@ -4,36 +4,20 @@
  */
 
 /**
- * Format milliseconds to display string
- * Under 60s: "SS.mmm" (e.g., "02.345")
- * Over 60s: "MM:SS.t" (e.g., "01:23.4")
+ * Format a timer value (elapsed time or split time) to hundredths precision.
+ * Under 60s: "S.CC" (e.g., "2.34"). At/over 60s: "M:SS.CC" (e.g., "1:23.40").
+ * Shot timers conventionally report to the hundredth of a second.
  */
-export function formatTime(timeMs: number): string {
+export function formatTimeValue(timeMs: number): string {
   const totalSeconds = timeMs / 1000;
 
   if (totalSeconds < 60) {
-    // Format as SS.mmm
-    const seconds = Math.floor(totalSeconds);
-    const milliseconds = Math.floor((timeMs % 1000));
-    return `${seconds.toString().padStart(2, '0')}.${milliseconds.toString().padStart(3, '0')}`;
-  } else {
-    // Format as MM:SS.t
-    const minutes = Math.floor(totalSeconds / 60);
-    const seconds = Math.floor(totalSeconds % 60);
-    const tenths = Math.floor((timeMs % 1000) / 100);
-    return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}.${tenths}`;
+    return totalSeconds.toFixed(2);
   }
-}
 
-/**
- * Format split time (time since previous shot)
- * Always format as S.mmm or SS.mmm
- */
-export function formatSplitTime(timeMs: number): string {
-  const totalSeconds = timeMs / 1000;
-  const seconds = Math.floor(totalSeconds);
-  const milliseconds = Math.floor((timeMs % 1000));
-  return `${seconds}.${milliseconds.toString().padStart(3, '0')}`;
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds - minutes * 60;
+  return `${minutes}:${seconds.toFixed(2).padStart(5, '0')}`;
 }
 
 /**
@@ -54,29 +38,6 @@ export function parseMqttMessage<T = any>(topic: string, payload: Buffer): T | n
     console.error(`Failed to parse MQTT message on topic ${topic}:`, error);
     return null;
   }
-}
-
-/**
- * Get text width estimation for scrolling
- * Roughly matches ESP32 character width calculations
- */
-export function estimateTextWidth(text: string, fontSize: number): number {
-  // Rough estimate: ~0.6 * fontSize per character
-  return text.length * fontSize * 0.6;
-}
-
-/**
- * Calculate pixel scaling for responsive display
- */
-export function calculatePixelSize(
-  containerWidth: number,
-  containerHeight: number,
-  displayWidth: number,
-  displayHeight: number
-): number {
-  const widthScale = containerWidth / displayWidth;
-  const heightScale = containerHeight / displayHeight;
-  return Math.floor(Math.min(widthScale, heightScale));
 }
 
 /**

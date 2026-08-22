@@ -12,9 +12,9 @@ export default defineConfig({
       manifest: {
         name: 'SG Timer LED Display',
         short_name: 'Timer Display',
-        description: 'LED matrix display for shot timer data',
-        theme_color: '#000000',
-        background_color: '#000000',
+        description: 'Live shot timer scoreboard for TV kiosk display',
+        theme_color: '#0a0d10',
+        background_color: '#0a0d10',
         display: 'standalone',
         orientation: 'landscape',
         icons: [
