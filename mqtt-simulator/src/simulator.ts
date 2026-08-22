@@ -1,7 +1,8 @@
 import mqtt from 'mqtt';
 import type { MqttClient } from 'mqtt';
 import {
-  MqttTopics,
+  MqttEvents,
+  buildDeviceTopic,
   ConnectionState,
   type ConnectionStateMessage,
   type SessionStartedMessage,
@@ -33,15 +34,25 @@ export class TimerSimulator {
   async connect(): Promise<void> {
     return new Promise((resolve, reject) => {
       console.log(`🔌 Connecting to MQTT broker: ${this.config.brokerUrl}`);
+      console.log(`🆔 Device ID: ${this.config.deviceId}`);
 
       this.client = mqtt.connect(this.config.brokerUrl, {
         clientId: `timer-simulator-${Math.random().toString(16).substring(2, 8)}`,
         clean: true,
-        reconnectPeriod: this.config.autoReconnect ? 5000 : 0
+        reconnectPeriod: this.config.autoReconnect ? 5000 : 0,
+        // Mirrors MqttManager::tryConnect() in the ESP32 firmware: the broker
+        // auto-publishes "offline" (retained) if this client drops uncleanly.
+        will: {
+          topic: buildDeviceTopic(this.config.deviceId, MqttEvents.PRESENCE),
+          payload: 'offline',
+          qos: 0,
+          retain: true
+        }
       });
 
       this.client.on('connect', () => {
         console.log('✅ Connected to MQTT broker');
+        this.publishPresence(true);
         resolve();
       });
 
@@ -67,23 +78,45 @@ export class TimerSimulator {
     if (this.client) {
       console.log('👋 Disconnecting from broker...');
       await this.publishConnectionState(ConnectionState.DISCONNECTED);
+      this.publishPresence(false);
       this.client.end();
       this.client = null;
     }
   }
 
   /**
-   * Publish a message to a topic
+   * Publish a message to a topic under timer/<deviceId>/<event>.
+   * Retained topics (presence, connection/state, device/info) let a display
+   * that (re)connects later immediately see the current state.
    */
-  private publish(topic: string, message: object): void {
+  private publish(event: string, message: object, retain = false): void {
     if (!this.client) {
       throw new Error('Not connected to MQTT broker');
     }
 
     const payload = JSON.stringify(message);
-    this.client.publish(topic, payload, { qos: 0 }, (error) => {
+    this.client.publish(buildDeviceTopic(this.config.deviceId, event), payload, { qos: 0, retain }, (error) => {
       if (error) {
-        console.error(`❌ Failed to publish to ${topic}:`, error.message);
+        console.error(`❌ Failed to publish to ${event}:`, error.message);
+      }
+    });
+  }
+
+  /**
+   * Publish presence. Raw "online"/"offline" string payload, not JSON —
+   * matches MqttManager::publishPresence() in the ESP32 firmware exactly,
+   * since the display compares the payload bytes directly.
+   */
+  publishPresence(online: boolean): void {
+    if (!this.client) {
+      throw new Error('Not connected to MQTT broker');
+    }
+
+    const payload = online ? 'online' : 'offline';
+    console.log(`📶 Presence: ${payload}`);
+    this.client.publish(buildDeviceTopic(this.config.deviceId, MqttEvents.PRESENCE), payload, { qos: 0, retain: true }, (error) => {
+      if (error) {
+        console.error('❌ Failed to publish presence:', error.message);
       }
     });
   }
@@ -99,7 +132,7 @@ export class TimerSimulator {
     };
 
     console.log(`📡 Connection state: ${state}${deviceName ? ` (${deviceName})` : ''}`);
-    this.publish(MqttTopics.CONNECTION_STATE, message);
+    this.publish(MqttEvents.CONNECTION_STATE, message, true);
   }
 
   /**
@@ -113,7 +146,7 @@ export class TimerSimulator {
     };
 
     console.log(`ℹ️  Device: ${this.config.deviceName} (${this.config.deviceModel})`);
-    this.publish(MqttTopics.DEVICE_INFO, message);
+    this.publish(MqttEvents.DEVICE_INFO, message, true);
   }
 
   /**
@@ -127,7 +160,7 @@ export class TimerSimulator {
     };
 
     console.log(`🎬 Session started: ID=${sessionId}, Delay=${startDelaySeconds}s`);
-    this.publish(MqttTopics.SESSION_STARTED, message);
+    this.publish(MqttEvents.SESSION_STARTED, message);
   }
 
   /**
@@ -140,7 +173,7 @@ export class TimerSimulator {
     };
 
     console.log(`⏱️  Countdown complete for session ${sessionId}`);
-    this.publish(MqttTopics.COUNTDOWN_COMPLETE, message);
+    this.publish(MqttEvents.COUNTDOWN_COMPLETE, message);
   }
 
   /**
@@ -168,7 +201,7 @@ export class TimerSimulator {
     console.log(
       `🎯 Shot #${shotNumber}: ${timeSeconds}s (split: ${splitSeconds}s)`
     );
-    this.publish(MqttTopics.SHOT_DETECTED, message);
+    this.publish(MqttEvents.SHOT_DETECTED, message);
   }
 
   /**
@@ -182,7 +215,7 @@ export class TimerSimulator {
     };
 
     console.log(`🏁 Session stopped: ID=${sessionId}, Total shots=${totalShots}`);
-    this.publish(MqttTopics.SESSION_STOPPED, message);
+    this.publish(MqttEvents.SESSION_STOPPED, message);
   }
 
   /**
