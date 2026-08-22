@@ -98,15 +98,12 @@ const WaitingHero = ({ sessionData }: { sessionData: SessionData | null }) => (
 
 const ShotHero = ({ shotData }: { shotData: ShotData }) => {
   const isDraw = shotData.isFirstShot;
-  const heroValueMs = isDraw ? shotData.absoluteTimeMs : shotData.splitTimeMs;
 
   return (
     <div className="hero hero-shot">
-      <span className="hero__eyebrow">
-        Shot {shotData.shotNumber} · {isDraw ? 'Draw' : 'Split'}
-      </span>
-      <span className="hero-shot__value">{formatTimeValue(heroValueMs)}</span>
-      <span className="hero__meta">Elapsed {formatTimeValue(shotData.absoluteTimeMs)}</span>
+      <span className="hero__eyebrow">Shot {shotData.shotNumber}</span>
+      <span className="hero-shot__value">{formatTimeValue(shotData.absoluteTimeMs)}</span>
+      <span className="hero__meta">{isDraw ? 'Draw' : `Split ${formatTimeValue(shotData.splitTimeMs)}`}</span>
     </div>
   );
 };

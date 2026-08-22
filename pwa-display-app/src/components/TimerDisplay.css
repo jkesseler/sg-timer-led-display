@@ -162,7 +162,7 @@
   height: 100%;
   width: 100%;
   display: grid;
-  grid-template-columns: minmax(20rem, 38%) 1fr;
+  grid-template-columns: minmax(20rem, 2fr) 1fr;
   gap: 2.5rem;
   padding: 2.5rem 3rem;
   min-height: 0;
