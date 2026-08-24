@@ -101,20 +101,42 @@ Assume schedules arrive as this kind of export; whether to build an importer is 
 
 ## How a match runs
 
-**The squad rotates as a whole, one round at a time.** Shooter 1 round 1, shooter 2 round 1, shooter 3 round 1, and so on to the end of the squad — then back to shooter 1 for round 2. After taking a turn a shooter waits for every other shooter in the squad before their next turn. A squad of 7 therefore runs 5 passes of 7 turns, 35 turns in total, and the round number only increments when the squad wraps around.
+**The squad rotates as a whole, one round at a time.** Everyone shoots round 1 before anyone starts round 2. After taking a turn a shooter waits for every other shooter in the squad before their next turn. A squad of 7 therefore runs 5 passes of 7 turns, 35 turns in total, and the round number only increments once the whole squad has finished the current round.
+
+The order within a round is a queue that the timekeeper can rearrange mid-match (see below), so treat "whose turn is next" as a property of that live queue rather than a fixed index into the squad list.
 
 This matters for the data model and the UI: the active position advances within a round, and the round advances only on wrap. Do **not** design it as one shooter completing all five rounds before the next steps up.
 
 1. The active squad is on the range.
-2. The next shooter in squad order scans their barcode card and becomes the active shooter.
+2. The next shooter in the queue scans their barcode card and becomes the active shooter.
 3. The range officer presses start on the timer device.
 4. The shooter shoots the round.
 5. The range officer presses stop. The turn ends.
-6. The timekeeper advances to the next shooter in the squad. Back to step 2.
-7. When the last shooter in the squad has finished, the round number increments and the rotation returns to the first shooter — until all 5 rounds are done.
+6. The timekeeper closes off the turn, which re-enables the scanner and lets the *next* shooter scan in. Back to step 2.
+7. Once every active shooter has a result for the current round, the round number increments and the queue starts again from the front — until all 5 rounds are done.
 8. When every squad member has completed 5 rounds, any outstanding reshoots are shot off (see below).
 9. Each shooter checks their recorded times with the timekeeper and signs the paper sheet.
 10. Once every round has a time and every sheet is signed, the match is over for that squad. A new squad arrives — back to step 1.
+
+**Who chooses the active shooter.** Step 6 is a release, not a selection. The timekeeper does not pick who shoots next — they end the current turn and re-arm the scanner, and the next shooter makes themselves active by scanning their own card. The queue tells everyone whose turn it is, but the scan is what sets the active shooter. Manual selection by clicking a name exists only as a fallback for a failed scan (see the timekeeper screen below). Do not design step 6 as "timekeeper selects next shooter".
+
+### The shooting order is a mutable queue, not a fixed list
+
+The squad's position numbers (`#1`…`#7`) give the *starting* order, but the real order changes during a match and the system must allow it. Real cases the timekeeper deals with:
+
+- A shooter arrives late — they are not there for round 1 but join later.
+- A shooter steps away right before their turn (the toilet, a gun problem, fetching ammo). Physically the timekeeper moves their scoring paper to the bottom of the stack, and they shoot later in that same round.
+- A shooter does not show up at all and is skipped entirely.
+
+So model the shooting order as an **ordered queue that can be rearranged mid-match**, not as a fixed list iterated by index. Note the paper metaphor exactly matches a queue operation: moving the card to the bottom of the stack is "send to back of the current round".
+
+The plan must cover:
+
+- Reordering the queue during a match: at minimum, send a shooter to the back of the current round; ideally drag-to-reorder. Only allowed when no session is active, like the other queue mutations.
+- Marking a shooter as absent/skipped, and letting them rejoin later at a chosen position — a late arrival should be able to shoot their missed rounds if the match allows, so say what happens to rounds they were absent for.
+- The consequence for round-advance: if the order is mutable, "the round advances when the last shooter finishes" cannot mean a fixed final index. The round advances when **every active shooter in the squad has a result for the current round** — derive it from completion, not position.
+- What a rearrangement means for a shooter mid-way through their 5 rounds: their already-recorded rounds are untouched, only their queue position changes.
+- Whether a skipped shooter blocks squad completion, given a squad is otherwise not finished until everyone has 5 results.
 
 ### Reshoots
 
@@ -207,13 +229,30 @@ Behind a login. Shows:
 
 - The current shooter's name and their time.
 - **No split times on this screen.**
-- The squad list in rotation order, with the active shooter highlighted, and the current round number.
-- Clickable names, so the timekeeper can set the active shooter by hand when the scanner fails.
-- A button to advance to the next turn. Because the squad rotates as a whole, this normally moves to the next shooter in the squad and only rolls the round number over when it passes the last shooter — one button, not separate next-shooter and next-round controls.
+- The squad queue in current shooting order, with the active shooter highlighted, and the current round number. It should also make clear who is **next** and who is **on deck** (see the display section below for what those mean).
+- Clickable names, so the timekeeper can set the active shooter by hand when the scanner fails. This is a fallback for a broken scan, not the normal way a shooter becomes active.
+- Controls to rearrange the queue — send a shooter to the back of the current round, mark them absent, or reorder them — per the mutable-queue section above.
+- A button to end the current turn, which re-arms the scanner for the next shooter. Because the squad rotates as a whole, the round number rolls over on its own once every active shooter has a result for the current round — one button, not separate next-shooter and next-round controls.
 
 Since a shooter's five times are collected across five separate passes, the squad list should make each shooter's progress visible — which rounds they have completed so far, not just the current one.
 
-**Hard rule:** manual shooter selection is only possible when **no session is active**. The barcode scanner is likewise active only when no session is active. Both are gated by the same condition — treat it as one guard in the state machine, and make the plan explicit about what the UI does if a scan or click arrives while a session is running.
+**Hard rule:** manual shooter selection is only possible when **no session is active**. The barcode scanner is likewise active only when no session is active. Both are gated by the same condition — treat it as one guard in the state machine, and make the plan explicit about what the UI does if a scan or click arrives while a session is running. Queue rearrangement is gated the same way.
+
+## The display app: queue callouts
+
+The PWA display (the LED-matrix view that shooters and the range officer look at) must also announce the queue, using the standard steel-plate range commands:
+
+- **"Next shooter"** — the competitor who will shoot after the shooter currently being called. Shown in **large text at the bottom of the screen**: `Next: <name>`.
+- **"Shooter on deck"** — the competitor after that, who should be getting ready at the shooting position. Shown in **smaller text**: `On deck: <name>`.
+
+These are established range roles, not invented labels: when the range officer calls "shooter on deck", they are telling that competitor to get prepared and step up. Keep the wording and the relative ordering exact — on-deck is one further out than next.
+
+Design notes for the plan:
+
+- Both names come from the mutable queue above, so they must update live when the queue is rearranged, when a shooter is marked absent, or when a turn ends — not be computed once from the starting order.
+- The current display renders a simulated **128×32** matrix (see [pwa-display-app/src/constants.ts](pwa-display-app/src/constants.ts)); two extra text lines plus the existing time readout will not fit at that size. The plan must say how this is resolved — a taller virtual canvas for the browser view, a separate larger layout for screens as opposed to the physical panel, or scrolling. Do not silently assume the physical LED panel can show all of it.
+- Long names need a strategy at these widths (truncate, abbreviate the surname, or scroll). Note the schedule contains names like "Koen Oostwoud Wijdenes".
+- Say what is shown when there is no next or on-deck shooter — end of round, end of squad, or during the reshoot phase.
 
 ## Requirements
 
@@ -223,7 +262,9 @@ Since a shooter's five times are collected across five separate passes, the squa
 - Shooter administration: create and edit shooters with first name, last name, ASN number, KNSA number.
 - Squads with a time block, an ordered shooter list, and a per-membership discipline.
 - Disciplines as an enum in code, all ten above.
-- Barcode scan sets the active shooter, via KNSA number.
+- Barcode scan sets the active shooter, via KNSA number. The shooter makes themselves active by scanning; the timekeeper only releases the scanner between turns.
+- A shooting order that can be rearranged mid-match: send to back of round, mark absent, reorder — to handle late arrivals, shooters who step away, and no-shows.
+- `Next:` in large text and `On deck:` in smaller text on the display app, driven by the live queue.
 - Timekeeper screen as specified, behind authentication.
 - Times captured per shooter per round from the existing MQTT event stream, five rounds per shooter.
 - One reshoot per shooter on malfunction, deferred until the squad has finished its 5 rounds. The affected round stays permanently marked `RS` and the reshoot time is stored in its own field (see the open question on how the limit is scoped).
@@ -270,7 +311,8 @@ Give a recommended default for each so the plan is not blocked, but do not silen
 A staged plan covering:
 
 - Payload collections and their relationships, with the membership-owns-discipline-and-times constraint respected.
-- The match/round state machine, including the no-active-session guard, the deferred-reshoot phase, and the failure cases.
+- The match/round state machine, including the no-active-session guard, the mutable shooting queue, the deferred-reshoot phase, and the failure cases.
+- How the display app derives and renders the next / on-deck callouts within its size constraints.
 - How a score card is produced from the stored data, matching the format above.
 - Route structure, including where the timekeeper screen and the migrated PWA display live, and the auth boundary.
 - The MQTT ingestion path and how a timer session is bound to (shooter, discipline, round).
