@@ -7,7 +7,7 @@
 
 Produce an implementation plan for a match score-keeping web application built on **PayloadCMS + Next.js**, into which the existing PWA display app is absorbed as a route.
 
-Do not write implementation code. I want a plan: data model, routes, state machine, integration points, and a staged build order. Ask me the open questions listed at the end before finalising — several of them change the shape of the whole design.
+Do not write implementation code. I want a plan: data model, routes, state machine, integration points, a staged build order, and an honest assessment of whether the proposed technologies fit the problem. Ask me the open questions listed at the end before finalising — several of them change the shape of the whole design.
 
 ## Goal
 
@@ -293,7 +293,7 @@ Give a recommended default for each so the plan is not blocked, but do not silen
 1. **Where MQTT is consumed.** I want the browser's responsiveness *and* durable storage, and I have not decided how to get both. My instinct is that these are not exclusive: **both** subscribe to the same broker. The timekeeper's browser subscribes directly so the live time updates with no server round-trip, and the Next.js server subscribes independently and persists every event to Payload as the system of record. The browser then renders from its own live feed but treats the server's stored data as authoritative on reload or reconnect.
 
    Evaluate that against the alternatives (server-only with push to the browser over SSE/WebSocket; browser-only with POST) and tell me if the dual-subscriber approach is wrong. The specific things I care about: the recorded time must survive the timekeeper closing their laptop or losing Wi-Fi mid-round; and the live display must not feel laggy. Note that both subscribers see the *same* `sessionId`, so the plan needs to say how a browser-side view and a server-side record of the same session are reconciled without double-counting, and which side owns binding a session to (shooter, discipline, round).
-2. **The `/admin` collision.** Payload already owns `/admin`. My notes say the timekeeper screen lives under `/admin` with a login. Is it a Payload custom admin view, or a separate route such as `/timekeeper` using Payload auth? Flag the trade-off.
+2. **The `/admin` collision.** Payload already owns `/admin`. My notes say the timekeeper screen lives under `/admin` with a login. Is it a Payload custom admin view, or a separate route such as `/timekeeper` using Payload auth? Flag the trade-off — and answer it together with the Payload fitness question in the technology review, since they are the same decision seen from two sides.
 3. **What "score" means here, and whether the card is printed.** The system records *times*; paper stays authoritative and the match director enters results elsewhere. So is this a capture aid, or is it becoming the results system? Now that the score card format is known, the sharper version of this question is: should the app **generate and print the filled-in card** for the shooter to sign — replacing the hand-written sheet with a printed one — or does the card stay hand-written and the app merely mirrors it on screen? Printing is the obvious win, since the times are already captured and transcription is where errors creep in. Recommend accordingly.
 4. **Timer-to-squad binding.** How does a `deviceId` map to a squad, range, or lane — configured once, chosen by the timekeeper, or auto-bound to the first online device?
 5. **Placement and stack.** New app directory alongside `pwa-display-app/`, or convert that app in place? npm workspaces or standalone? Which database does Payload use — Postgres or Mongo? These are unstated.
@@ -308,6 +308,22 @@ Give a recommended default for each so the plan is not blocked, but do not silen
 - Do not use the `void` operator in click handlers or callbacks.
 - Reuse the existing MQTT types and topic helpers rather than restating them.
 - Use [mqtt-simulator/](mqtt-simulator/) to develop and test without hardware.
+- **Client application state should be handled with Redux Toolkit.** The existing PWA already uses it — store in [pwa-display-app/src/store/](pwa-display-app/src/store/), with MQTT and beep middleware — so this carries the pattern forward rather than introducing one. The live match state (active shooter, current round, the mutable queue, incoming shot events) is exactly the kind of shared cross-component state it suits. This is a preference, not an absolute: if some part of the app is better served otherwise, say so and justify it in the technology review below.
+
+## Technology fitness review
+
+Part of the plan is to **examine whether the chosen technologies actually fit this problem**, rather than assuming the stack and designing inside it. Treat this as real analysis with a recommendation, not a formality — and say plainly where a choice is a poor fit.
+
+Cover at least:
+
+- **PayloadCMS** — it is a content management system being used here for match operations, not content. Assess how well its collections, access control, admin UI and hooks fit a live, stateful, real-time workflow. Where does it help (auth, CRUD, admin scaffolding for shooters and squads), and where does it fight the problem (a live shooting queue, session state, event ingestion)? Is a Payload custom admin view the right home for the timekeeper screen, or should that be an ordinary Next.js route using Payload only for auth and data?
+- **Redux Toolkit** — confirm it fits the live match state, and say how it interacts with server state. Be explicit about the boundary between RTK and whatever fetches from Payload, and whether RTK Query or the Payload client should own server data. Flag it if two state systems would end up overlapping.
+- **Next.js** — App Router vs Pages, server vs client components given a persistent MQTT subscription, and whether SSR earns its place for a screen that is almost entirely live client state.
+- **The MQTT client in the browser**, and how a long-lived subscription coexists with the Next.js lifecycle and React strict mode.
+- **Database choice** for Payload (see the open question), judged against this workload rather than by general preference.
+- **The barcode scanner as HID keyboard input** — whether global key capture is robust enough, or whether the scanner should be configured differently.
+
+For each: does it fit, what does it cost, and what is the alternative if it does not. If the honest answer is that the stack is a poor fit for part of this, say so — I would rather hear it now than discover it mid-build.
 
 ## Deliverable
 
@@ -320,4 +336,5 @@ A staged plan covering:
 - Route structure, including where the timekeeper screen and the migrated PWA display live, and the auth boundary.
 - The MQTT ingestion path and how a timer session is bound to (shooter, discipline, round).
 - Barcode capture strategy.
+- The technology fitness review above, with a clear recommendation on each choice and on the RTK / server-state boundary.
 - Build order in phases that each leave the app working, with the riskiest unknowns resolved first.
