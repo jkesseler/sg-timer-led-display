@@ -162,8 +162,14 @@ export const mqttMiddleware: Middleware = (store) => (next) => (action: any) => 
       }
 
       // --- Filter by active device ---
-      const activeId = resolveActiveDeviceId(getState());
-      if (activeId && deviceId !== activeId) return;
+      const state = getState();
+      const activeId = resolveActiveDeviceId(state);
+      if (activeId) {
+        if (deviceId !== activeId) return;
+      } else {
+        const known = state.mqtt.knownDevices.find((d) => d.deviceId === deviceId);
+        if (known?.presence === 'offline') return;
+      }
 
       // --- Connection state ---
       if (matchPattern(MqttTopics.CONNECTION_STATE, topic)) {

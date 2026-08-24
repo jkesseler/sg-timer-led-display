@@ -31,6 +31,14 @@ export function generateDeviceId(): string {
   return id;
 }
 
+// Fixed default so repeated local runs reuse the same retained MQTT topics
+// instead of each minting a new device ID and leaving the old one's retained
+// "online"/"connected" state stuck in the broker forever. Uses I/0/1, which
+// the firmware alphabet above excludes, so it can never collide with a real
+// or randomly generated device ID. Override with --device-id when simulating
+// more than one device at once.
+export const DEFAULT_SIMULATOR_DEVICE_ID = 'SIM001';
+
 // Connection states
 export enum ConnectionState {
   DISCONNECTED = 'DISCONNECTED',
@@ -112,7 +120,7 @@ export interface SimulatorConfig {
 
 export const DEFAULT_CONFIG: SimulatorConfig = {
   brokerUrl: 'ws://localhost:9001',
-  deviceId: generateDeviceId(),
+  deviceId: DEFAULT_SIMULATOR_DEVICE_ID,
   deviceName: 'Simulated SG Timer',
   deviceModel: DeviceModels.SIMULATED,
   startDelay: 3.0,

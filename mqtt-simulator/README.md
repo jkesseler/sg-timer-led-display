@@ -93,7 +93,7 @@ npm run start [options] [mode]
 | Option | Description | Default |
 |--------|-------------|---------|
 | `--broker <url>` | MQTT broker URL | `ws://localhost:9001` |
-| `--device-id <id>` | Device ID the display scopes topics by | random 6-char ID |
+| `--device-id <id>` | Device ID the display scopes topics by | `SIM001` |
 | `--shots <number>` | Number of shots per session | `10` |
 | `--delay <seconds>` | Start delay countdown | `3.0` |
 | `--interval <ms>` | Time between shots (ms) | `1500` |
@@ -170,10 +170,12 @@ npm run start -- --broker wss://mqtt.example.com:8884
 ## MQTT Topics Published
 
 The simulator publishes to the same `timer/<deviceId>/<event>` topics as the ESP32
-bridge, using a randomly generated 6-char device ID by default (override with
-`--device-id`). Retained topics let a display that (re)connects later immediately
-see the current state — presence also carries a Last Will & Testament, so an
-unclean simulator exit still flips it to "offline".
+bridge, using the fixed device ID `SIM001` by default so repeated local runs reuse
+the same retained topics instead of each leaving a stale device behind (override
+with `--device-id`, e.g. to simulate more than one device at once). Retained
+topics let a display that (re)connects later immediately see the current state —
+presence also carries a Last Will & Testament, so an unclean simulator exit still
+flips it to "offline".
 
 | Topic | Retained | When | Message |
 |-------|----------|------|---------|

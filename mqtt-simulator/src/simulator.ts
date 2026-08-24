@@ -77,8 +77,14 @@ export class TimerSimulator {
   async disconnect(): Promise<void> {
     if (this.client) {
       console.log('👋 Disconnecting from broker...');
-      await this.publishConnectionState(ConnectionState.DISCONNECTED);
-      this.publishPresence(false);
+      // QoS 1 here (unlike the QoS 0 used everywhere else, to mirror the
+      // firmware): a QoS 0 publish's callback fires as soon as the packet is
+      // handed to the socket, not once the broker actually has it, so with
+      // the socket closing right after, the broker could still be holding the
+      // *previous* retained value — leaving connection/state stuck on
+      // CONNECTED forever. QoS 1 only resolves once the broker PUBACKs it.
+      await this.publishConnectionState(ConnectionState.DISCONNECTED, undefined, 1);
+      await this.publishPresence(false, 1);
       this.client.end();
       this.client = null;
     }
@@ -89,16 +95,20 @@ export class TimerSimulator {
    * Retained topics (presence, connection/state, device/info) let a display
    * that (re)connects later immediately see the current state.
    */
-  private publish(event: string, message: object, retain = false): void {
-    if (!this.client) {
+  private publish(event: string, message: object, retain = false, qos: 0 | 1 = 0): Promise<void> {
+    const client = this.client;
+    if (!client) {
       throw new Error('Not connected to MQTT broker');
     }
 
     const payload = JSON.stringify(message);
-    this.client.publish(buildDeviceTopic(this.config.deviceId, event), payload, { qos: 0, retain }, (error) => {
-      if (error) {
-        console.error(`❌ Failed to publish to ${event}:`, error.message);
-      }
+    return new Promise((resolve) => {
+      client.publish(buildDeviceTopic(this.config.deviceId, event), payload, { qos, retain }, (error) => {
+        if (error) {
+          console.error(`❌ Failed to publish to ${event}:`, error.message);
+        }
+        resolve();
+      });
     });
   }
 
@@ -107,24 +117,28 @@ export class TimerSimulator {
    * matches MqttManager::publishPresence() in the ESP32 firmware exactly,
    * since the display compares the payload bytes directly.
    */
-  publishPresence(online: boolean): void {
-    if (!this.client) {
+  publishPresence(online: boolean, qos: 0 | 1 = 0): Promise<void> {
+    const client = this.client;
+    if (!client) {
       throw new Error('Not connected to MQTT broker');
     }
 
     const payload = online ? 'online' : 'offline';
     console.log(`📶 Presence: ${payload}`);
-    this.client.publish(buildDeviceTopic(this.config.deviceId, MqttEvents.PRESENCE), payload, { qos: 0, retain: true }, (error) => {
-      if (error) {
-        console.error('❌ Failed to publish presence:', error.message);
-      }
+    return new Promise((resolve) => {
+      client.publish(buildDeviceTopic(this.config.deviceId, MqttEvents.PRESENCE), payload, { qos, retain: true }, (error) => {
+        if (error) {
+          console.error('❌ Failed to publish presence:', error.message);
+        }
+        resolve();
+      });
     });
   }
 
   /**
    * Publish connection state
    */
-  publishConnectionState(state: ConnectionState, deviceName?: string): void {
+  publishConnectionState(state: ConnectionState, deviceName?: string, qos: 0 | 1 = 0): Promise<void> {
     const message: ConnectionStateMessage = {
       state,
       deviceName: deviceName || this.config.deviceName,
@@ -132,7 +146,7 @@ export class TimerSimulator {
     };
 
     console.log(`📡 Connection state: ${state}${deviceName ? ` (${deviceName})` : ''}`);
-    this.publish(MqttEvents.CONNECTION_STATE, message, true);
+    return this.publish(MqttEvents.CONNECTION_STATE, message, true, qos);
   }
 
   /**

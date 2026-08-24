@@ -20,6 +20,13 @@ const SESSION_DISPLAY_STATES: DisplayState[] = [
   DisplayState.SESSION_ENDED,
 ];
 
+// Prototype only — no roster data feed yet, so the names are hardcoded.
+const SHOOTER_ROSTER = {
+  current: 'Alex Rivera',
+  next: 'Jamie Chen',
+  onDeck: 'Morgan Blake',
+};
+
 type BeaconTone = 'neutral' | 'searching' | 'ready';
 
 interface IdleCardContent {
@@ -108,6 +115,26 @@ const ShotHero = ({ shotData }: { shotData: ShotData }) => {
   );
 };
 
+const ShooterHeader = ({ name }: { name: string }) => (
+  <div className="shooter-header">
+    <span className="shooter-header__label">Current shooter</span>
+    <span className="shooter-header__name">{name}</span>
+  </div>
+);
+
+const ShooterQueue = ({ next, onDeck }: { next: string; onDeck: string }) => (
+  <div className="shooter-queue">
+    <div className="shooter-queue__item">
+      <span className="shooter-queue__label">Next</span>
+      <span className="shooter-queue__name">{next}</span>
+    </div>
+    <div className="shooter-queue__item">
+      <span className="shooter-queue__label">On deck</span>
+      <span className="shooter-queue__name">{onDeck}</span>
+    </div>
+  </div>
+);
+
 const SessionEndedHero = ({
   shotData,
   sessionData,
@@ -169,14 +196,18 @@ export const TimerDisplay = () => {
   return (
     <div className="session-view">
       <div className="hero-pane">
-        {displayState === DisplayState.COUNTDOWN && (
-          <CountdownHero countdownRemainingMs={countdownRemainingMs} />
-        )}
-        {displayState === DisplayState.WAITING_FOR_SHOTS && <WaitingHero sessionData={sessionData} />}
-        {displayState === DisplayState.SHOWING_SHOT && shotData && <ShotHero shotData={shotData} />}
-        {displayState === DisplayState.SESSION_ENDED && (
-          <SessionEndedHero shotData={shotData} sessionData={sessionData} shots={shots} />
-        )}
+        <ShooterHeader name={SHOOTER_ROSTER.current} />
+        <div className="hero-pane__content">
+          {displayState === DisplayState.COUNTDOWN && (
+            <CountdownHero countdownRemainingMs={countdownRemainingMs} />
+          )}
+          {displayState === DisplayState.WAITING_FOR_SHOTS && <WaitingHero sessionData={sessionData} />}
+          {displayState === DisplayState.SHOWING_SHOT && shotData && <ShotHero shotData={shotData} />}
+          {displayState === DisplayState.SESSION_ENDED && (
+            <SessionEndedHero shotData={shotData} sessionData={sessionData} shots={shots} />
+          )}
+        </div>
+        <ShooterQueue next={SHOOTER_ROSTER.next} onDeck={SHOOTER_ROSTER.onDeck} />
       </div>
       <div className="splits-pane">
         <SplitList shots={shots} highlightExtremes={displayState === DisplayState.SESSION_ENDED} />
