@@ -24,7 +24,7 @@ This is a monorepo — see [CLAUDE.md](CLAUDE.md) for the full component map and
   - [src/constants.ts](pwa-display-app/src/constants.ts) — topic constants plus `buildDeviceTopic()` / `parseDeviceTopic()`
   - [src/hooks/useMqtt.ts](pwa-display-app/src/hooks/useMqtt.ts) — connection, device discovery, per-device message routing
   - Store lives in [src/store/](pwa-display-app/src/store/) with MQTT and beep middleware
-- [ESP32-S3-firmware/](ESP32-S3-firmware/) — the firmware that publishes the events. **Out of scope for changes** unless the plan proves a firmware change is unavoidable; if so, call it out explicitly rather than assuming it.
+- [ESP32-S3-firmware/](ESP32-S3-firmware/) — the firmware that publishes the events, and the HUB75 LED panel it drives. **Strictly off limits.** Do not plan, propose, or design any change here — not to the firmware, not to the matrix rendering code, not to the MQTT contract it publishes. Treat the event stream as a fixed external input. If something appears to require a firmware change, redesign around it or flag it as a blocker; do not plan the change.
 - [mqtt-simulator/](mqtt-simulator/) — emulates firmware MQTT output. Use it as the development and test driver so no hardware is needed.
 
 ### The MQTT contract (already exists — consume it, do not redesign it)
@@ -240,7 +240,9 @@ Since a shooter's five times are collected across five separate passes, the squa
 
 ## The display app: queue callouts
 
-The PWA display (the LED-matrix view that shooters and the range officer look at) must also announce the queue, using the standard steel-plate range commands:
+**Scope: this is the PWA app only.** The callouts below are a change to [pwa-display-app/](pwa-display-app/) — the browser view — and nothing else. The physical HUB75 LED panel and the firmware that drives it are **not** part of this work: do not plan changes to the matrix rendering for the hardware, do not propose firmware changes to carry queue data, and do not treat the panel's 128×32 geometry as a constraint on the browser layout. The browser is a screen and can be laid out freely.
+
+The PWA display that shooters and the range officer look at must also announce the queue, using the standard steel-plate range commands:
 
 - **"Next shooter"** — the competitor who will shoot after the shooter currently being called. Shown in **large text at the bottom of the screen**: `Next: <name>`.
 - **"Shooter on deck"** — the competitor after that, who should be getting ready at the shooting position. Shown in **smaller text**: `On deck: <name>`.
@@ -250,8 +252,8 @@ These are established range roles, not invented labels: when the range officer c
 Design notes for the plan:
 
 - Both names come from the mutable queue above, so they must update live when the queue is rearranged, when a shooter is marked absent, or when a turn ends — not be computed once from the starting order.
-- The current display renders a simulated **128×32** matrix (see [pwa-display-app/src/constants.ts](pwa-display-app/src/constants.ts)); two extra text lines plus the existing time readout will not fit at that size. The plan must say how this is resolved — a taller virtual canvas for the browser view, a separate larger layout for screens as opposed to the physical panel, or scrolling. Do not silently assume the physical LED panel can show all of it.
-- Long names need a strategy at these widths (truncate, abbreviate the surname, or scroll). Note the schedule contains names like "Koen Oostwoud Wijdenes".
+- The PWA today renders a simulated **128×32** matrix (see [pwa-display-app/src/constants.ts](pwa-display-app/src/constants.ts)) to mimic the panel. The callouts do not have to live inside that simulated matrix and should not be squeezed into it — put them in the surrounding page, below the matrix view, where there is real room for large text. Leave the matrix rendering itself alone.
+- Long names still need a sensible strategy at narrow viewport widths (truncate, abbreviate the surname, or wrap) — the schedule contains names like "Koen Oostwoud Wijdenes" — but this is ordinary responsive layout, not a pixel budget.
 - Say what is shown when there is no next or on-deck shooter — end of round, end of squad, or during the reshoot phase.
 
 ## Requirements
@@ -280,7 +282,8 @@ Design notes for the plan:
 
 - The paper sign-off flow and the shooter's signature.
 - The match director's entry into the external results system.
-- Any change to the firmware or the MQTT contract, unless proven unavoidable.
+- **The ESP32-S3 firmware, the HUB75 LED panel, and the matrix rendering code — off limits entirely, no exceptions.** The MQTT contract they publish is fixed input, not something to extend.
+- The [BLE-LoRa-Bridge/](BLE-LoRa-Bridge/) firmware, for the same reason.
 - Ranking, scoring formulas, or published results — unless the answer to the "what is a score" question below says otherwise.
 
 ## Open questions — ask me these before finalising the plan
