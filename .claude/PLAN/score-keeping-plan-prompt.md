@@ -101,16 +101,21 @@ Assume schedules arrive as this kind of export; whether to build an importer is 
 
 ## How a match runs
 
+**The squad rotates as a whole, one round at a time.** Shooter 1 round 1, shooter 2 round 1, shooter 3 round 1, and so on to the end of the squad — then back to shooter 1 for round 2. After taking a turn a shooter waits for every other shooter in the squad before their next turn. A squad of 7 therefore runs 5 passes of 7 turns, 35 turns in total, and the round number only increments when the squad wraps around.
+
+This matters for the data model and the UI: the active position advances within a round, and the round advances only on wrap. Do **not** design it as one shooter completing all five rounds before the next steps up.
+
 1. The active squad is on the range.
-2. The next shooter scans their barcode card and becomes the active shooter.
+2. The next shooter in squad order scans their barcode card and becomes the active shooter.
 3. The range officer presses start on the timer device.
 4. The shooter shoots the round.
-5. The range officer presses stop. The round ends.
-6. The timekeeper advances to the next shooter. Back to step 2. Five rounds in total.
-7. After the final round the shooter checks the recorded times with the timekeeper and signs the paper sheet.
-8. When every squad member has completed five rounds, the match is over for that squad. A new squad arrives — back to step 1.
+5. The range officer presses stop. The turn ends.
+6. The timekeeper advances to the next shooter in the squad. Back to step 2.
+7. When the last shooter in the squad has finished, the round number increments and the rotation returns to the first shooter — until all 5 rounds are done.
+8. After their final round each shooter checks the recorded times with the timekeeper and signs the paper sheet.
+9. When every squad member has completed 5 rounds, the match is over for that squad. A new squad arrives — back to step 1.
 
-A shooter is allowed **one** reshoot if they have a malfunction during a round. The plan must say how a reshoot is recorded and which time counts.
+A shooter is allowed **one** reshoot if they have a malfunction during a round. The plan must say how a reshoot is recorded, which time counts, and where the reshoot turn fits into the rotation — taken immediately, or appended at the end of the round.
 
 ## The barcode scanner
 
@@ -124,9 +129,11 @@ Behind a login. Shows:
 
 - The current shooter's name and their time.
 - **No split times on this screen.**
-- The squad list, with the active shooter highlighted.
+- The squad list in rotation order, with the active shooter highlighted, and the current round number.
 - Clickable names, so the timekeeper can set the active shooter by hand when the scanner fails.
-- A button to advance the match to the next round/shooter.
+- A button to advance to the next turn. Because the squad rotates as a whole, this normally moves to the next shooter in the squad and only rolls the round number over when it passes the last shooter — one button, not separate next-shooter and next-round controls.
+
+Since a shooter's five times are collected across five separate passes, the squad list should make each shooter's progress visible — which rounds they have completed so far, not just the current one.
 
 **Hard rule:** manual shooter selection is only possible when **no session is active**. The barcode scanner is likewise active only when no session is active. Both are gated by the same condition — treat it as one guard in the state machine, and make the plan explicit about what the UI does if a scan or click arrives while a session is running.
 
@@ -160,16 +167,15 @@ Behind a login. Shows:
 
 Give a recommended default for each so the plan is not blocked, but do not silently bury them as assumptions.
 
-1. **Round rotation order.** This is the most important one and my notes are ambiguous. Step 6 says "advance to the next shooter (for a total of 5 rounds)" but step 7 says "all squad members have finished 5 rounds". Does the whole squad rotate through each round (five passes over the squad), or does one shooter shoot all five rounds before the next steps up? This changes the state machine and the entire timekeeper UI.
-2. **Where MQTT is consumed.** Does the Next.js server subscribe to `timer/<deviceId>/…` and persist to Payload, or does the timekeeper's browser subscribe and POST results? Only server-side capture survives the timekeeper closing their laptop — recommend accordingly and let me confirm.
-3. **The `/admin` collision.** Payload already owns `/admin`. My notes say the timekeeper screen lives under `/admin` with a login. Is it a Payload custom admin view, or a separate route such as `/timekeeper` using Payload auth? Flag the trade-off.
-4. **What "score" means here.** The system records *times*; paper stays authoritative and the match director enters results elsewhere. So is this a capture aid that prints a sheet, or is it becoming the results system? This decides whether export and sign-off features are in scope at all.
-5. **Timer-to-squad binding.** How does a `deviceId` map to a squad, range, or lane — configured once, chosen by the timekeeper, or auto-bound to the first online device?
-6. **Placement and stack.** New app directory alongside `pwa-display-app/`, or convert that app in place? npm workspaces or standalone? Which database does Payload use — Postgres or Mongo? These are unstated.
-7. **PWA migration specifics.** How the Vite app moves to Next.js: the MQTT hook becomes a client-only component, `vite-plugin-pwa` is replaced by a Next PWA setup, and the Redux store carries over. Confirm the PWA route keeps working standalone on a tablet.
-8. **Schedule import.** Should squad schedules be imported from an export like the PDF above (or a CSV of it), or entered by hand in the Payload admin?
-9. **Missing KNSA numbers.** In the reference export the ASN and KNSA columns are dashes — I can't tell whether that is placeholder data or genuinely absent. If some shooters have no KNSA number they cannot be scanned at all. Does manual selection need to be a permanent first-class path rather than a scanner fallback, and can a shooter be entered without a KNSA number?
-10. **Reshoot scope.** My notes say one reshoot on malfunction but not over what: one per match, one per squad entry, or one per discipline? A shooter entered in two disciplines makes this materially different.
+1. **Where MQTT is consumed.** Does the Next.js server subscribe to `timer/<deviceId>/…` and persist to Payload, or does the timekeeper's browser subscribe and POST results? Only server-side capture survives the timekeeper closing their laptop — recommend accordingly and let me confirm.
+2. **The `/admin` collision.** Payload already owns `/admin`. My notes say the timekeeper screen lives under `/admin` with a login. Is it a Payload custom admin view, or a separate route such as `/timekeeper` using Payload auth? Flag the trade-off.
+3. **What "score" means here.** The system records *times*; paper stays authoritative and the match director enters results elsewhere. So is this a capture aid that prints a sheet, or is it becoming the results system? This decides whether export and sign-off features are in scope at all.
+4. **Timer-to-squad binding.** How does a `deviceId` map to a squad, range, or lane — configured once, chosen by the timekeeper, or auto-bound to the first online device?
+5. **Placement and stack.** New app directory alongside `pwa-display-app/`, or convert that app in place? npm workspaces or standalone? Which database does Payload use — Postgres or Mongo? These are unstated.
+6. **PWA migration specifics.** How the Vite app moves to Next.js: the MQTT hook becomes a client-only component, `vite-plugin-pwa` is replaced by a Next PWA setup, and the Redux store carries over. Confirm the PWA route keeps working standalone on a tablet.
+7. **Schedule import.** Should squad schedules be imported from an export like the PDF above (or a CSV of it), or entered by hand in the Payload admin?
+8. **Missing KNSA numbers.** In the reference export the ASN and KNSA columns are dashes — I can't tell whether that is placeholder data or genuinely absent. If some shooters have no KNSA number they cannot be scanned at all. Does manual selection need to be a permanent first-class path rather than a scanner fallback, and can a shooter be entered without a KNSA number?
+9. **Reshoot scope.** My notes say one reshoot on malfunction but not over what: one per match, one per squad entry, or one per discipline? A shooter entered in two disciplines makes this materially different.
 
 ## Constraints
 
