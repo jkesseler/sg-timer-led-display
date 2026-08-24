@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { TimerSimulator } from './simulator.js';
-import { DeviceModels } from './types.js';
+import { DeviceModels, generateDeviceId } from './types.js';
 
 // Color codes for terminal output
 const colors = {
@@ -40,6 +40,7 @@ ${colors.bright}Modes:${colors.reset}
 
 ${colors.bright}Options:${colors.reset}
   --broker <url>      MQTT broker URL (default: ws://localhost:9001)
+  --device-id <id>    Device ID the display scopes topics by (default: random, e.g. "K3RQXZ")
   --shots <number>    Number of shots per session (default: 10)
   --delay <seconds>   Start delay in seconds (default: 3.0)
   --interval <ms>     Time between shots in ms (default: 1500)
@@ -81,6 +82,7 @@ function parseArgs() {
 
   const config = {
     brokerUrl: 'ws://localhost:9001',
+    deviceId: generateDeviceId(),
     deviceName: 'Simulated SG Timer',
     deviceModel: DeviceModels.SIMULATED as string,
     startDelay: 3.0,
@@ -107,6 +109,10 @@ function parseArgs() {
 
       case '--broker':
         config.brokerUrl = args[++i];
+        break;
+
+      case '--device-id':
+        config.deviceId = args[++i];
         break;
 
       case '--shots':
@@ -179,6 +185,7 @@ async function main() {
 
   console.log(`${colors.bright}Configuration:${colors.reset}`);
   console.log(`  Broker:   ${config.brokerUrl}`);
+  console.log(`  Device ID:${config.deviceId}`);
   console.log(`  Device:   ${config.deviceName}`);
   console.log(`  Model:    ${config.deviceModel}`);
   console.log(`  Mode:     ${mode}`);

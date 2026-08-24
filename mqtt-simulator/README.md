@@ -93,6 +93,7 @@ npm run start [options] [mode]
 | Option | Description | Default |
 |--------|-------------|---------|
 | `--broker <url>` | MQTT broker URL | `ws://localhost:9001` |
+| `--device-id <id>` | Device ID the display scopes topics by | random 6-char ID |
 | `--shots <number>` | Number of shots per session | `10` |
 | `--delay <seconds>` | Start delay countdown | `3.0` |
 | `--interval <ms>` | Time between shots (ms) | `1500` |
@@ -168,16 +169,21 @@ npm run start -- --broker wss://mqtt.example.com:8884
 
 ## MQTT Topics Published
 
-The simulator publishes to the same topics as the ESP32 bridge:
+The simulator publishes to the same `timer/<deviceId>/<event>` topics as the ESP32
+bridge, using a randomly generated 6-char device ID by default (override with
+`--device-id`). Retained topics let a display that (re)connects later immediately
+see the current state — presence also carries a Last Will & Testament, so an
+unclean simulator exit still flips it to "offline".
 
-| Topic | When | Message |
-|-------|------|---------|
-| `timer/connection/state` | Connection changes | Connection state, device name |
-| `timer/device/info` | After connection | Device model and name |
-| `timer/session/started` | Session begins | Session ID, start delay |
-| `timer/countdown/complete` | Countdown ends | Session ID |
-| `timer/shot/detected` | Each shot | Shot number, times, device |
-| `timer/session/stopped` | Session ends | Session ID, total shots |
+| Topic | Retained | When | Message |
+|-------|----------|------|---------|
+| `timer/<deviceId>/presence` | Yes | On connect / disconnect | Raw `"online"` / `"offline"` string |
+| `timer/<deviceId>/connection/state` | Yes | Connection changes | Connection state, device name |
+| `timer/<deviceId>/device/info` | Yes | After connection | Device model and name |
+| `timer/<deviceId>/session/started` | No | Session begins | Session ID, start delay |
+| `timer/<deviceId>/countdown/complete` | No | Countdown ends | Session ID |
+| `timer/<deviceId>/shot/detected` | No | Each shot | Shot number, times, device |
+| `timer/<deviceId>/session/stopped` | No | Session ends | Session ID, total shots |
 
 ## Example Output
 

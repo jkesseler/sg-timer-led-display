@@ -118,31 +118,6 @@ export interface DevicePresenceMessage {
   presence: 'online' | 'offline';
 }
 
-// Display Colors
-export interface DisplayColors {
-  RED: string;
-  GREEN: string;
-  BLUE: string;
-  YELLOW: string;
-  WHITE: string;
-  LIGHT_BLUE: string;
-  GRAY: string;
-}
-
-// Display Configuration
-export interface DisplayConfig {
-  PANEL_WIDTH: number;
-  PANEL_HEIGHT: number;
-  PANEL_CHAIN: number;
-  TOTAL_WIDTH: number;
-  TOTAL_HEIGHT: number;
-  PIXEL_SIZE: number;
-  STARTUP_MESSAGE_DELAY: number;
-  SCROLL_SPEED_MS: number;
-  SCROLL_PAUSE_MS: number;
-  STARTUP_TEXT: string;
-}
-
 // MQTT Topics
 // Values are MQTT subscription patterns using '+' (single-level wildcard)
 // so the display subscribes to events from ANY device in one call.
@@ -159,23 +134,6 @@ export interface MqttTopics {
   COUNTDOWN_COMPLETE: string;
   /** timer/+/device/info – retained */
   DEVICE_INFO: string;
-}
-
-// Component Props
-export interface LEDMatrixProps {
-  displayState: DisplayState;
-  shotData: ShotData | null;
-  sessionData: SessionData | null;
-  connectionState: string;
-  deviceName: string | null;
-  brightness?: number;
-}
-
-export interface SettingsProps {
-  settings: MqttSettings;
-  onSave: (settings: MqttSettings) => void;
-  onClose: () => void;
-  isConnected: boolean;
 }
 
 // Hook return types
@@ -200,6 +158,3 @@ export interface UseMqttReturn {
   onMessage: <T = any>(topic: string, handler: MqttMessageHandler<T>) => void;
   updateSettings: (settings: MqttSettings) => void;
 }
-
-// Canvas rendering context
-export type CanvasRenderingContext = CanvasRenderingContext2D;

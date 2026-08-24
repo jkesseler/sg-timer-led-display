@@ -3,7 +3,7 @@
   "private": true,
   "version": "1.0.0",
   "type": "module",
-  "description": "PWA LED matrix display for SG Timer shot timer data via MQTT",
+  "description": "PWA shot timer scoreboard for SG Timer data via MQTT, built for TV kiosk display",
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
