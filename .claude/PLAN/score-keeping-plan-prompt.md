@@ -133,7 +133,7 @@ The plan must cover:
 - Where deferred reshoots are queued and how the timekeeper sees which ones are outstanding, given they may be requested many turns before they are taken.
 - Whether more than one shooter in a squad can have an outstanding `RS`, and in what order those are shot off at the end.
 - What the timekeeper screen shows during the reshoot phase, once the normal 5-round rotation is over but the squad is not yet complete.
-- How `RS` appears on the printed/reviewed sheet the shooter signs, since sign-off happens after their rounds are done.
+- How `RS` appears on the sheet in the meantime. A shooter with an outstanding `RS` **waits** — they do not sign until their reshoot has been taken and every round has a real time. Nobody signs a sheet with an `RS` on it, and there is no partial or repeated sign-off.
 
 ## The barcode scanner
 
@@ -185,7 +185,9 @@ Since a shooter's five times are collected across five separate passes, the squa
 
 Give a recommended default for each so the plan is not blocked, but do not silently bury them as assumptions.
 
-1. **Where MQTT is consumed.** Does the Next.js server subscribe to `timer/<deviceId>/…` and persist to Payload, or does the timekeeper's browser subscribe and POST results? Only server-side capture survives the timekeeper closing their laptop — recommend accordingly and let me confirm.
+1. **Where MQTT is consumed.** I want the browser's responsiveness *and* durable storage, and I have not decided how to get both. My instinct is that these are not exclusive: **both** subscribe to the same broker. The timekeeper's browser subscribes directly so the live time updates with no server round-trip, and the Next.js server subscribes independently and persists every event to Payload as the system of record. The browser then renders from its own live feed but treats the server's stored data as authoritative on reload or reconnect.
+
+   Evaluate that against the alternatives (server-only with push to the browser over SSE/WebSocket; browser-only with POST) and tell me if the dual-subscriber approach is wrong. The specific things I care about: the recorded time must survive the timekeeper closing their laptop or losing Wi-Fi mid-round; and the live display must not feel laggy. Note that both subscribers see the *same* `sessionId`, so the plan needs to say how a browser-side view and a server-side record of the same session are reconciled without double-counting, and which side owns binding a session to (shooter, discipline, round).
 2. **The `/admin` collision.** Payload already owns `/admin`. My notes say the timekeeper screen lives under `/admin` with a login. Is it a Payload custom admin view, or a separate route such as `/timekeeper` using Payload auth? Flag the trade-off.
 3. **What "score" means here.** The system records *times*; paper stays authoritative and the match director enters results elsewhere. So is this a capture aid that prints a sheet, or is it becoming the results system? This decides whether export and sign-off features are in scope at all.
 4. **Timer-to-squad binding.** How does a `deviceId` map to a squad, range, or lane — configured once, chosen by the timekeeper, or auto-bound to the first online device?
@@ -193,7 +195,7 @@ Give a recommended default for each so the plan is not blocked, but do not silen
 6. **PWA migration specifics.** How the Vite app moves to Next.js: the MQTT hook becomes a client-only component, `vite-plugin-pwa` is replaced by a Next PWA setup, and the Redux store carries over. Confirm the PWA route keeps working standalone on a tablet.
 7. **Schedule import.** Should squad schedules be imported from an export like the PDF above (or a CSV of it), or entered by hand in the Payload admin?
 8. **Missing KNSA numbers.** In the reference export the ASN and KNSA columns are dashes — I can't tell whether that is placeholder data or genuinely absent. If some shooters have no KNSA number they cannot be scanned at all. Does manual selection need to be a permanent first-class path rather than a scanner fallback, and can a shooter be entered without a KNSA number?
-9. **Reshoot scope and edge cases.** The reshoot mechanic itself is settled above, but the limit is not: is it one reshoot per match, per squad entry, or per discipline? A shooter entered in two disciplines makes this materially different. Also: what happens if the reshoot itself malfunctions, and can a shooter with an outstanding `RS` sign off before it is taken?
+9. **Reshoot scope.** The reshoot mechanic and sign-off ordering are settled above, but the limit is not: is it one reshoot per match, per squad entry, or per discipline? A shooter entered in two disciplines makes this materially different. Also: what happens if the reshoot itself malfunctions?
 
 ## Constraints
 
