@@ -252,8 +252,8 @@ These are established range roles, not invented labels: when the range officer c
 Design notes for the plan:
 
 - Both names come from the mutable queue above, so they must update live when the queue is rearranged, when a shooter is marked absent, or when a turn ends — not be computed once from the starting order.
-- The PWA today renders a simulated **128×32** matrix (see [pwa-display-app/src/constants.ts](pwa-display-app/src/constants.ts)) to mimic the panel. The callouts do not have to live inside that simulated matrix and should not be squeezed into it — put them in the surrounding page, below the matrix view, where there is real room for large text. Leave the matrix rendering itself alone.
-- Long names still need a sensible strategy at narrow viewport widths (truncate, abbreviate the surname, or wrap) — the schedule contains names like "Koen Oostwoud Wijdenes" — but this is ordinary responsive layout, not a pixel budget.
+- **There is already enough room on the PWA screen** — this is not a layout problem to solve. The callouts go in the page below the simulated matrix view. Do not treat available space as a constraint, do not propose scrolling or a taller canvas to make them fit, and leave the matrix rendering itself alone.
+- The PWA renders a simulated **128×32** matrix (see [pwa-display-app/src/constants.ts](pwa-display-app/src/constants.ts)) to mimic the panel. The callouts sit outside it, as ordinary page text, so the matrix geometry does not apply to them.
 - Say what is shown when there is no next or on-deck shooter — end of round, end of squad, or during the reshoot phase.
 
 ## Requirements
@@ -315,7 +315,7 @@ A staged plan covering:
 
 - Payload collections and their relationships, with the membership-owns-discipline-and-times constraint respected.
 - The match/round state machine, including the no-active-session guard, the mutable shooting queue, the deferred-reshoot phase, and the failure cases.
-- How the display app derives and renders the next / on-deck callouts within its size constraints.
+- How the display app derives the next / on-deck callouts from the live queue and keeps them in sync as it changes.
 - How a score card is produced from the stored data, matching the format above.
 - Route structure, including where the timekeeper screen and the migrated PWA display live, and the auth boundary.
 - The MQTT ingestion path and how a timer session is bound to (shooter, discipline, round).
