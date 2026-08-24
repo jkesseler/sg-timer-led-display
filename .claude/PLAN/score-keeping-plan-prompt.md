@@ -121,19 +121,79 @@ This matters for the data model and the UI: the active position advances within 
 A shooter is allowed **one** reshoot if they have a malfunction during a round. A reshoot is **deferred, not taken immediately** — it does not interrupt the rotation:
 
 1. The shooter has a malfunction in, say, round 3.
-2. That round's result is recorded as **`RS`** rather than a time. It is a marker, not a number — round 3 has no time until the reshoot is taken.
+2. That round's result is recorded as **`RS`** rather than a time. It is a marker, not a number — round 3 never gets a time.
 3. The rotation carries on untouched. The rest of the squad completes all 5 rounds.
-4. Once the squad has finished, that shooter takes their reshoot for round 3.
-5. The time from the reshoot becomes the round 3 result, replacing the `RS` marker.
+4. Once the squad has finished, that shooter takes their reshoot.
+5. The reshoot time is recorded in its **own separate field**, not written back into round 3. The `RS` marker stays.
 
-So a round result is either a recorded time or the `RS` marker awaiting a reshoot, and a squad is not finished while any `RS` is outstanding. Model the round result as a small state — pending, timed, or `RS`-awaiting-reshoot — rather than a nullable time field, and make sure the reshoot writes back to the *original* round number rather than appending a sixth round.
+**The `RS` marker is permanent.** See the score card examples below: round 3 still reads `RS` on the finished card, and the reshoot time sits in a dedicated `Reshoot:` field alongside the five rounds. Do not model the reshoot as overwriting the failed round — the card deliberately preserves both, so it stays visible that round 3 malfunctioned and what was shot in its place.
+
+So a round result is either a recorded time or the permanent `RS` marker, and the reshoot is a sixth, separately-labelled value that exists only when some round is `RS`. A squad is not finished while an `RS` has no matching reshoot time. Model the round result as a small state — pending, timed, or `RS` — plus one optional reshoot time on the shooter's card, rather than a nullable time field per round.
+
+Since the card has a single `Reshoot:` field and the allowance is one reshoot, at most one round per card can be `RS`.
 
 The plan must cover:
 
 - Where deferred reshoots are queued and how the timekeeper sees which ones are outstanding, given they may be requested many turns before they are taken.
 - Whether more than one shooter in a squad can have an outstanding `RS`, and in what order those are shot off at the end.
 - What the timekeeper screen shows during the reshoot phase, once the normal 5-round rotation is over but the squad is not yet complete.
-- How `RS` appears on the sheet in the meantime. A shooter with an outstanding `RS` **waits** — they do not sign until their reshoot has been taken and every round has a real time. Nobody signs a sheet with an `RS` on it, and there is no partial or repeated sign-off.
+- Sign-off timing. A shooter with an outstanding `RS` and no reshoot time yet **waits** — they do not sign until the reshoot has been taken. They then sign a card that still shows `RS` for that round plus the reshoot time. There is no partial or repeated sign-off.
+
+## The score card
+
+This is the artefact the shooter checks and signs, and what the match director carries away. Two real examples — the first a clean card, the second with a reshoot:
+
+```
+# Score Card
+
+Name: John Piper
+ANS Number: 1122334455
+KNSA Number: 5544332211
+Disicipline: OKP
+
+Round times
+1: 11.45
+2: 10.64
+3: 10.12
+4: 09.99
+5: 09.76
+
+Reshoot:
+
+
+Signature:
+
+
+------------------------------
+# Score Card
+
+Name: Peter Wik
+ASN Number: 123456
+KNSA Number:  654321
+Disicipline: OKP
+
+Round times
+1: 11.45
+2: 10.64
+3: RS
+4: 09.99
+5: 09.76
+
+Reshoot:  09.95
+
+
+Signature:
+```
+
+What this tells you about the model:
+
+- **One card per shooter per discipline** — the card carries a single `Disicipline` field, so a shooter entered in two disciplines gets two cards. This matches the squad-membership constraint above: the card *is* the membership row rendered.
+- Times are shown as **`SS.CC`** — seconds and centiseconds, two decimals, zero-padded (`09.99`, not `9.99`). The MQTT feed carries milliseconds, so the card rounds or truncates on render; the plan should say which, and keep full millisecond precision in storage.
+- `Reshoot:` is a first-class field on every card, left blank when unused — not an appended note.
+- The card shows **no split times**, consistent with the timekeeper screen.
+- The heading, field labels and layout above are reproduced verbatim from the real cards, typos included (`ANS Number` on one, `ASN Number` on the other; `Disicipline` on both). Treat the *structure* as authoritative, not the spelling — use correct spelling in code and in any generated card, but keep the same fields in the same order.
+
+Generating this card is likely the concrete output of the whole capture flow — see the open question below on whether printing it is in scope.
 
 ## The barcode scanner
 
@@ -166,7 +226,8 @@ Since a shooter's five times are collected across five separate passes, the squa
 - Barcode scan sets the active shooter, via KNSA number.
 - Timekeeper screen as specified, behind authentication.
 - Times captured per shooter per round from the existing MQTT event stream, five rounds per shooter.
-- One reshoot per shooter on malfunction, deferred until the squad has finished its 5 rounds, with the affected round marked `RS` until the reshoot replaces it (see the open question on how the limit is scoped).
+- One reshoot per shooter on malfunction, deferred until the squad has finished its 5 rounds. The affected round stays permanently marked `RS` and the reshoot time is stored in its own field (see the open question on how the limit is scoped).
+- A score card per shooter per discipline, in the format above, showing five round results, the reshoot field, and space for a signature.
 - Scanner and manual selection enabled only when no session is active.
 
 ### Should
@@ -189,13 +250,13 @@ Give a recommended default for each so the plan is not blocked, but do not silen
 
    Evaluate that against the alternatives (server-only with push to the browser over SSE/WebSocket; browser-only with POST) and tell me if the dual-subscriber approach is wrong. The specific things I care about: the recorded time must survive the timekeeper closing their laptop or losing Wi-Fi mid-round; and the live display must not feel laggy. Note that both subscribers see the *same* `sessionId`, so the plan needs to say how a browser-side view and a server-side record of the same session are reconciled without double-counting, and which side owns binding a session to (shooter, discipline, round).
 2. **The `/admin` collision.** Payload already owns `/admin`. My notes say the timekeeper screen lives under `/admin` with a login. Is it a Payload custom admin view, or a separate route such as `/timekeeper` using Payload auth? Flag the trade-off.
-3. **What "score" means here.** The system records *times*; paper stays authoritative and the match director enters results elsewhere. So is this a capture aid that prints a sheet, or is it becoming the results system? This decides whether export and sign-off features are in scope at all.
+3. **What "score" means here, and whether the card is printed.** The system records *times*; paper stays authoritative and the match director enters results elsewhere. So is this a capture aid, or is it becoming the results system? Now that the score card format is known, the sharper version of this question is: should the app **generate and print the filled-in card** for the shooter to sign — replacing the hand-written sheet with a printed one — or does the card stay hand-written and the app merely mirrors it on screen? Printing is the obvious win, since the times are already captured and transcription is where errors creep in. Recommend accordingly.
 4. **Timer-to-squad binding.** How does a `deviceId` map to a squad, range, or lane — configured once, chosen by the timekeeper, or auto-bound to the first online device?
 5. **Placement and stack.** New app directory alongside `pwa-display-app/`, or convert that app in place? npm workspaces or standalone? Which database does Payload use — Postgres or Mongo? These are unstated.
 6. **PWA migration specifics.** How the Vite app moves to Next.js: the MQTT hook becomes a client-only component, `vite-plugin-pwa` is replaced by a Next PWA setup, and the Redux store carries over. Confirm the PWA route keeps working standalone on a tablet.
 7. **Schedule import.** Should squad schedules be imported from an export like the PDF above (or a CSV of it), or entered by hand in the Payload admin?
 8. **Missing KNSA numbers.** In the reference export the ASN and KNSA columns are dashes — I can't tell whether that is placeholder data or genuinely absent. If some shooters have no KNSA number they cannot be scanned at all. Does manual selection need to be a permanent first-class path rather than a scanner fallback, and can a shooter be entered without a KNSA number?
-9. **Reshoot scope.** The reshoot mechanic and sign-off ordering are settled above, but the limit is not: is it one reshoot per match, per squad entry, or per discipline? A shooter entered in two disciplines makes this materially different. Also: what happens if the reshoot itself malfunctions?
+9. **Reshoot scope.** The reshoot mechanic and sign-off ordering are settled above. The card's single `Reshoot:` field implies one reshoot **per card** — i.e. per shooter per discipline — so a shooter in two disciplines would get one reshoot in each. Confirm that reading. Also: what happens if the reshoot itself malfunctions, given there is nowhere on the card to record a second one?
 
 ## Constraints
 
@@ -209,7 +270,8 @@ Give a recommended default for each so the plan is not blocked, but do not silen
 A staged plan covering:
 
 - Payload collections and their relationships, with the membership-owns-discipline-and-times constraint respected.
-- The match/round state machine, including the no-active-session guard, reshoots, and the failure cases.
+- The match/round state machine, including the no-active-session guard, the deferred-reshoot phase, and the failure cases.
+- How a score card is produced from the stored data, matching the format above.
 - Route structure, including where the timekeeper screen and the migrated PWA display live, and the auth boundary.
 - The MQTT ingestion path and how a timer session is bound to (shooter, discipline, round).
 - Barcode capture strategy.
