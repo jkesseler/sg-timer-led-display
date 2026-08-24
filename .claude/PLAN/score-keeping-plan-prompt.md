@@ -112,10 +112,28 @@ This matters for the data model and the UI: the active position advances within 
 5. The range officer presses stop. The turn ends.
 6. The timekeeper advances to the next shooter in the squad. Back to step 2.
 7. When the last shooter in the squad has finished, the round number increments and the rotation returns to the first shooter — until all 5 rounds are done.
-8. After their final round each shooter checks the recorded times with the timekeeper and signs the paper sheet.
-9. When every squad member has completed 5 rounds, the match is over for that squad. A new squad arrives — back to step 1.
+8. When every squad member has completed 5 rounds, any outstanding reshoots are shot off (see below).
+9. Each shooter checks their recorded times with the timekeeper and signs the paper sheet.
+10. Once every round has a time and every sheet is signed, the match is over for that squad. A new squad arrives — back to step 1.
 
-A shooter is allowed **one** reshoot if they have a malfunction during a round. The plan must say how a reshoot is recorded, which time counts, and where the reshoot turn fits into the rotation — taken immediately, or appended at the end of the round.
+### Reshoots
+
+A shooter is allowed **one** reshoot if they have a malfunction during a round. A reshoot is **deferred, not taken immediately** — it does not interrupt the rotation:
+
+1. The shooter has a malfunction in, say, round 3.
+2. That round's result is recorded as **`RS`** rather than a time. It is a marker, not a number — round 3 has no time until the reshoot is taken.
+3. The rotation carries on untouched. The rest of the squad completes all 5 rounds.
+4. Once the squad has finished, that shooter takes their reshoot for round 3.
+5. The time from the reshoot becomes the round 3 result, replacing the `RS` marker.
+
+So a round result is either a recorded time or the `RS` marker awaiting a reshoot, and a squad is not finished while any `RS` is outstanding. Model the round result as a small state — pending, timed, or `RS`-awaiting-reshoot — rather than a nullable time field, and make sure the reshoot writes back to the *original* round number rather than appending a sixth round.
+
+The plan must cover:
+
+- Where deferred reshoots are queued and how the timekeeper sees which ones are outstanding, given they may be requested many turns before they are taken.
+- Whether more than one shooter in a squad can have an outstanding `RS`, and in what order those are shot off at the end.
+- What the timekeeper screen shows during the reshoot phase, once the normal 5-round rotation is over but the squad is not yet complete.
+- How `RS` appears on the printed/reviewed sheet the shooter signs, since sign-off happens after their rounds are done.
 
 ## The barcode scanner
 
@@ -148,7 +166,7 @@ Since a shooter's five times are collected across five separate passes, the squa
 - Barcode scan sets the active shooter, via KNSA number.
 - Timekeeper screen as specified, behind authentication.
 - Times captured per shooter per round from the existing MQTT event stream, five rounds per shooter.
-- One reshoot per shooter on malfunction (see the open question on how that limit is scoped).
+- One reshoot per shooter on malfunction, deferred until the squad has finished its 5 rounds, with the affected round marked `RS` until the reshoot replaces it (see the open question on how the limit is scoped).
 - Scanner and manual selection enabled only when no session is active.
 
 ### Should
@@ -175,7 +193,7 @@ Give a recommended default for each so the plan is not blocked, but do not silen
 6. **PWA migration specifics.** How the Vite app moves to Next.js: the MQTT hook becomes a client-only component, `vite-plugin-pwa` is replaced by a Next PWA setup, and the Redux store carries over. Confirm the PWA route keeps working standalone on a tablet.
 7. **Schedule import.** Should squad schedules be imported from an export like the PDF above (or a CSV of it), or entered by hand in the Payload admin?
 8. **Missing KNSA numbers.** In the reference export the ASN and KNSA columns are dashes — I can't tell whether that is placeholder data or genuinely absent. If some shooters have no KNSA number they cannot be scanned at all. Does manual selection need to be a permanent first-class path rather than a scanner fallback, and can a shooter be entered without a KNSA number?
-9. **Reshoot scope.** My notes say one reshoot on malfunction but not over what: one per match, one per squad entry, or one per discipline? A shooter entered in two disciplines makes this materially different.
+9. **Reshoot scope and edge cases.** The reshoot mechanic itself is settled above, but the limit is not: is it one reshoot per match, per squad entry, or per discipline? A shooter entered in two disciplines makes this materially different. Also: what happens if the reshoot itself malfunctions, and can a shooter with an outstanding `RS` sign off before it is taken?
 
 ## Constraints
 
