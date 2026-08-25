@@ -18,12 +18,13 @@ export interface SettingsState {
 
 function loadInitialSettings(): SettingsState {
   const persisted = storage.get<MqttSettings>('mqttSettings', DefaultMqttSettings);
+
   return {
     broker: persisted.broker ?? DefaultMqttSettings.broker,
     username: persisted.username ?? DefaultMqttSettings.username,
     password: persisted.password ?? DefaultMqttSettings.password,
     clientId: persisted.clientId ?? DefaultMqttSettings.clientId,
-    brightness: storage.get<number>('brightness', 200),
+    brightness: storage.get<number>('brightness', 200)
   };
 }
 
@@ -46,7 +47,7 @@ export const settingsSlice = createSlice({
         username: state.username,
         password: state.password,
         clientId: state.clientId,
-        brightness: state.brightness,
+        brightness: state.brightness
       };
       storage.set('mqttSettings', mqttSettings);
     },
@@ -64,8 +65,8 @@ export const settingsSlice = createSlice({
     decreaseBrightness(state) {
       state.brightness = Math.max(10, state.brightness - 25);
       storage.set('brightness', state.brightness);
-    },
-  },
+    }
+  }
 });
 
 // ---------------------------------------------------------------------------
@@ -78,12 +79,12 @@ export const selectMqttConnectionSettings = (state: RootState) => ({
   broker: state.settings.broker,
   username: state.settings.username,
   password: state.settings.password,
-  clientId: state.settings.clientId,
+  clientId: state.settings.clientId
 });
 
 export const {
   updateSettings,
   setBrightness,
   increaseBrightness,
-  decreaseBrightness,
+  decreaseBrightness
 } = settingsSlice.actions;

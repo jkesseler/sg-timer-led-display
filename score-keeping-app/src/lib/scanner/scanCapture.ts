@@ -17,7 +17,7 @@ export interface ScanEvent {
 
 const DEFAULT_OPTIONS: Required<ScanCaptureOptions> = {
   maxKeystrokeGapMs: 50,
-  minCodeLength: 4,
+  minCodeLength: 4
 };
 
 /**
@@ -77,6 +77,7 @@ export function createScanCapture(onScan: (event: ScanEvent) => void, options: S
 
       event.preventDefault();
       onScan({ code, capturedAtMs: now, burstDurationMs: now - burstStartedAtMs });
+
       return;
     }
 
@@ -96,5 +97,6 @@ export function createScanCapture(onScan: (event: ScanEvent) => void, options: S
   }
 
   document.addEventListener('keydown', handleKeyDown, { capture: true });
+
   return () => document.removeEventListener('keydown', handleKeyDown, { capture: true });
 }

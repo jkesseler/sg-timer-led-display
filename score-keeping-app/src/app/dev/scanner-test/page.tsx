@@ -20,8 +20,8 @@ export default function ScannerTestPage() {
   // open issue. Manual shooter selection is unaffected and stays the
   // primary supported path in the meantime.
   function handleKeyDown(event: KeyboardEvent<HTMLInputElement>) {
-    setKeyLog((prev) =>
-      [`key=${JSON.stringify(event.key)} code=${event.code} keyCode=${event.keyCode}`, ...prev].slice(0, 40),
+    setKeyLog(prev =>
+      [`key=${JSON.stringify(event.key)} code=${event.code} keyCode=${event.keyCode}`, ...prev].slice(0, 40)
     );
 
     if (event.key !== 'Enter') {
@@ -33,7 +33,7 @@ export default function ScannerTestPage() {
     if (code.length === 0) {
       return;
     }
-    setScans((prev) => [{ code, at: new Date().toLocaleTimeString() }, ...prev]);
+    setScans(prev => [{ code, at: new Date().toLocaleTimeString() }, ...prev]);
   }
 
   return (
@@ -43,7 +43,7 @@ export default function ScannerTestPage() {
       <input
         type="text"
         value={value}
-        onChange={(event) => setValue(event.target.value)}
+        onChange={event => setValue(event.target.value)}
         onKeyDown={handleKeyDown}
         placeholder="click here, then scan"
         style={{ fontFamily: 'monospace', fontSize: '1rem', padding: '0.4rem', width: '20rem' }}
@@ -53,7 +53,12 @@ export default function ScannerTestPage() {
       <ul>
         {scans.map((scan, index) => (
           <li key={`${scan.at}-${index}`}>
-            code=<strong>{scan.code}</strong> at {scan.at}
+            code=
+            <strong>{scan.code}</strong>
+            {' '}
+            at
+            {' '}
+            {scan.at}
           </li>
         ))}
       </ul>

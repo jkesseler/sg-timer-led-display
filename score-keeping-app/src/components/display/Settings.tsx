@@ -35,7 +35,7 @@ const Settings = ({ onSave, onClose, onConnect, onDisconnect }: SettingsProps) =
 
   return (
     <div className="settings-overlay" onClick={onClose}>
-      <div className="settings-panel" onClick={(e) => e.stopPropagation()}>
+      <div className="settings-panel" onClick={e => e.stopPropagation()}>
         <div className="settings-header">
           <h2>Settings</h2>
           <button className="close-button" onClick={onClose}>×</button>
@@ -51,7 +51,7 @@ const Settings = ({ onSave, onClose, onConnect, onDisconnect }: SettingsProps) =
                 id="broker"
                 type="text"
                 value={broker}
-                onChange={(e) => setBroker(e.target.value)}
+                onChange={e => setBroker(e.target.value)}
                 placeholder="ws://localhost:9001"
                 disabled={isConnected}
               />
@@ -64,7 +64,7 @@ const Settings = ({ onSave, onClose, onConnect, onDisconnect }: SettingsProps) =
                 id="username"
                 type="text"
                 value={username}
-                onChange={(e) => setUsername(e.target.value)}
+                onChange={e => setUsername(e.target.value)}
                 disabled={isConnected}
               />
             </div>
@@ -75,7 +75,7 @@ const Settings = ({ onSave, onClose, onConnect, onDisconnect }: SettingsProps) =
                 id="password"
                 type="password"
                 value={password}
-                onChange={(e) => setPassword(e.target.value)}
+                onChange={e => setPassword(e.target.value)}
                 disabled={isConnected}
               />
             </div>
@@ -86,7 +86,10 @@ const Settings = ({ onSave, onClose, onConnect, onDisconnect }: SettingsProps) =
 
             <div className="form-group">
               <label htmlFor="brightness">
-                Screen brightness: {Math.round((brightness / 255) * 100)}%
+                Screen brightness:
+                {' '}
+                {Math.round((brightness / 255) * 100)}
+                %
               </label>
               <input
                 id="brightness"
@@ -94,7 +97,7 @@ const Settings = ({ onSave, onClose, onConnect, onDisconnect }: SettingsProps) =
                 min="10"
                 max="255"
                 value={brightness}
-                onChange={(e) => setBrightness(parseInt(e.target.value))}
+                onChange={e => setBrightness(parseInt(e.target.value))}
               />
             </div>
           </div>
@@ -113,15 +116,17 @@ const Settings = ({ onSave, onClose, onConnect, onDisconnect }: SettingsProps) =
                 <span className="info-value">{settings.clientId}</span>
               </div>
             </div>
-            {isConnected ? (
-              <button className="button button-danger connection-button" onClick={onDisconnect}>
-                Disconnect
-              </button>
-            ) : (
-              <button className="button button-primary connection-button" onClick={onConnect}>
-                Connect
-              </button>
-            )}
+            {isConnected
+              ? (
+                  <button className="button button-danger connection-button" onClick={onDisconnect}>
+                    Disconnect
+                  </button>
+                )
+              : (
+                  <button className="button button-primary connection-button" onClick={onConnect}>
+                    Connect
+                  </button>
+                )}
           </div>
         </div>
 

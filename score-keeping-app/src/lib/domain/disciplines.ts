@@ -8,7 +8,7 @@ export const DISCIPLINES = [
   'OKR',
   'OKKR',
   'SKR',
-  'SKKR',
-] as const
+  'SKKR'
+] as const;
 
-export type Discipline = (typeof DISCIPLINES)[number]
+export type Discipline = (typeof DISCIPLINES)[number];

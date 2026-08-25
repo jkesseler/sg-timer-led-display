@@ -8,7 +8,7 @@ import {
   selectSessionData,
   selectShots,
   selectDeviceName,
-  selectCountdownRemainingMs,
+  selectCountdownRemainingMs
 } from '@/store/mqttSlice';
 import type { ShotData, SessionData } from '@/lib/mqtt/types';
 import type { RosterInfo } from '@/app/display/actions';
@@ -19,7 +19,7 @@ const SESSION_DISPLAY_STATES: DisplayState[] = [
   DisplayState.COUNTDOWN,
   DisplayState.WAITING_FOR_SHOTS,
   DisplayState.SHOWING_SHOT,
-  DisplayState.SESSION_ENDED,
+  DisplayState.SESSION_ENDED
 ];
 
 type BeaconTone = 'neutral' | 'searching' | 'ready';
@@ -94,7 +94,12 @@ const WaitingHero = ({ sessionData }: { sessionData: SessionData | null }) => (
       <span />
     </div>
     <span className="hero__eyebrow">Listening for shots</span>
-    {sessionData && <span className="hero__meta">Session #{sessionData.sessionId}</span>}
+    {sessionData && (
+      <span className="hero__meta">
+        Session #
+        {sessionData.sessionId}
+      </span>
+    )}
   </div>
 );
 
@@ -103,7 +108,10 @@ const ShotHero = ({ shotData }: { shotData: ShotData }) => {
 
   return (
     <div className="hero hero-shot">
-      <span className="hero__eyebrow">Shot {shotData.shotNumber}</span>
+      <span className="hero__eyebrow">
+        Shot
+        {shotData.shotNumber}
+      </span>
       <span className="hero-shot__value">{formatTimeValue(shotData.absoluteTimeMs)}</span>
       <span className="hero__meta">{isDraw ? 'Draw' : `Split ${formatTimeValue(shotData.splitTimeMs)}`}</span>
     </div>
@@ -133,7 +141,7 @@ const ShooterQueue = ({ next, onDeck }: { next: string; onDeck: string }) => (
 const SessionEndedHero = ({
   shotData,
   sessionData,
-  shots,
+  shots
 }: {
   shotData: ShotData | null;
   sessionData: SessionData | null;
@@ -142,7 +150,7 @@ const SessionEndedHero = ({
   const finalTimeMs = shotData?.absoluteTimeMs ?? 0;
   const totalShots = sessionData?.totalShots || shotData?.shotNumber || shots.length;
 
-  const timedSplits = shots.filter((shot) => !shot.isFirstShot).map((shot) => shot.splitTimeMs);
+  const timedSplits = shots.filter(shot => !shot.isFirstShot).map(shot => shot.splitTimeMs);
   const fastestMs = timedSplits.length ? Math.min(...timedSplits) : null;
   const slowestMs = timedSplits.length ? Math.max(...timedSplits) : null;
   const averageMs = timedSplits.length
@@ -212,5 +220,3 @@ export const TimerDisplay = ({ roster }: { roster: RosterInfo | null }) => {
     </div>
   );
 };
-
-export default TimerDisplay;

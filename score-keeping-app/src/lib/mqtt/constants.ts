@@ -5,16 +5,16 @@ import type { MqttTopics as IMqttTopics } from './types';
 // Subscribing to 'timer/+/shot/detected' receives shots from ALL devices.
 export const MqttTopics: IMqttTopics = {
   // Retained  – late-joining subscribers receive the last value immediately
-  PRESENCE:         'timer/+/presence',
+  PRESENCE: 'timer/+/presence',
   CONNECTION_STATE: 'timer/+/connection/state',
-  DEVICE_INFO:      'timer/+/device/info',
+  DEVICE_INFO: 'timer/+/device/info',
   // Ephemeral – events only; not retained
-  SESSION_STARTED:   'timer/+/session/started',
-  SESSION_STOPPED:   'timer/+/session/stopped',
+  SESSION_STARTED: 'timer/+/session/started',
+  SESSION_STOPPED: 'timer/+/session/stopped',
   SESSION_SUSPENDED: 'timer/+/session/suspended',
-  SESSION_RESUMED:   'timer/+/session/resumed',
-  SHOT_DETECTED:     'timer/+/shot/detected',
-  COUNTDOWN_COMPLETE:'timer/+/countdown/complete',
+  SESSION_RESUMED: 'timer/+/session/resumed',
+  SHOT_DETECTED: 'timer/+/shot/detected',
+  COUNTDOWN_COMPLETE: 'timer/+/countdown/complete'
 };
 
 /**
@@ -32,6 +32,9 @@ export function buildDeviceTopic(deviceId: string, event: string): string {
  */
 export function parseDeviceTopic(topic: string): { deviceId: string; event: string } | null {
   const parts = topic.split('/');
-  if (parts.length < 3 || parts[0] !== 'timer') return null;
+  if (parts.length < 3 || parts[0] !== 'timer') {
+    return null;
+  }
+
   return { deviceId: parts[1], event: parts.slice(2).join('/') };
 }

@@ -1,10 +1,10 @@
-import type { CollectionConfig } from 'payload'
+import type { CollectionConfig } from 'payload';
 
 export const Devices: CollectionConfig = {
   slug: 'devices',
   admin: {
     useAsTitle: 'label',
-    defaultColumns: ['label', 'deviceId'],
+    defaultColumns: ['label', 'deviceId']
   },
   fields: [
     {
@@ -13,16 +13,16 @@ export const Devices: CollectionConfig = {
       required: true,
       unique: true,
       admin: {
-        description: "The firmware's 6-character device ID, as published on timer/<deviceId>/... MQTT topics.",
-      },
+        description: 'The firmware\'s 6-character device ID, as published on timer/<deviceId>/... MQTT topics.'
+      }
     },
     {
       name: 'label',
       type: 'text',
       required: true,
       admin: {
-        description: 'Friendly name shown when the timekeeper picks a device, e.g. "Lane 3".',
-      },
-    },
-  ],
-}
+        description: 'Friendly name shown when the timekeeper picks a device, e.g. "Lane 3".'
+      }
+    }
+  ]
+};

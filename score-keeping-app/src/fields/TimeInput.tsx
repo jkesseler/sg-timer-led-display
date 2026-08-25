@@ -1,7 +1,7 @@
-'use client'
+'use client';
 
-import { useField, FieldLabel, FieldError } from '@payloadcms/ui'
-import type { TextFieldClientComponent } from 'payload'
+import { useField, FieldLabel, FieldError } from '@payloadcms/ui';
+import type { TextFieldClientComponent } from 'payload';
 
 // A native <input type="time"> instead of Payload's default date-picker
 // widget — squads.startTime/endTime store a plain "HH:MM" string (see
@@ -14,8 +14,8 @@ export const TimeInput: TextFieldClientComponent = ({ field, path: pathFromProps
     setValue,
     path,
     showError,
-    errorMessage,
-  } = useField<string>({ potentiallyStalePath: pathFromProps })
+    errorMessage
+  } = useField<string>({ potentiallyStalePath: pathFromProps });
 
   return (
     <div className="field-type text">
@@ -25,7 +25,7 @@ export const TimeInput: TextFieldClientComponent = ({ field, path: pathFromProps
         id={path}
         name={path}
         value={value ?? ''}
-        onChange={(event) => setValue(event.target.value)}
+        onChange={event => setValue(event.target.value)}
         // en-GB renders the native time control in 24-hour format —
         // there's no dedicated HTML attribute for this, browsers derive
         // it from locale.
@@ -34,5 +34,5 @@ export const TimeInput: TextFieldClientComponent = ({ field, path: pathFromProps
       />
       {showError && <FieldError message={errorMessage} path={path} showError={showError} />}
     </div>
-  )
-}
+  );
+};

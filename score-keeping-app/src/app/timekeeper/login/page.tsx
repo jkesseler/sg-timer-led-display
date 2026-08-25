@@ -1,12 +1,12 @@
-import { loginAction } from './actions'
-import '../timekeeper.css'
+import { loginAction } from './actions';
+import '../timekeeper.css';
 
 export default async function TimekeeperLoginPage({
-  searchParams,
+  searchParams
 }: {
-  searchParams: Promise<{ error?: string }>
+  searchParams: Promise<{ error?: string }>;
 }) {
-  const { error } = await searchParams
+  const { error } = await searchParams;
 
   return (
     <div className="tk-login">
@@ -28,5 +28,5 @@ export default async function TimekeeperLoginPage({
         </form>
       </div>
     </div>
-  )
+  );
 }

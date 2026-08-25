@@ -60,12 +60,13 @@ const eslintConfig = defineConfig([
         'error',
         {
           ignoreGlobals: true,
+          ignoreImports: true,
           properties: 'never',
           allow: ['^o_', 'node_*', 'npm_*', 'unstable_*', 'migration_*'],
         },
       ],
       curly: 'error',
-      eqeqeq: 'error',
+      eqeqeq: ['error', 'always', { null: 'ignore' }],
 
       'id-length': [
         'warn',

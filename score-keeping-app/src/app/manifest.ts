@@ -1,4 +1,4 @@
-import type { MetadataRoute } from 'next'
+import type { MetadataRoute } from 'next';
 
 // Replaces pwa-display-app's vite-plugin-pwa config. The only installable
 // route in this app is /display (a TV/tablet kiosk); /admin and /timekeeper
@@ -17,8 +17,8 @@ export default function manifest(): MetadataRoute.Manifest {
       {
         src: '/display-icon.svg',
         sizes: 'any',
-        type: 'image/svg+xml',
-      },
-    ],
-  }
+        type: 'image/svg+xml'
+      }
+    ]
+  };
 }

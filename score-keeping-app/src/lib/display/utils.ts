@@ -17,6 +17,7 @@ export function formatTimeValue(timeMs: number): string {
 
   const minutes = Math.floor(totalSeconds / 60);
   const seconds = totalSeconds - minutes * 60;
+
   return `${minutes}:${seconds.toFixed(2).padStart(5, '0')}`;
 }
 
@@ -36,6 +37,7 @@ export function parseMqttMessage<T = any>(topic: string, payload: Buffer): T | n
     return JSON.parse(payload.toString()) as T;
   } catch (error) {
     console.error(`Failed to parse MQTT message on topic ${topic}:`, error);
+
     return null;
   }
 }
@@ -47,6 +49,7 @@ export const storage = {
   get<T>(key: string, defaultValue: T): T {
     try {
       const item = localStorage.getItem(key);
+
       return item ? JSON.parse(item) as T : defaultValue;
     } catch {
       return defaultValue;
@@ -56,6 +59,7 @@ export const storage = {
   set<T>(key: string, value: T): boolean {
     try {
       localStorage.setItem(key, JSON.stringify(value));
+
       return true;
     } catch {
       return false;
@@ -65,6 +69,7 @@ export const storage = {
   remove(key: string): boolean {
     try {
       localStorage.removeItem(key);
+
       return true;
     } catch {
       return false;
@@ -74,6 +79,7 @@ export const storage = {
   clear(): boolean {
     try {
       localStorage.clear();
+
       return true;
     } catch {
       return false;

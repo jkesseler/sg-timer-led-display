@@ -1,13 +1,13 @@
-import type { CollectionConfig } from 'payload'
-import { DISCIPLINES } from '../lib/domain/disciplines'
+import { DISCIPLINES } from '../lib/domain/disciplines';
+import type { CollectionConfig } from 'payload';
 
-const ROUNDS_PER_MEMBERSHIP = 5
+const ROUNDS_PER_MEMBERSHIP = 5;
 
 export const SquadMemberships: CollectionConfig = {
   slug: 'squad-memberships',
   admin: {
     useAsTitle: 'id',
-    defaultColumns: ['squad', 'shooter', 'discipline', 'status', 'queuePosition'],
+    defaultColumns: ['squad', 'shooter', 'discipline', 'status', 'queuePosition']
   },
   // A shooter appears at most once per (squad, discipline) — the card format
   // is one card per shooter per discipline.
@@ -17,35 +17,35 @@ export const SquadMemberships: CollectionConfig = {
       name: 'squad',
       type: 'relationship',
       relationTo: 'squads',
-      required: true,
+      required: true
     },
     {
       name: 'shooter',
       type: 'relationship',
       relationTo: 'shooters',
-      required: true,
+      required: true
     },
     {
       name: 'discipline',
       type: 'select',
       required: true,
-      options: DISCIPLINES.map((discipline) => ({ label: discipline, value: discipline })),
+      options: DISCIPLINES.map(discipline => ({ label: discipline, value: discipline }))
     },
     {
       name: 'startingPosition',
       type: 'number',
       required: true,
       admin: {
-        description: 'Position number from the printed schedule — the starting order only.',
-      },
+        description: 'Position number from the printed schedule — the starting order only.'
+      }
     },
     {
       name: 'queuePosition',
       type: 'number',
       required: true,
       admin: {
-        description: 'Current position in the live shooting queue. Mutable mid-match; renumbered on every queue mutation.',
-      },
+        description: 'Current position in the live shooting queue. Mutable mid-match; renumbered on every queue mutation.'
+      }
     },
     {
       name: 'status',
@@ -56,29 +56,29 @@ export const SquadMemberships: CollectionConfig = {
         { label: 'Scheduled', value: 'scheduled' },
         { label: 'Present', value: 'present' },
         { label: 'Absent', value: 'absent' },
-        { label: 'Withdrawn', value: 'withdrawn' },
-      ],
+        { label: 'Withdrawn', value: 'withdrawn' }
+      ]
     },
     {
       name: 'reshootTimeMs',
       type: 'number',
       admin: {
-        description: 'The one allowed reshoot, in milliseconds. Overwritable before sign-off; blank until taken.',
-      },
+        description: 'The one allowed reshoot, in milliseconds. Overwritable before sign-off; blank until taken.'
+      }
     },
     {
       name: 'signedOffAt',
       type: 'date',
       admin: {
-        description: 'Set manually by the timekeeper once the shooter has physically signed the paper card.',
-      },
-    },
+        description: 'Set manually by the timekeeper once the shooter has physically signed the paper card.'
+      }
+    }
   ],
   hooks: {
     afterChange: [
       async ({ doc, operation, req }) => {
         if (operation !== 'create') {
-          return
+          return;
         }
 
         for (let roundNumber = 1; roundNumber <= ROUNDS_PER_MEMBERSHIP; roundNumber++) {
@@ -87,12 +87,12 @@ export const SquadMemberships: CollectionConfig = {
             data: {
               membership: doc.id,
               roundNumber,
-              status: 'pending',
+              status: 'pending'
             },
-            req,
-          })
+            req
+          });
         }
-      },
-    ],
-  },
-}
+      }
+    ]
+  }
+};

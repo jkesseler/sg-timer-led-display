@@ -1,16 +1,16 @@
-import Link from 'next/link'
-import { listOpenSquads, loadSquadView } from '@/lib/match/loadSquadView'
-import { TimekeeperBoard } from '@/components/timekeeper/TimekeeperBoard'
+import Link from 'next/link';
+import { listOpenSquads, loadSquadView } from '@/lib/match/loadSquadView';
+import { TimekeeperBoard } from '@/components/timekeeper/TimekeeperBoard';
 
 export default async function TimekeeperPage({
-  searchParams,
+  searchParams
 }: {
-  searchParams: Promise<{ squad?: string }>
+  searchParams: Promise<{ squad?: string }>;
 }) {
-  const { squad: squadParam } = await searchParams
-  const openSquads = await listOpenSquads()
+  const { squad: squadParam } = await searchParams;
+  const openSquads = await listOpenSquads();
 
-  const squadId = squadParam ? Number(squadParam) : openSquads.length === 1 ? openSquads[0].id : undefined
+  const squadId = squadParam ? Number(squadParam) : openSquads.length === 1 ? openSquads[0].id : undefined;
 
   if (!squadId) {
     return (
@@ -23,7 +23,7 @@ export default async function TimekeeperPage({
             </p>
           )}
           <div className="tk-list">
-            {openSquads.map((squad) => (
+            {openSquads.map(squad => (
               <Link href={`/timekeeper?squad=${squad.id}`} key={squad.id} className="tk-list-row" style={{ textDecoration: 'none' }}>
                 <span>{squad.label || `Squad #${squad.id}`}</span>
               </Link>
@@ -31,9 +31,10 @@ export default async function TimekeeperPage({
           </div>
         </div>
       </div>
-    )
+    );
   }
 
-  const view = await loadSquadView(squadId)
-  return <TimekeeperBoard view={view} />
+  const view = await loadSquadView(squadId);
+
+  return <TimekeeperBoard view={view} />;
 }

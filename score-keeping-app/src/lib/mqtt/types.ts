@@ -74,7 +74,7 @@ export interface SessionStartedMessage {
 export interface SessionStoppedMessage {
   sessionId: number;
   totalShots?: number;
-  lastShotTimeMs?: number;  // Final shot time in milliseconds
+  lastShotTimeMs?: number; // Final shot time in milliseconds
   timestamp: number;
 }
 
@@ -97,7 +97,7 @@ export interface DeviceInfoMessage {
   deviceName?: string;
   deviceModel?: string;
   firmwareVersion?: string;
-  deviceId?: string;   // Embedded by firmware in publishDeviceInfo
+  deviceId?: string; // Embedded by firmware in publishDeviceInfo
   timestamp: number;
 }
 
@@ -107,12 +107,12 @@ export type MqttMessageHandler<T = any> = (message: T, deviceId: string) => void
 
 // A device discovered via its presence topic
 export interface KnownDevice {
-  deviceId: string;          // 6-char alphanumeric from DeviceId.h
-  deviceName?: string;       // BLE device name (from device/info)
-  deviceModel?: string;      // BLE device model (from device/info)
+  deviceId: string; // 6-char alphanumeric from DeviceId.h
+  deviceName?: string; // BLE device name (from device/info)
+  deviceModel?: string; // BLE device model (from device/info)
   firmwareVersion?: string;
   presence: 'online' | 'offline';
-  lastSeenMs: number;        // Date.now() when last message was received
+  lastSeenMs: number; // Date.now() when last message was received
 }
 
 // Presence payload published to timer/<deviceId>/presence

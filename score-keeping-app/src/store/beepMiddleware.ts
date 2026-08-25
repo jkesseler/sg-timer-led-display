@@ -8,12 +8,16 @@ import { countdownComplete } from './mqttSlice';
 let audioCtx: AudioContext | null = null;
 
 function ensureAudioContext(): AudioContext | null {
-  if (audioCtx && audioCtx.state !== 'closed') return audioCtx;
+  if (audioCtx && audioCtx.state !== 'closed') {
+    return audioCtx;
+  }
   try {
     audioCtx = new AudioContext();
+
     return audioCtx;
   } catch {
     console.warn('Web Audio API not available');
+
     return null;
   }
 }
@@ -24,7 +28,9 @@ function ensureAudioContext(): AudioContext | null {
  */
 function playBeep() {
   const ctx = ensureAudioContext();
-  if (!ctx) return;
+  if (!ctx) {
+    return;
+  }
 
   // Resume context if it was suspended (autoplay policy)
   if (ctx.state === 'suspended') {
@@ -62,5 +68,5 @@ beepMiddleware.startListening({
     } catch (error) {
       console.error('Failed to play countdown beep:', error);
     }
-  },
+  }
 });

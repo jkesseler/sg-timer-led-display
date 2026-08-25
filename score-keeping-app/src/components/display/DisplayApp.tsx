@@ -2,8 +2,6 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
-import TimerDisplay from './TimerDisplay';
-import Settings from './Settings';
 import { STARTUP_DISPLAY_MS } from '@/lib/display/constants';
 import {
   startConnecting,
@@ -14,17 +12,19 @@ import {
   selectKnownDevices,
   selectSelectedDeviceId,
   selectIsCurrentDeviceConnected,
-  selectCurrentDeviceId,
+  selectCurrentDeviceId
 } from '@/store/mqttSlice';
 import { disconnectMqttClient } from '@/store/mqttMiddleware';
 import {
   selectSettings,
   updateSettings,
   increaseBrightness,
-  decreaseBrightness,
+  decreaseBrightness
 } from '@/store/settingsSlice';
 import type { MqttSettings, KnownDevice } from '@/lib/mqtt/types';
 import { getRosterForDevice, type RosterInfo } from '@/app/display/actions';
+import Settings from './Settings';
+import { TimerDisplay } from './TimerDisplay';
 import './DisplayApp.css';
 
 // How often to re-poll the Next:/On deck: roster for the active device.
@@ -71,18 +71,19 @@ function DisplayApp() {
       clearTimeout(timer);
       disconnectMqttClient();
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Reconnect whenever connection-relevant settings change
   useEffect(() => {
     if (isInitialMount.current) {
       isInitialMount.current = false;
+
       return;
     }
 
     disconnectMqttClient();
     const timer = setTimeout(() => dispatch(startConnecting()), 500);
+
     return () => clearTimeout(timer);
   }, [settings.broker, settings.username, settings.password, dispatch]);
 
@@ -90,6 +91,7 @@ function DisplayApp() {
   useEffect(() => {
     if (!currentDeviceId) {
       setRoster(null);
+
       return;
     }
 
@@ -97,13 +99,16 @@ function DisplayApp() {
     const poll = () => {
       getRosterForDevice(currentDeviceId)
         .then((result) => {
-          if (!cancelled) setRoster(result);
+          if (!cancelled) {
+            setRoster(result);
+          }
         })
-        .catch((error) => console.error('[display] failed to fetch roster', error));
+        .catch(error => console.error('[display] failed to fetch roster', error));
     };
 
     poll();
     const interval = setInterval(poll, ROSTER_POLL_INTERVAL_MS);
+
     return () => {
       cancelled = true;
       clearInterval(interval);
@@ -117,8 +122,8 @@ function DisplayApp() {
         broker: newSettings.broker,
         username: newSettings.username,
         password: newSettings.password,
-        brightness: newSettings.brightness ?? settings.brightness,
-      }),
+        brightness: newSettings.brightness ?? settings.brightness
+      })
     );
 
     setShowSettings(false);
@@ -130,13 +135,14 @@ function DisplayApp() {
       if (e.key === 's' || e.key === 'S') {
         setShowSettings(true);
       } else if (e.key === 'i' || e.key === 'I') {
-        setShowStatus((prev) => !prev);
+        setShowStatus(prev => !prev);
       } else if (e.key === 'Escape') {
         setShowSettings(false);
       }
     };
 
     window.addEventListener('keydown', handleKeyPress);
+
     return () => window.removeEventListener('keydown', handleKeyPress);
   }, []);
 
@@ -152,7 +158,10 @@ function DisplayApp() {
             <span>{isConnected ? 'MQTT Connected' : 'MQTT Disconnected'}</span>
           </div>
           {connectionError && (
-            <div className="status-item error">Error: {connectionError}</div>
+            <div className="status-item error">
+              Error:
+              {connectionError}
+            </div>
           )}
           <div className="status-item">{settings.broker}</div>
           {/* Device selector – shown when more than one device is online */}
@@ -162,14 +171,17 @@ function DisplayApp() {
               <select
                 id="device-select"
                 value={selectedDeviceId ?? ''}
-                onChange={(e) => dispatch(selectDevice(e.target.value || null))}
+                onChange={e => dispatch(selectDevice(e.target.value || null))}
               >
                 <option value="">
-                  Auto ({knownDevices.find((d: KnownDevice) => d.presence === 'online')?.deviceId ?? 'none'})
+                  Auto (
+                  {knownDevices.find((d: KnownDevice) => d.presence === 'online')?.deviceId ?? 'none'}
+                  )
                 </option>
                 {knownDevices.map((d: KnownDevice) => (
                   <option key={d.deviceId} value={d.deviceId}>
-                    {d.deviceName ?? d.deviceId}{' '}
+                    {d.deviceName ?? d.deviceId}
+                    {' '}
                     {d.presence === 'offline' ? '(offline)' : ''}
                   </option>
                 ))}
@@ -178,7 +190,9 @@ function DisplayApp() {
           )}
           {knownDevices.length === 1 && (
             <div className="status-item">
-              Display: {knownDevices[0].deviceName ?? knownDevices[0].deviceId}
+              Display:
+              {' '}
+              {knownDevices[0].deviceName ?? knownDevices[0].deviceId}
               {knownDevices[0].presence === 'offline' ? ' (offline)' : ''}
             </div>
           )}
@@ -186,14 +200,16 @@ function DisplayApp() {
       )}
 
       <div className="stage">
-        {isCurrentDeviceConnected ? (
-          <TimerDisplay roster={roster} />
-        ) : (
-          <div className="no-device">
-            <span className="no-device__title">No display found</span>
-            <span className="no-device__detail">Waiting for a bridge device to come online</span>
-          </div>
-        )}
+        {isCurrentDeviceConnected
+          ? (
+              <TimerDisplay roster={roster} />
+            )
+          : (
+              <div className="no-device">
+                <span className="no-device__title">No display found</span>
+                <span className="no-device__detail">Waiting for a bridge device to come online</span>
+              </div>
+            )}
       </div>
 
       {/* Controls */}
@@ -203,7 +219,7 @@ function DisplayApp() {
         </button>
         <button
           className="control-button"
-          onClick={() => setShowStatus((prev) => !prev)}
+          onClick={() => setShowStatus(prev => !prev)}
           title="Toggle status bar (I)"
         >
           {showStatus ? 'Hide status' : 'Show status'}

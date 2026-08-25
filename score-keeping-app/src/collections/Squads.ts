@@ -1,27 +1,30 @@
-import type { CollectionConfig } from 'payload'
+import type { CollectionConfig } from 'payload';
 
 export const Squads: CollectionConfig = {
   slug: 'squads',
   admin: {
     useAsTitle: 'label',
-    defaultColumns: ['label', 'match', 'startTime', 'endTime', 'status'],
+    defaultColumns: ['label', 'match', 'startTime', 'endTime', 'status']
   },
   fields: [
     {
       name: 'label',
       type: 'text',
       admin: {
-        description: 'Optional friendly name, e.g. "08:00 squad". Defaults to the start–end time range when left blank.',
+        description: 'Optional friendly name, e.g. "08:00 squad". Defaults to the start–end time range when left blank.'
       },
       hooks: {
         afterRead: [
           ({ value, siblingData }) => {
-            if (value) return value
-            const { startTime, endTime } = siblingData as { startTime?: string; endTime?: string }
-            return startTime && endTime ? `${startTime} - ${endTime}` : value
-          },
-        ],
-      },
+            if (value) {
+              return value;
+            }
+            const { startTime, endTime } = siblingData as { startTime?: string; endTime?: string };
+
+            return startTime && endTime ? `${startTime} - ${endTime}` : value;
+          }
+        ]
+      }
     },
     {
       name: 'match',
@@ -29,8 +32,8 @@ export const Squads: CollectionConfig = {
       relationTo: 'matches',
       required: true,
       admin: {
-        description: 'The match this squad rotates through — its timer device comes from here, not from the squad.',
-      },
+        description: 'The match this squad rotates through — its timer device comes from here, not from the squad.'
+      }
     },
     {
       type: 'row',
@@ -43,11 +46,11 @@ export const Squads: CollectionConfig = {
             description: 'e.g. "08:00"',
             width: '50%',
             components: {
-              Field: '/fields/TimeInput#TimeInput',
-            },
+              Field: '/fields/TimeInput#TimeInput'
+            }
           },
           validate: (value: string | null | undefined) =>
-            typeof value === 'string' && /^\d{2}:\d{2}$/.test(value) ? true : 'Enter a time as HH:MM.',
+            typeof value === 'string' && /^\d{2}:\d{2}$/.test(value) ? true : 'Enter a time as HH:MM.'
         },
         {
           name: 'endTime',
@@ -57,13 +60,13 @@ export const Squads: CollectionConfig = {
             description: 'e.g. "09:00"',
             width: '50%',
             components: {
-              Field: '/fields/TimeInput#TimeInput',
-            },
+              Field: '/fields/TimeInput#TimeInput'
+            }
           },
           validate: (value: string | null | undefined) =>
-            typeof value === 'string' && /^\d{2}:\d{2}$/.test(value) ? true : 'Enter a time as HH:MM.',
-        },
-      ],
+            typeof value === 'string' && /^\d{2}:\d{2}$/.test(value) ? true : 'Enter a time as HH:MM.'
+        }
+      ]
     },
     {
       name: 'status',
@@ -74,14 +77,14 @@ export const Squads: CollectionConfig = {
         { label: 'Scheduled', value: 'scheduled' },
         { label: 'Active', value: 'active' },
         { label: 'Reshoot phase', value: 'reshoot-phase' },
-        { label: 'Completed', value: 'completed' },
-      ],
+        { label: 'Completed', value: 'completed' }
+      ]
     },
     {
       name: 'memberships',
       type: 'join',
       collection: 'squad-memberships',
-      on: 'squad',
-    },
-  ],
-}
+      on: 'squad'
+    }
+  ]
+};

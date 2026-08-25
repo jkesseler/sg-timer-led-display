@@ -1,17 +1,17 @@
-import type { Middleware } from '@reduxjs/toolkit';
 import mqtt, { MqttClient } from 'mqtt';
 import { MqttTopics, parseDeviceTopic } from '@/lib/mqtt/constants';
 import { parseMqttMessage } from '@/lib/display/utils';
-import { mqttSlice } from './mqttSlice';
-import { selectMqttConnectionSettings } from './settingsSlice';
 import type {
   ConnectionStateMessage,
   SessionStartedMessage,
   SessionStoppedMessage,
   ShotDetectedMessage,
   CountdownCompleteMessage,
-  DeviceInfoMessage,
+  DeviceInfoMessage
 } from '@/lib/mqtt/types';
+import { mqttSlice } from './mqttSlice';
+import { selectMqttConnectionSettings } from './settingsSlice';
+import type { Middleware } from '@reduxjs/toolkit';
 import type { RootState } from './store';
 
 // ---------------------------------------------------------------------------
@@ -29,10 +29,16 @@ function matchPattern(pattern: string, topic: string): boolean {
   const pp = pattern.split('/');
   const tp = topic.split('/');
   if (pp[pp.length - 1] === '#') {
-    if (tp.length < pp.length - 1) return false;
+    if (tp.length < pp.length - 1) {
+      return false;
+    }
+
     return pp.slice(0, -1).every((seg, i) => seg === '+' || seg === tp[i]);
   }
-  if (pp.length !== tp.length) return false;
+  if (pp.length !== tp.length) {
+    return false;
+  }
+
   return pp.every((seg, i) => seg === '+' || seg === tp[i]);
 }
 
@@ -42,13 +48,14 @@ function matchPattern(pattern: string, topic: string): boolean {
 
 function startCountdownTimer(
   dispatch: (action: unknown) => void,
-  getState: () => RootState,
+  getState: () => RootState
 ) {
   stopCountdownTimer();
   countdownTimerId = setInterval(() => {
     const { sessionData, displayState } = getState().mqtt;
     if (!sessionData || displayState !== 'COUNTDOWN') {
       stopCountdownTimer();
+
       return;
     }
     const elapsed = Date.now() - sessionData.countdownStartTime;
@@ -70,7 +77,10 @@ function stopCountdownTimer() {
 
 function resolveActiveDeviceId(state: RootState): string | null {
   const { knownDevices, selectedDeviceId } = state.mqtt;
-  if (selectedDeviceId) return selectedDeviceId;
+  if (selectedDeviceId) {
+    return selectedDeviceId;
+  }
+
   return knownDevices.find((d: { presence: string }) => d.presence === 'online')?.deviceId ?? null;
 }
 
@@ -78,8 +88,7 @@ function resolveActiveDeviceId(state: RootState): string | null {
 // Middleware
 // ---------------------------------------------------------------------------
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export const mqttMiddleware: Middleware = (store) => (next) => (action: any) => {
+export const mqttMiddleware: Middleware = store => next => (action: any) => {
   const dispatch = store.dispatch;
   const getState = store.getState as () => RootState;
 
@@ -98,7 +107,7 @@ export const mqttMiddleware: Middleware = (store) => (next) => (action: any) => 
       clientId: freshClientId,
       clean: true,
       reconnectPeriod: 5000,
-      connectTimeout: 30000,
+      connectTimeout: 30000
     };
 
     if (settings.username) {
@@ -114,8 +123,11 @@ export const mqttMiddleware: Middleware = (store) => (next) => (action: any) => 
       dispatch(mqttSlice.actions.connected());
 
       mqttClient?.subscribe('timer/#', { qos: 1 }, (err) => {
-        if (err) console.error('Failed to subscribe to timer/#:', err);
-        else console.log('Subscribed to timer/# (all devices)');
+        if (err) {
+          console.error('Failed to subscribe to timer/#:', err);
+        } else {
+          console.log('Subscribed to timer/# (all devices)');
+        }
       });
     });
 
@@ -142,7 +154,9 @@ export const mqttMiddleware: Middleware = (store) => (next) => (action: any) => 
     // ---- Central message router ----
     mqttClient.on('message', (topic: string, payload: Buffer) => {
       const parsed = parseDeviceTopic(topic);
-      if (!parsed) return;
+      if (!parsed) {
+        return;
+      }
 
       const { deviceId, event } = parsed;
 
@@ -150,6 +164,7 @@ export const mqttMiddleware: Middleware = (store) => (next) => (action: any) => 
       if (event === 'presence') {
         const presence = payload.toString() as 'online' | 'offline';
         dispatch(mqttSlice.actions.devicePresenceUpdated({ deviceId, presence }));
+
         return;
       }
 
@@ -165,16 +180,22 @@ export const mqttMiddleware: Middleware = (store) => (next) => (action: any) => 
       const state = getState();
       const activeId = resolveActiveDeviceId(state);
       if (activeId) {
-        if (deviceId !== activeId) return;
+        if (deviceId !== activeId) {
+          return;
+        }
       } else {
-        const known = state.mqtt.knownDevices.find((d) => d.deviceId === deviceId);
-        if (known?.presence === 'offline') return;
+        const known = state.mqtt.knownDevices.find(d => d.deviceId === deviceId);
+        if (known?.presence === 'offline') {
+          return;
+        }
       }
 
       // --- Connection state ---
       if (matchPattern(MqttTopics.CONNECTION_STATE, topic)) {
         const msg = parseMqttMessage<ConnectionStateMessage>(topic, payload);
-        if (msg) dispatch(mqttSlice.actions.timerConnectionStateChanged(msg));
+        if (msg) {
+          dispatch(mqttSlice.actions.timerConnectionStateChanged(msg));
+        }
       }
 
       // --- Session started ---
@@ -201,7 +222,9 @@ export const mqttMiddleware: Middleware = (store) => (next) => (action: any) => 
       // --- Shot detected ---
       if (matchPattern(MqttTopics.SHOT_DETECTED, topic)) {
         const msg = parseMqttMessage<ShotDetectedMessage>(topic, payload);
-        if (msg) dispatch(mqttSlice.actions.shotDetected(msg));
+        if (msg) {
+          dispatch(mqttSlice.actions.shotDetected(msg));
+        }
       }
 
       // --- Session stopped ---
@@ -233,7 +256,7 @@ export const mqttMiddleware: Middleware = (store) => (next) => (action: any) => 
         if (state.mqtt.displayState === 'COUNTDOWN') {
           dispatch(mqttSlice.actions.countdownComplete({
             sessionId: state.mqtt.sessionData?.sessionId ?? 0,
-            timestamp: Date.now(),
+            timestamp: Date.now()
           }));
           stopCountdownTimer();
         }

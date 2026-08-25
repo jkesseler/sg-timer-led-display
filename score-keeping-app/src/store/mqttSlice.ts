@@ -9,7 +9,7 @@ import type {
   SessionStoppedMessage,
   ShotDetectedMessage,
   CountdownCompleteMessage,
-  DeviceInfoMessage,
+  DeviceInfoMessage
 } from '@/lib/mqtt/types';
 import type { RootState } from './store';
 
@@ -38,21 +38,20 @@ const initialState: MqttState = {
   deviceName: null,
   knownDevices: [],
   selectedDeviceId: null,
-  countdownRemainingMs: 0,
+  countdownRemainingMs: 0
 };
-
 
 const PRE_SESSION_STATES: DisplayState[] = [
   DisplayState.STARTUP,
   DisplayState.DISCONNECTED,
   DisplayState.SCANNING,
   DisplayState.CONNECTING,
-  DisplayState.CONNECTED,
+  DisplayState.CONNECTED
 ];
 
 function resolveActiveDeviceId(
   devices: KnownDevice[],
-  pinned: string | null,
+  pinned: string | null
 ): string | null {
   if (pinned) {
     return pinned;
@@ -97,7 +96,7 @@ export const mqttSlice = createSlice({
 
     devicePresenceUpdated(
       state,
-      action: PayloadAction<{ deviceId: string; presence: 'online' | 'offline' }>,
+      action: PayloadAction<{ deviceId: string; presence: 'online' | 'offline' }>
     ) {
       const { deviceId, presence } = action.payload;
       const idx = state.knownDevices.findIndex(d => d.deviceId === deviceId);
@@ -115,7 +114,7 @@ export const mqttSlice = createSlice({
       action: PayloadAction<{
         deviceId: string;
         info: DeviceInfoMessage;
-      }>,
+      }>
     ) {
       const { deviceId, info } = action.payload;
       const idx = state.knownDevices.findIndex(d => d.deviceId === deviceId);
@@ -123,13 +122,13 @@ export const mqttSlice = createSlice({
         deviceName: info.deviceName,
         deviceModel: info.deviceModel,
         firmwareVersion: info.firmwareVersion,
-        lastSeenMs: Date.now(),
+        lastSeenMs: Date.now()
       };
       if (idx === -1) {
         state.knownDevices.push({
           deviceId,
           presence: 'online',
-          ...patch,
+          ...patch
         });
       } else {
         Object.assign(state.knownDevices[idx], patch);
@@ -179,7 +178,7 @@ export const mqttSlice = createSlice({
         totalShots: 0,
         startTimestamp: msg.timestamp,
         startDelaySeconds: msg.startDelaySeconds || 0,
-        countdownStartTime: Date.now(),
+        countdownStartTime: Date.now()
       };
       state.sessionData = newSession;
       state.shots = [];
@@ -220,7 +219,7 @@ export const mqttSlice = createSlice({
           splitTimeMs: 0,
           deviceModel: 'Timer',
           isFirstShot: false,
-          timestamp: msg.timestamp,
+          timestamp: msg.timestamp
         };
       }
 
@@ -239,7 +238,7 @@ export const mqttSlice = createSlice({
         splitTimeMs: msg.splitTimeMs,
         deviceModel: msg.deviceModel,
         isFirstShot: msg.isFirstShot,
-        timestamp: msg.timestamp,
+        timestamp: msg.timestamp
       };
       state.shots.push(state.shotData);
       state.displayState = DisplayState.SHOWING_SHOT;
@@ -247,7 +246,7 @@ export const mqttSlice = createSlice({
       if (state.sessionData) {
         state.sessionData.totalShots = Math.max(
           state.sessionData.totalShots,
-          msg.shotNumber,
+          msg.shotNumber
         );
       }
     },
@@ -258,8 +257,8 @@ export const mqttSlice = createSlice({
       if (state.displayState === DisplayState.STARTUP) {
         state.displayState = DisplayState.DISCONNECTED;
       }
-    },
-  },
+    }
+  }
 });
 
 // ---------------------------------------------------------------------------
@@ -286,10 +285,12 @@ export const selectCurrentDeviceId = (state: RootState) =>
 
 export const selectIsCurrentDeviceConnected = (state: RootState) => {
   const currentDeviceId = selectCurrentDeviceId(state);
-  if (!currentDeviceId) return false;
+  if (!currentDeviceId) {
+    return false;
+  }
 
   const currentDevice = state.mqtt.knownDevices.find(
-    (device) => device.deviceId === currentDeviceId,
+    device => device.deviceId === currentDeviceId
   );
 
   return currentDevice?.presence === 'online';
@@ -309,5 +310,5 @@ export const {
   countdownComplete,
   sessionStopped,
   shotDetected,
-  startupComplete,
+  startupComplete
 } = mqttSlice.actions;
