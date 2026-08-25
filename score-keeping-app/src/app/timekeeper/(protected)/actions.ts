@@ -4,7 +4,7 @@ import { getPayload } from 'payload'
 import { revalidatePath } from 'next/cache'
 import config from '@/payload.config'
 import { loadSquadView } from '@/lib/match/loadSquadView'
-import type { MembershipView } from '@/lib/match/matchState'
+import { resolveSquadDeviceId, type MembershipView } from '@/lib/match/matchState'
 
 export interface ActionResult {
   ok: boolean
@@ -30,9 +30,9 @@ async function activate(squadId: number, membershipId: number): Promise<ActionRe
   const payload = await getPayload({ config })
   const view = await loadSquadView(squadId)
 
-  const deviceId = typeof view.squad.device === 'object' ? view.squad.device?.id : view.squad.device
+  const deviceId = resolveSquadDeviceId(view.squad)
   if (deviceId == null) {
-    return { ok: false, error: 'This squad has no timer device assigned.' }
+    return { ok: false, error: 'This squad has no timer device assigned (set one on its match).' }
   }
   if (view.isSessionActive) {
     return { ok: false, error: 'A turn is already in progress on this device.' }
@@ -66,6 +66,34 @@ async function activate(squadId: number, membershipId: number): Promise<ActionRe
 
 export async function activateMembershipAction(squadId: number, membershipId: number): Promise<ActionResult> {
   return activate(squadId, membershipId)
+}
+
+/**
+ * Undoes an activation — an accidental click/scan, or a genuine
+ * mid-round problem (matching the plan's "Abandon Turn" case: no
+ * automatic timeout, an explicit action instead). Leaves the target
+ * round-result untouched (still pending) so the shooter can be
+ * re-activated; any shots already fired for this MQTT session simply
+ * won't be attributed to anyone once it stops, since the server
+ * subscriber no longer finds a live match-session to bind them to.
+ */
+export async function cancelActivationAction(squadId: number): Promise<ActionResult> {
+  const payload = await getPayload({ config })
+  const view = await loadSquadView(squadId)
+
+  const liveSession = view.liveSessions[0]
+  if (!liveSession) {
+    return { ok: false, error: 'No active turn to cancel.' }
+  }
+
+  await payload.update({
+    collection: 'match-sessions',
+    id: liveSession.id,
+    data: { status: 'abandoned', stoppedAtMs: Date.now() },
+  })
+
+  revalidatePath('/timekeeper')
+  return { ok: true }
 }
 
 export async function activateByKnsaAction(squadId: number, rawCode: string): Promise<ActionResult> {
@@ -105,19 +133,21 @@ async function assertNotSessionActive(squadId: number): Promise<ActionResult | n
   return null
 }
 
-export async function sendToBackAction(squadId: number, membershipId: number): Promise<ActionResult> {
+/** Drag-and-drop reorder: orderedMembershipIds is the full new front-to-back order of present shooters. */
+export async function reorderQueueAction(squadId: number, orderedMembershipIds: number[]): Promise<ActionResult> {
   const guardError = await assertNotSessionActive(squadId)
   if (guardError) return guardError
 
   const payload = await getPayload({ config })
-  const view = await loadSquadView(squadId)
-  const maxPosition = Math.max(0, ...view.memberships.map((m) => m.membership.queuePosition))
-
-  await payload.update({
-    collection: 'squad-memberships',
-    id: membershipId,
-    data: { queuePosition: maxPosition + 1 },
-  })
+  await Promise.all(
+    orderedMembershipIds.map((membershipId, index) =>
+      payload.update({
+        collection: 'squad-memberships',
+        id: membershipId,
+        data: { queuePosition: index + 1 },
+      }),
+    ),
+  )
 
   revalidatePath('/timekeeper')
   return { ok: true }

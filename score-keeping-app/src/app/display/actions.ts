@@ -1,8 +1,6 @@
 'use server'
 
-import { getPayload } from 'payload'
-import config from '@/payload.config'
-import { listOpenSquads, loadSquadView } from '@/lib/match/loadSquadView'
+import { findOpenSquadForDevice, loadSquadView } from '@/lib/match/loadSquadView'
 import { deriveUpcomingShooters, deriveOutstanding } from '@/lib/match/matchState'
 import type { MembershipView } from '@/lib/match/matchState'
 
@@ -27,13 +25,7 @@ export async function getRosterForDevice(deviceId: string): Promise<RosterInfo> 
   const empty: RosterInfo = { current: null, next: null, onDeck: null }
   if (!deviceId) return empty
 
-  const payload = await getPayload({ config })
-  const devices = await payload.find({ collection: 'devices', where: { deviceId: { equals: deviceId } }, limit: 1 })
-  const device = devices.docs[0]
-  if (!device) return empty
-
-  const openSquads = await listOpenSquads()
-  const squad = openSquads.find((s) => (typeof s.device === 'object' ? s.device?.id : s.device) === device.id)
+  const squad = await findOpenSquadForDevice(deviceId)
   if (!squad) return empty
 
   const view = await loadSquadView(squad.id)

@@ -1,4 +1,4 @@
-import type { MatchSession, RoundResult, SquadMembership } from '@/payload-types'
+import type { MatchSession, RoundResult, Squad, SquadMembership } from '@/payload-types'
 
 export const ROUNDS_PER_MEMBERSHIP = 5
 
@@ -6,6 +6,25 @@ export interface MembershipView {
   membership: SquadMembership
   /** This membership's round-results, sorted by roundNumber. */
   roundResults: RoundResult[]
+}
+
+// Pure — safe to import from client components (unlike loadSquadView.ts,
+// which pulls in the server-only `payload` package).
+
+/** The device belongs to the squad's match, not to the squad itself — every squad in a match shares the one timer. */
+export function resolveSquadDeviceId(squad: Squad): number | null {
+  const match = squad.match
+  if (typeof match !== 'object' || match === null) return null
+  const device = match.device
+  return typeof device === 'object' ? (device?.id ?? null) : (device ?? null)
+}
+
+/** The firmware's 6-char MQTT device ID (timer/<deviceId>/...) for this squad's match — needs the squad fetched at depth >= 2. */
+export function resolveSquadFirmwareDeviceId(squad: Squad): string | null {
+  const match = squad.match
+  if (typeof match !== 'object' || match === null) return null
+  const device = match.device
+  return typeof device === 'object' ? (device?.deviceId ?? null) : null
 }
 
 /**

@@ -22,33 +22,33 @@ async function findOrCreateShooter(
 async function main(): Promise<void> {
   const payload = await getPayload({ config })
 
-  const device = await findOrCreateDevice(payload, 'DISPLAY1', 'Display verification lane')
-  const match = await payload.create({ collection: 'matches', data: { label: 'Display verification match', device: device.id } })
-  const shooterA = await findOrCreateShooter(payload, 'Casey', 'Nguyen', '444444')
-  const shooterB = await findOrCreateShooter(payload, 'Drew', 'Park', '555555')
+  const device = await findOrCreateDevice(payload, 'DNDTEST', 'DnD verification lane')
+  const match = await payload.create({ collection: 'matches', data: { label: 'DnD verification match', device: device.id } })
+  const names = [
+    ['Priya', 'Shah'],
+    ['Owen', 'Clarke'],
+    ['Mika', 'Tanaka'],
+  ]
+  const shooterIds: number[] = []
+  for (const [firstName, lastName] of names) {
+    const shooter = await findOrCreateShooter(payload, firstName, lastName, `7${shooterIds.length}${shooterIds.length}${shooterIds.length}${shooterIds.length}${shooterIds.length}`)
+    shooterIds.push(shooter.id)
+  }
 
   const squad = await payload.create({
     collection: 'squads',
-    data: {
-      label: 'Display verification squad',
-      startTime: '08:00',
-      endTime: '09:00',
-      match: match.id,
-      status: 'active',
-    },
+    data: { label: 'DnD verification squad', startTime: '08:00', endTime: '09:00', match: match.id, status: 'active' },
   })
 
-  const membershipA = await payload.create({
-    collection: 'squad-memberships',
-    data: { squad: squad.id, shooter: shooterA.id, discipline: 'OKP', startingPosition: 1, queuePosition: 1, status: 'present' },
-  })
-  const membershipB = await payload.create({
-    collection: 'squad-memberships',
-    data: { squad: squad.id, shooter: shooterB.id, discipline: 'OKP', startingPosition: 2, queuePosition: 2, status: 'present' },
-  })
+  for (let i = 0; i < shooterIds.length; i++) {
+    await payload.create({
+      collection: 'squad-memberships',
+      data: { squad: squad.id, shooter: shooterIds[i], discipline: 'OKP', startingPosition: i + 1, queuePosition: i + 1, status: 'present' },
+    })
+  }
 
-  console.log('Device: DISPLAY1')
-  console.log('Squad:', squad.id, 'memberships:', membershipA.id, membershipB.id)
+  console.log('Squad URL: /timekeeper?squad=' + squad.id)
+  console.log('Order: Priya Shah, Owen Clarke, Mika Tanaka')
 }
 
 main()

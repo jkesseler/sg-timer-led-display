@@ -45,13 +45,14 @@ async function main(): Promise<void> {
 
   console.log('Setting up fixtures...')
   const device = await payload.create({ collection: 'devices', data: { deviceId: DEVICE_ID, label: 'Verification device' } })
+  const match = await payload.create({ collection: 'matches', data: { label: 'Verification match', device: device.id } })
   const shooter = await payload.create({ collection: 'shooters', data: { firstName: 'Test', lastName: 'Shooter', knsaNumber: '999999' } })
   const squad = await payload.create({
     collection: 'squads',
     data: {
-      startTime: new Date().toISOString(),
-      endTime: new Date(Date.now() + 3600_000).toISOString(),
-      device: device.id,
+      startTime: '08:00',
+      endTime: '09:00',
+      match: match.id,
       status: 'active',
     },
   })

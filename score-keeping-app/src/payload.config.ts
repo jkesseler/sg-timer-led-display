@@ -7,6 +7,7 @@ import { fileURLToPath } from 'url'
 import { Users } from './collections/Users'
 import { Shooters } from './collections/Shooters'
 import { Devices } from './collections/Devices'
+import { Matches } from './collections/Matches'
 import { Squads } from './collections/Squads'
 import { SquadMemberships } from './collections/SquadMemberships'
 import { RoundResults } from './collections/RoundResults'
@@ -22,7 +23,7 @@ export default buildConfig({
       baseDir: path.resolve(dirname),
     },
   },
-  collections: [Users, Shooters, Devices, Squads, SquadMemberships, RoundResults, MatchSessions],
+  collections: [Users, Shooters, Devices, Matches, Squads, SquadMemberships, RoundResults, MatchSessions],
   editor: lexicalEditor(),
   secret: process.env.PAYLOAD_SECRET || '',
   typescript: {

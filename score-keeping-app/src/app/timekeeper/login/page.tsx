@@ -1,4 +1,5 @@
 import { loginAction } from './actions'
+import '../timekeeper.css'
 
 export default async function TimekeeperLoginPage({
   searchParams,
@@ -8,20 +9,24 @@ export default async function TimekeeperLoginPage({
   const { error } = await searchParams
 
   return (
-    <div style={{ maxWidth: '24rem', margin: '4rem auto', padding: '0 1rem' }}>
-      <h1>Timekeeper login</h1>
-      {error && <p style={{ color: 'crimson' }}>Invalid email or password.</p>}
-      <form action={loginAction} style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-        <label>
-          Email
-          <input type="email" name="email" required style={{ display: 'block', width: '100%' }} />
-        </label>
-        <label>
-          Password
-          <input type="password" name="password" required style={{ display: 'block', width: '100%' }} />
-        </label>
-        <button type="submit">Log in</button>
-      </form>
+    <div className="tk-login">
+      <div className="tk-login-card">
+        <span className="tk-login-card__title">Timekeeper login</span>
+        {error && <p className="tk-login-error">Invalid email or password.</p>}
+        <form action={loginAction} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+          <div className="tk-field">
+            <label htmlFor="email">Email</label>
+            <input type="email" id="email" name="email" required />
+          </div>
+          <div className="tk-field">
+            <label htmlFor="password">Password</label>
+            <input type="password" id="password" name="password" required />
+          </div>
+          <button type="submit" className="tk-button tk-button--primary">
+            Log in
+          </button>
+        </form>
+      </div>
     </div>
   )
 }

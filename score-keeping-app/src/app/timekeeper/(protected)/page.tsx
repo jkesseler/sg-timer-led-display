@@ -14,16 +14,22 @@ export default async function TimekeeperPage({
 
   if (!squadId) {
     return (
-      <div style={{ padding: '2rem' }}>
-        <h1>Select a squad</h1>
-        {openSquads.length === 0 && <p>No squad is currently active or in reshoot-phase. Set one active in /admin.</p>}
-        <ul>
-          {openSquads.map((squad) => (
-            <li key={squad.id}>
-              <Link href={`/timekeeper?squad=${squad.id}`}>{squad.label || `Squad #${squad.id}`}</Link>
-            </li>
-          ))}
-        </ul>
+      <div className="tk-layout">
+        <div className="tk-main">
+          <h1 className="tk-squad-title">Select a squad</h1>
+          {openSquads.length === 0 && (
+            <p style={{ color: 'var(--ink-dim)' }}>
+              No squad is currently active or in reshoot-phase. Set one active in /admin.
+            </p>
+          )}
+          <div className="tk-list">
+            {openSquads.map((squad) => (
+              <Link href={`/timekeeper?squad=${squad.id}`} key={squad.id} className="tk-list-row" style={{ textDecoration: 'none' }}>
+                <span>{squad.label || `Squad #${squad.id}`}</span>
+              </Link>
+            ))}
+          </div>
+        </div>
       </div>
     )
   }

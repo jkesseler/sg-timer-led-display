@@ -70,6 +70,7 @@ export interface Config {
     users: User;
     shooters: Shooter;
     devices: Device;
+    matches: Match;
     squads: Squad;
     'squad-memberships': SquadMembership;
     'round-results': RoundResult;
@@ -79,11 +80,19 @@ export interface Config {
     'payload-preferences': PayloadPreference;
     'payload-migrations': PayloadMigration;
   };
-  collectionsJoins: {};
+  collectionsJoins: {
+    matches: {
+      squads: 'squads';
+    };
+    squads: {
+      memberships: 'squad-memberships';
+    };
+  };
   collectionsSelect: {
     users: UsersSelect<false> | UsersSelect<true>;
     shooters: ShootersSelect<false> | ShootersSelect<true>;
     devices: DevicesSelect<false> | DevicesSelect<true>;
+    matches: MatchesSelect<false> | MatchesSelect<true>;
     squads: SquadsSelect<false> | SquadsSelect<true>;
     'squad-memberships': SquadMembershipsSelect<false> | SquadMembershipsSelect<true>;
     'round-results': RoundResultsSelect<false> | RoundResultsSelect<true>;
@@ -188,6 +197,28 @@ export interface Device {
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "matches".
+ */
+export interface Match {
+  id: number;
+  /**
+   * e.g. "Saturday match, 30 August".
+   */
+  label?: string | null;
+  /**
+   * The one timer used for every squad rotating through this match.
+   */
+  device: number | Device;
+  squads?: {
+    docs?: (number | Squad)[];
+    hasNextPage?: boolean;
+    totalDocs?: number;
+  };
+  updatedAt: string;
+  createdAt: string;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "squads".
  */
 export interface Squad {
@@ -196,13 +227,24 @@ export interface Squad {
    * Optional friendly name, e.g. "08:00 squad".
    */
   label?: string | null;
+  /**
+   * The match this squad rotates through — its timer device comes from here, not from the squad.
+   */
+  match: number | Match;
+  /**
+   * e.g. "08:00"
+   */
   startTime: string;
+  /**
+   * e.g. "09:00"
+   */
   endTime: string;
   status: 'scheduled' | 'active' | 'reshoot-phase' | 'completed';
-  /**
-   * The timer device bound to this squad, chosen by the timekeeper when the squad starts.
-   */
-  device?: (number | null) | Device;
+  memberships?: {
+    docs?: (number | SquadMembership)[];
+    hasNextPage?: boolean;
+    totalDocs?: number;
+  };
   updatedAt: string;
   createdAt: string;
 }
@@ -320,6 +362,10 @@ export interface PayloadLockedDocument {
         value: number | Device;
       } | null)
     | ({
+        relationTo: 'matches';
+        value: number | Match;
+      } | null)
+    | ({
         relationTo: 'squads';
         value: number | Squad;
       } | null)
@@ -424,14 +470,26 @@ export interface DevicesSelect<T extends boolean = true> {
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "matches_select".
+ */
+export interface MatchesSelect<T extends boolean = true> {
+  label?: T;
+  device?: T;
+  squads?: T;
+  updatedAt?: T;
+  createdAt?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "squads_select".
  */
 export interface SquadsSelect<T extends boolean = true> {
   label?: T;
+  match?: T;
   startTime?: T;
   endTime?: T;
   status?: T;
-  device?: T;
+  memberships?: T;
   updatedAt?: T;
   createdAt?: T;
 }

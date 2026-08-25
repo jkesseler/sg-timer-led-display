@@ -4,7 +4,7 @@ export const Squads: CollectionConfig = {
   slug: 'squads',
   admin: {
     useAsTitle: 'label',
-    defaultColumns: ['label', 'startTime', 'endTime', 'status', 'device'],
+    defaultColumns: ['label', 'match', 'startTime', 'endTime', 'status'],
   },
   fields: [
     {
@@ -15,14 +15,46 @@ export const Squads: CollectionConfig = {
       },
     },
     {
-      name: 'startTime',
-      type: 'date',
+      name: 'match',
+      type: 'relationship',
+      relationTo: 'matches',
       required: true,
+      admin: {
+        description: 'The match this squad rotates through — its timer device comes from here, not from the squad.',
+      },
     },
     {
-      name: 'endTime',
-      type: 'date',
-      required: true,
+      type: 'row',
+      fields: [
+        {
+          name: 'startTime',
+          type: 'text',
+          required: true,
+          admin: {
+            description: 'e.g. "08:00"',
+            width: '50%',
+            components: {
+              Field: '/fields/TimeInput#TimeInput',
+            },
+          },
+          validate: (value: string | null | undefined) =>
+            typeof value === 'string' && /^\d{2}:\d{2}$/.test(value) ? true : 'Enter a time as HH:MM.',
+        },
+        {
+          name: 'endTime',
+          type: 'text',
+          required: true,
+          admin: {
+            description: 'e.g. "09:00"',
+            width: '50%',
+            components: {
+              Field: '/fields/TimeInput#TimeInput',
+            },
+          },
+          validate: (value: string | null | undefined) =>
+            typeof value === 'string' && /^\d{2}:\d{2}$/.test(value) ? true : 'Enter a time as HH:MM.',
+        },
+      ],
     },
     {
       name: 'status',
@@ -37,12 +69,10 @@ export const Squads: CollectionConfig = {
       ],
     },
     {
-      name: 'device',
-      type: 'relationship',
-      relationTo: 'devices',
-      admin: {
-        description: 'The timer device bound to this squad, chosen by the timekeeper when the squad starts.',
-      },
+      name: 'memberships',
+      type: 'join',
+      collection: 'squad-memberships',
+      on: 'squad',
     },
   ],
 }

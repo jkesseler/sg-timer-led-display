@@ -13,29 +13,17 @@ import type {
 } from '@/lib/mqtt/types';
 import type { RootState } from './store';
 
-// ---------------------------------------------------------------------------
-// State
-// ---------------------------------------------------------------------------
-
 export interface MqttState {
-  // Connection
   isConnecting: boolean;
   isConnected: boolean;
   connectionError: string | null;
-
-  // Display
   displayState: DisplayState;
   shotData: ShotData | null;
   sessionData: SessionData | null;
-  /** Every shot of the current (or most recently completed) session, in fire order. */
   shots: ShotData[];
   deviceName: string | null;
-
-  // Multi-device
   knownDevices: KnownDevice[];
   selectedDeviceId: string | null;
-
-  // Countdown
   countdownRemainingMs: number;
 }
 
@@ -43,24 +31,17 @@ const initialState: MqttState = {
   isConnecting: false,
   isConnected: false,
   connectionError: null,
-
   displayState: DisplayState.STARTUP,
   shotData: null,
   sessionData: null,
   shots: [],
   deviceName: null,
-
   knownDevices: [],
   selectedDeviceId: null,
-
   countdownRemainingMs: 0,
 };
 
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
 
-/** Pre-session states that can be overridden by a CONNECTED event */
 const PRE_SESSION_STATES: DisplayState[] = [
   DisplayState.STARTUP,
   DisplayState.DISCONNECTED,
@@ -73,13 +54,12 @@ function resolveActiveDeviceId(
   devices: KnownDevice[],
   pinned: string | null,
 ): string | null {
-  if (pinned) return pinned;
+  if (pinned) {
+    return pinned;
+  }
+
   return devices.find(d => d.presence === 'online')?.deviceId ?? null;
 }
-
-// ---------------------------------------------------------------------------
-// Slice
-// ---------------------------------------------------------------------------
 
 export const mqttSlice = createSlice({
   name: 'mqtt',

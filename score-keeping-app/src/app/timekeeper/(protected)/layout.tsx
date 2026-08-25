@@ -3,6 +3,7 @@ import { redirect } from 'next/navigation'
 import { getPayload } from 'payload'
 import config from '@/payload.config'
 import { logoutAction } from '../login/actions'
+import '../timekeeper.css'
 
 export default async function TimekeeperLayout({ children }: { children: React.ReactNode }) {
   const headers = await getHeaders()
@@ -15,11 +16,13 @@ export default async function TimekeeperLayout({ children }: { children: React.R
 
   return (
     <div>
-      <header style={{ display: 'flex', justifyContent: 'space-between', padding: '0.75rem 1.5rem', borderBottom: '1px solid #ddd' }}>
-        <strong>Timekeeper</strong>
-        <form action={logoutAction}>
-          <span style={{ marginRight: '1rem' }}>{user.email}</span>
-          <button type="submit">Log out</button>
+      <header className="tk-header">
+        <span className="tk-header__title">Timekeeper</span>
+        <form action={logoutAction} className="tk-header__account">
+          <span className="tk-header__email">{user.email}</span>
+          <button type="submit" className="tk-button tk-button--small">
+            Log out
+          </button>
         </form>
       </header>
       <main>{children}</main>

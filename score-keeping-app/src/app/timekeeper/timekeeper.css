@@ -1,0 +1,500 @@
+/* Shared visual language with /display (same design tokens, same card and
+   button vocabulary) — this is an interactive control screen, not a
+   passive scoreboard, so it adds form/list/drag styling on top. */
+
+.tk-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1rem 1.75rem;
+  border-bottom: 1px solid var(--line);
+  background: var(--surface-1);
+}
+
+.tk-header__title {
+  font-family: var(--font-ui);
+  font-size: 1.1rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: var(--ink);
+}
+
+.tk-header__account {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.tk-header__email {
+  font-size: 0.9rem;
+  color: var(--ink-dim);
+}
+
+.tk-layout {
+  display: flex;
+  align-items: flex-start;
+  gap: 1.75rem;
+  max-width: 96rem;
+  margin: 0 auto;
+  padding: 2rem 1.75rem 4rem;
+}
+
+.tk-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1.75rem;
+}
+
+.tk-splits-pane {
+  flex-shrink: 0;
+  width: 22rem;
+  position: sticky;
+  top: 2rem;
+  background: var(--surface-1);
+  border: 1px solid var(--line);
+  border-radius: 0.9rem;
+  padding: 1.5rem 1.75rem;
+  max-height: calc(100vh - 4rem);
+}
+
+@media (max-width: 1100px) {
+  .tk-layout {
+    flex-direction: column;
+  }
+
+  .tk-splits-pane {
+    width: 100%;
+    position: static;
+  }
+}
+
+.tk-squad-title {
+  font-family: var(--font-ui);
+  font-size: 1.9rem;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+/* ---- Buttons ---- */
+
+.tk-button {
+  background: rgba(27, 33, 38, 0.75);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  color: var(--ink-dim);
+  padding: 0.55rem 1rem;
+  font-family: var(--font-ui);
+  font-size: 0.85rem;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+  cursor: pointer;
+  transition: color 0.15s ease, border-color 0.15s ease, background 0.15s ease;
+}
+
+.tk-button:hover:not(:disabled) {
+  color: var(--ink);
+  border-color: var(--line-strong);
+  background: rgba(34, 42, 48, 0.9);
+}
+
+.tk-button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.tk-button--primary {
+  background: var(--signal-ready-dim);
+  border-color: var(--signal-ready);
+  color: var(--signal-ready);
+}
+
+.tk-button--primary:hover:not(:disabled) {
+  background: var(--signal-ready);
+  color: var(--ink-void);
+}
+
+.tk-button--small {
+  padding: 0.35rem 0.7rem;
+  font-size: 0.78rem;
+}
+
+.tk-button--danger {
+  color: var(--signal-stop);
+  border-color: var(--signal-stop-dim);
+}
+
+.tk-button--danger:hover:not(:disabled) {
+  background: var(--signal-stop-dim);
+  color: var(--ink);
+}
+
+/* ---- Status card ---- */
+
+.tk-card {
+  background: var(--surface-1);
+  border: 1px solid var(--line);
+  border-radius: 0.9rem;
+  padding: 1.5rem 1.75rem;
+}
+
+.tk-status-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1.5rem;
+  flex-wrap: wrap;
+}
+
+.tk-status-card__round {
+  font-family: var(--font-ui);
+  font-size: 1.3rem;
+  font-weight: 700;
+  color: var(--ink);
+  margin-bottom: 0.5rem;
+}
+
+.tk-status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.95rem;
+  color: var(--ink-dim);
+}
+
+.tk-status-badge__dot {
+  width: 0.55rem;
+  height: 0.55rem;
+  border-radius: 50%;
+  background: var(--signal-ready);
+  flex-shrink: 0;
+}
+
+.tk-status-badge--active .tk-status-badge__dot {
+  background: var(--signal-live);
+  animation: tk-pulse 1.6s ease-in-out infinite;
+}
+
+@keyframes tk-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+.tk-status-badge strong {
+  color: var(--ink);
+}
+
+/* ---- Next / on deck hero ---- */
+
+.tk-roster {
+  display: flex;
+  gap: 3rem;
+  flex-wrap: wrap;
+}
+
+.tk-roster__item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.tk-roster__label {
+  font-family: var(--font-ui);
+  font-size: 0.85rem;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+
+.tk-roster__name {
+  font-family: var(--font-ui);
+  font-size: 2rem;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.tk-roster__item--on-deck .tk-roster__name {
+  font-size: 1.3rem;
+  color: var(--ink-dim);
+}
+
+/* ---- Scan / manual entry ---- */
+
+.tk-scan-form {
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+}
+
+.tk-scan-input {
+  flex: 1;
+  max-width: 22rem;
+  background: var(--ink-void);
+  border: 1px solid var(--line-strong);
+  border-radius: 6px;
+  color: var(--ink);
+  font-family: var(--font-mono);
+  font-size: 1rem;
+  padding: 0.6rem 0.85rem;
+}
+
+.tk-scan-input:focus-visible {
+  outline: 2px solid var(--signal-ready);
+  outline-offset: 1px;
+}
+
+.tk-scan-input::placeholder {
+  color: var(--ink-faint);
+}
+
+.tk-scan-input:disabled {
+  opacity: 0.4;
+}
+
+/* ---- Error banner ---- */
+
+.tk-error {
+  border: 1px solid var(--signal-stop-dim);
+  background: rgba(241, 84, 63, 0.08);
+  color: var(--signal-stop);
+  border-radius: 0.6rem;
+  padding: 0.85rem 1.1rem;
+  font-size: 0.9rem;
+}
+
+/* ---- Queue ---- */
+
+.tk-section-title {
+  font-family: var(--font-ui);
+  font-size: 0.95rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  margin-bottom: 0.9rem;
+}
+
+.tk-queue {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.tk-queue-row {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  background: var(--surface-1);
+  border: 1px solid var(--line);
+  border-radius: 0.7rem;
+  padding: 0.85rem 1.1rem;
+}
+
+.tk-queue-row--active {
+  border-color: var(--signal-live);
+  background: var(--signal-live-dim);
+}
+
+.tk-queue-row--dragging {
+  opacity: 0.5;
+}
+
+.tk-queue-row__handle {
+  cursor: grab;
+  color: var(--ink-faint);
+  font-size: 1.2rem;
+  line-height: 1;
+  padding: 0.2rem;
+  touch-action: none;
+  user-select: none;
+}
+
+.tk-queue-row__handle:active {
+  cursor: grabbing;
+}
+
+.tk-queue-row__position {
+  font-family: var(--font-mono);
+  color: var(--ink-faint);
+  width: 1.5rem;
+  text-align: right;
+  flex-shrink: 0;
+}
+
+.tk-queue-row__name {
+  background: none;
+  border: none;
+  color: var(--ink);
+  font-family: var(--font-ui);
+  font-size: 1.05rem;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 0.2rem 0;
+  text-align: left;
+  min-width: 9rem;
+}
+
+.tk-queue-row__name:hover:not(:disabled) {
+  color: var(--signal-ready);
+}
+
+.tk-queue-row__name:disabled {
+  cursor: not-allowed;
+  color: var(--ink);
+}
+
+.tk-queue-row__discipline {
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  color: var(--ink-dim);
+  background: var(--surface-2);
+  border-radius: 4px;
+  padding: 0.2rem 0.5rem;
+  flex-shrink: 0;
+}
+
+.tk-queue-row__rounds {
+  display: flex;
+  gap: 0.4rem;
+  flex-shrink: 0;
+}
+
+.tk-round-cell {
+  width: 3.6rem;
+  text-align: center;
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+  color: var(--ink-faint);
+  background: var(--surface-2);
+  border-radius: 4px;
+  padding: 0.3rem 0.2rem;
+}
+
+.tk-round-cell--timed {
+  color: var(--ink);
+}
+
+.tk-round-cell--rs {
+  color: var(--signal-stop);
+  font-weight: 700;
+}
+
+.tk-round-cell--skipped {
+  color: var(--ink-faint);
+  text-decoration: line-through;
+}
+
+.tk-round-cell--reshoot {
+  color: var(--signal-live);
+}
+
+.tk-round-cell--live {
+  color: var(--signal-live);
+  background: var(--signal-live-dim);
+  font-weight: 700;
+  animation: tk-pulse 1.2s ease-in-out infinite;
+}
+
+.tk-queue-row__spacer {
+  flex: 1;
+}
+
+.tk-queue-row__actions {
+  display: flex;
+  gap: 0.5rem;
+  flex-shrink: 0;
+}
+
+.tk-signed-tag {
+  font-size: 0.8rem;
+  color: var(--signal-ready);
+  font-style: italic;
+}
+
+/* ---- Outstanding / absent lists ---- */
+
+.tk-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.tk-list-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  background: var(--surface-1);
+  border: 1px solid var(--line);
+  border-radius: 0.6rem;
+  padding: 0.75rem 1.1rem;
+  font-size: 0.95rem;
+  color: var(--ink);
+}
+
+.tk-list-row__meta {
+  color: var(--ink-dim);
+  font-size: 0.85rem;
+}
+
+/* ---- Login ---- */
+
+.tk-login {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem;
+}
+
+.tk-login-card {
+  width: 100%;
+  max-width: 22rem;
+  background: var(--surface-1);
+  border: 1px solid var(--line);
+  border-radius: 0.9rem;
+  padding: 2rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.tk-login-card__title {
+  font-family: var(--font-ui);
+  font-size: 1.3rem;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.tk-login-error {
+  color: var(--signal-stop);
+  font-size: 0.9rem;
+}
+
+.tk-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.tk-field label {
+  font-size: 0.85rem;
+  color: var(--ink-dim);
+}
+
+.tk-field input {
+  background: var(--ink-void);
+  border: 1px solid var(--line-strong);
+  border-radius: 6px;
+  color: var(--ink);
+  font-family: var(--font-ui);
+  font-size: 1rem;
+  padding: 0.6rem 0.75rem;
+}
+
+.tk-field input:focus-visible {
+  outline: 2px solid var(--signal-ready);
+  outline-offset: 1px;
+}
