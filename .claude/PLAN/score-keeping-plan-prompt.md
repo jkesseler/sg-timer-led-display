@@ -219,7 +219,7 @@ Generating this card is likely the concrete output of the whole capture flow —
 
 ## The barcode scanner
 
-A NETUM NT-EM61 2D CMOS scanner in HID mode — the OS sees it as a USB keyboard. Scans arrive as fast keystrokes ending in Enter, into whatever has focus.
+A NETUM NT-EM61 2D CMOS scanner in HID mode — the OS sees it as a USB keyboard. Scans arrive as fast keystrokes into whatever has focus. String is terminated with TAB character.
 
 The plan needs a capture strategy that does not depend on an input being focused, distinguishes a scan burst from human typing (inter-keystroke timing plus the terminating Enter), and handles unknown or unmatched codes. It must also honour the enable/disable rule below.
 

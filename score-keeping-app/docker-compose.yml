@@ -1,0 +1,32 @@
+version: '3'
+
+services:
+  payload:
+    image: node:20-alpine
+    ports:
+      - '3000:3000'
+    volumes:
+      - .:/home/node/app
+      - node_modules:/home/node/app/node_modules
+    working_dir: /home/node/app/
+    command: sh -c "npm install && npm run dev"
+    depends_on:
+      - postgres
+    env_file:
+      - .env
+
+  # Ensure your DATABASE_URL uses 'postgres' as the hostname,
+  # e.g. postgres://postgres:<password>@postgres:5432/score-keeping-app
+  postgres:
+    restart: always
+    image: postgres:latest
+    environment:
+      POSTGRES_PASSWORD: postgres
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    ports:
+      - '5432:5432'
+
+volumes:
+  pgdata:
+  node_modules:

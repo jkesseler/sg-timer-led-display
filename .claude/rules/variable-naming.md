@@ -2,6 +2,7 @@
 paths:
   - "pwa-display-app/**/*.{ts,tsx}"
   - "mqtt-simulator/**/*.ts"
+  - "score-keeping-app/**/*.{ts,tsx}"
   - "ESP32-S3-firmware/**/*.{cpp,h}"
   - "BLE-LoRa-Bridge/**/*.{cpp,h}"
 ---
