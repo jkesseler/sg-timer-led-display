@@ -11,7 +11,16 @@ export const Squads: CollectionConfig = {
       name: 'label',
       type: 'text',
       admin: {
-        description: 'Optional friendly name, e.g. "08:00 squad".',
+        description: 'Optional friendly name, e.g. "08:00 squad". Defaults to the start–end time range when left blank.',
+      },
+      hooks: {
+        afterRead: [
+          ({ value, siblingData }) => {
+            if (value) return value
+            const { startTime, endTime } = siblingData as { startTime?: string; endTime?: string }
+            return startTime && endTime ? `${startTime} - ${endTime}` : value
+          },
+        ],
       },
     },
     {

@@ -170,6 +170,7 @@ export interface Shooter {
   id: number;
   firstName: string;
   lastName: string;
+  displayName?: string | null;
   asnNumber?: string | null;
   /**
    * Barcode scan lookup key. Leave blank if the shooter has no card.
@@ -224,7 +225,7 @@ export interface Match {
 export interface Squad {
   id: number;
   /**
-   * Optional friendly name, e.g. "08:00 squad".
+   * Optional friendly name, e.g. "08:00 squad". Defaults to the start–end time range when left blank.
    */
   label?: string | null;
   /**
@@ -453,6 +454,7 @@ export interface UsersSelect<T extends boolean = true> {
 export interface ShootersSelect<T extends boolean = true> {
   firstName?: T;
   lastName?: T;
+  displayName?: T;
   asnNumber?: T;
   knsaNumber?: T;
   updatedAt?: T;
