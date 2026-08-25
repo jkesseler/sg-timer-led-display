@@ -1,0 +1,208 @@
+.app {
+  height: 100vh;
+  width: 100vw;
+  display: flex;
+  flex-direction: column;
+  background: var(--ink-void);
+  color: var(--ink);
+  font-family: var(--font-ui);
+  overflow: hidden;
+}
+
+.stage {
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+}
+
+/* ---- Status bar ---- */
+
+.status-bar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  background: rgba(20, 25, 29, 0.92);
+  backdrop-filter: blur(8px);
+  border-bottom: 1px solid var(--line);
+  padding: 0.6rem 1.1rem;
+  display: flex;
+  align-items: center;
+  gap: 1.4rem;
+  font-size: 0.85rem;
+  z-index: 100;
+  animation: status-bar-in 200ms ease-out;
+}
+
+@keyframes status-bar-in {
+  from {
+    transform: translateY(-100%);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+
+.status-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: var(--ink-dim);
+}
+
+.status-item.error {
+  color: var(--signal-stop);
+}
+
+.status-item label {
+  color: var(--ink-faint);
+}
+
+.status-item select {
+  background: var(--ink-void);
+  border: 1px solid var(--line-strong);
+  border-radius: 4px;
+  color: var(--ink);
+  font-size: 0.85rem;
+  font-family: inherit;
+  padding: 0.15rem 1.4rem 0.15rem 0.4rem;
+  cursor: pointer;
+  -webkit-appearance: none;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath fill='%238b969e' d='M0 0l5 6 5-6z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 6px center;
+  transition: border-color 0.15s ease;
+}
+
+.status-item select:focus-visible {
+  outline: 2px solid var(--signal-ready);
+  outline-offset: 1px;
+  border-color: var(--signal-ready);
+}
+
+.status-item select option {
+  background: var(--surface-1);
+  color: var(--ink);
+}
+
+.status-indicator {
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 50%;
+  background: var(--signal-stop);
+}
+
+.status-indicator.connected {
+  background: var(--signal-ready);
+}
+
+.status-indicator.disconnected {
+  background: var(--signal-stop);
+  animation: status-indicator-pulse 2s ease-in-out infinite;
+}
+
+@keyframes status-indicator-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+
+/* ---- No bridge device reachable ---- */
+
+.no-device {
+  height: 100%;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  gap: 0.75rem;
+}
+
+.no-device__title {
+  font-size: clamp(1.8rem, 4vw, 2.75rem);
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.no-device__detail {
+  font-size: 1.15rem;
+  color: var(--ink-dim);
+}
+
+/* ---- Controls ---- */
+
+.controls {
+  position: fixed;
+  bottom: 1.1rem;
+  right: 1.1rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  z-index: 100;
+}
+
+.control-button {
+  background: rgba(27, 33, 38, 0.75);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  color: var(--ink-dim);
+  padding: 0.5rem 0.85rem;
+  font-family: var(--font-ui);
+  font-size: 0.8rem;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  transition:
+    color 0.15s ease,
+    border-color 0.15s ease,
+    background 0.15s ease;
+}
+
+.control-button:hover {
+  color: var(--ink);
+  border-color: var(--line-strong);
+  background: rgba(34, 42, 48, 0.9);
+}
+
+.control-button:focus-visible {
+  outline: 2px solid var(--signal-ready);
+  outline-offset: 2px;
+}
+
+.control-button--icon {
+  padding: 0.5rem 0.75rem;
+  font-family: var(--font-mono);
+  font-weight: 600;
+  line-height: 1;
+}
+
+.brightness-control {
+  display: flex;
+  gap: 1px;
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.brightness-control .control-button {
+  border-radius: 0;
+}
+
+/* Responsive: keep the corner controls usable on small dev viewports */
+@media (max-width: 640px) {
+  .controls {
+    bottom: 0.6rem;
+    right: 0.6rem;
+  }
+
+  .control-button {
+    padding: 0.4rem 0.65rem;
+    font-size: 0.75rem;
+  }
+}

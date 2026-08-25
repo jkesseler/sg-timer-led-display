@@ -1,0 +1,90 @@
+:root {
+  /* Surfaces */
+  --ink-void: #0a0d10;
+  --surface-1: #14191d;
+  --surface-2: #1b2126;
+  --surface-3: #222a30;
+  --line: #262e34;
+  --line-strong: #333d44;
+
+  /* Text */
+  --ink: #f2f5f4;
+  --ink-dim: #8b969e;
+  --ink-faint: #565f66;
+
+  /* Semaphore accents — meaning, not decoration */
+  --signal-ready: #34d399;
+  --signal-ready-dim: #1f5f4c;
+  --signal-live: #f2a73b;
+  --signal-live-dim: #6b4b1c;
+  --signal-stop: #f1543f;
+  --signal-stop-dim: #6b2a20;
+
+  /* Type */
+  --font-ui: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-mono: 'JetBrains Mono', 'Consolas', 'SF Mono', monospace;
+
+  color-scheme: dark;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+/* Base type scale tuned for a TV viewed from several meters away, not a desk. */
+html {
+  font-size: 16px;
+}
+
+@media (min-width: 1280px) {
+  html {
+    font-size: 18px;
+  }
+}
+
+@media (min-width: 1920px) {
+  html {
+    font-size: 22px;
+  }
+}
+
+@media (min-width: 2560px) {
+  html {
+    font-size: 27px;
+  }
+}
+
+body {
+  margin: 0;
+  font-family: var(--font-ui);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  background-color: var(--ink-void);
+  color: var(--ink);
+  overflow: hidden;
+}
+
+code {
+  font-family: var(--font-mono);
+}
+
+#root {
+  width: 100vw;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--ink-void);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
