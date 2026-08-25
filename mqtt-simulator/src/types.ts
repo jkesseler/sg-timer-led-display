@@ -82,6 +82,7 @@ export interface ShotDetectedMessage {
 export interface SessionStoppedMessage {
   sessionId: number;
   totalShots: number;
+  lastShotTimeMs?: number;  // Omitted when totalShots is 0, matching MqttManager::doPublishSessionStopped
   timestamp: number;
 }
 

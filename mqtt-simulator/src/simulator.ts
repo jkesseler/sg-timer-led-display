@@ -23,6 +23,10 @@ export class TimerSimulator {
   private config: SimulatorConfig;
   private sessionId: number = 0;
   private isRunning: boolean = false;
+  // Tracks the last published shot's absoluteTimeMs for the current session,
+  // mirroring TimerApplication::lastShotTime in the firmware — used as the
+  // default lastShotTimeMs on session/stopped.
+  private lastShotTimeMs: number = 0;
 
   constructor(config: Partial<SimulatorConfig> = {}) {
     this.config = { ...DEFAULT_CONFIG, ...config };
@@ -167,6 +171,8 @@ export class TimerSimulator {
    * Publish session started
    */
   publishSessionStarted(sessionId: number, startDelaySeconds: number): void {
+    this.lastShotTimeMs = 0;
+
     const message: SessionStartedMessage = {
       sessionId,
       startDelaySeconds,
@@ -200,6 +206,8 @@ export class TimerSimulator {
     splitTimeMs: number,
     isFirstShot: boolean
   ): void {
+    this.lastShotTimeMs = absoluteTimeMs;
+
     const message: ShotDetectedMessage = {
       sessionId,
       shotNumber,
@@ -221,12 +229,18 @@ export class TimerSimulator {
   /**
    * Publish session stopped
    */
-  publishSessionStopped(sessionId: number, totalShots: number): void {
+  publishSessionStopped(sessionId: number, totalShots: number, lastShotTimeMs: number = this.lastShotTimeMs): void {
     const message: SessionStoppedMessage = {
       sessionId,
       totalShots,
       timestamp: Date.now()
     };
+
+    // Mirrors MqttManager::doPublishSessionStopped: omitted entirely when
+    // there is no shot to report, rather than published as 0.
+    if (lastShotTimeMs > 0) {
+      message.lastShotTimeMs = lastShotTimeMs;
+    }
 
     console.log(`🏁 Session stopped: ID=${sessionId}, Total shots=${totalShots}`);
     this.publish(MqttEvents.SESSION_STOPPED, message);
