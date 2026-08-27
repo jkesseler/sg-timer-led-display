@@ -250,6 +250,104 @@ export async function flagMalfunctionAction(squadId: number, roundResultId: numb
   return { ok: true };
 }
 
+/**
+ * Marks a round the shooter shot but did not complete — ran out of
+ * ammunition, ran out of time. Like RS it is a permanent marker rather
+ * than a time, but unlike RS it earns no reshoot: the round is simply
+ * done. Any time the timer recorded stays in storage; the card shows DNF.
+ */
+export async function flagDnfAction(squadId: number, roundResultId: number): Promise<ActionResult> {
+  const guardError = await assertNotSessionActive(squadId);
+  if (guardError) {
+    return guardError;
+  }
+
+  const payload = await getPayload({ config });
+  await payload.update({ collection: 'round-results', id: roundResultId, data: { status: 'dnf' } });
+
+  revalidatePath('/timekeeper');
+
+  return { ok: true };
+}
+
+/**
+ * A DQ ends the shooter's whole match. Every squad-membership they hold
+ * across squads in this match is marked disqualified, and each of those
+ * cards' not-yet-shot rounds becomes the terminal `dq` marker. Rounds
+ * already recorded (a time or RS) are left untouched — the match director
+ * decides what a disqualified card counts for.
+ */
+export async function disqualifyShooterAction(
+  squadId: number,
+  membershipId: number,
+  reason: string
+): Promise<ActionResult> {
+  const guardError = await assertNotSessionActive(squadId);
+  if (guardError) {
+    return guardError;
+  }
+
+  const trimmedReason = reason.trim();
+  if (!trimmedReason) {
+    return { ok: false, error: 'A disqualification needs a reason.' };
+  }
+
+  const payload = await getPayload({ config });
+  const membership = await payload.findByID({ collection: 'squad-memberships', id: membershipId, depth: 2 });
+
+  const shooterId = typeof membership.shooter === 'object' ? membership.shooter.id : membership.shooter;
+  const squad = typeof membership.squad === 'object' ? membership.squad : null;
+  const matchId
+    = squad && typeof squad.match === 'object' ? squad.match.id : (squad?.match ?? null);
+  if (matchId == null) {
+    return { ok: false, error: 'This squad has no match assigned.' };
+  }
+
+  const squadsInMatch = await payload.find({
+    collection: 'squads',
+    where: { match: { equals: matchId } },
+    limit: 100
+  });
+  const squadIds = squadsInMatch.docs.map(s => s.id);
+
+  const cards = await payload.find({
+    collection: 'squad-memberships',
+    where: { and: [{ shooter: { equals: shooterId } }, { squad: { in: squadIds } }] },
+    limit: 100
+  });
+
+  const disqualifiedAt = new Date().toISOString();
+
+  // Not a single transaction — like markAbsentAction, the updates run one
+  // by one. If one fails the caller sees the error and can re-run; a DQ is
+  // idempotent (statuses only ever move to disqualified / dq), so a retry
+  // finishes the partially-applied cards without side effects.
+  try {
+    for (const card of cards.docs) {
+      await payload.update({
+        collection: 'squad-memberships',
+        id: card.id,
+        data: { status: 'disqualified', disqualifiedReason: trimmedReason, disqualifiedAt }
+      });
+
+      const pendingRounds = await payload.find({
+        collection: 'round-results',
+        where: { and: [{ membership: { equals: card.id } }, { status: { equals: 'pending' } }] },
+        limit: 20
+      });
+      for (const round of pendingRounds.docs) {
+        await payload.update({ collection: 'round-results', id: round.id, data: { status: 'dq' } });
+      }
+    }
+  } catch (error) {
+    return { ok: false, error: error instanceof Error ? error.message : 'Could not disqualify this shooter.' };
+  }
+
+  revalidatePath('/timekeeper');
+
+  return { ok: true };
+}
+
 export async function markSignedOffAction(membershipId: number): Promise<ActionResult> {
   const payload = await getPayload({ config });
   await payload.update({

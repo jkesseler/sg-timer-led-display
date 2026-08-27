@@ -32,6 +32,8 @@ import {
   markPresentAction,
   offerCatchUpAction,
   markSignedOffAction,
+  flagDnfAction,
+  disqualifyShooterAction,
   type ActionResult
 } from '@/app/timekeeper/(protected)/actions';
 import { ReduxProvider } from '@/components/display/ReduxProvider';
@@ -92,13 +94,45 @@ function roundCell(view: MembershipView, round: number, liveTimeMs: number | nul
       </span>
     );
   }
+  if (result.status === 'dnf') {
+    return (
+      <span className="tk-round-cell tk-round-cell--dnf">
+        R
+        {round}
+        {' '}
+        DNF
+      </span>
+    );
+  }
+  if (result.status === 'dq') {
+    return (
+      <span className="tk-round-cell tk-round-cell--dq">
+        R
+        {round}
+        {' '}
+        DQ
+      </span>
+    );
+  }
+  if (result.status === 'timed') {
+    return (
+      <span className="tk-round-cell tk-round-cell--timed">
+        R
+        {round}
+        {' '}
+        {result.timeMs != null ? formatRoundTimeMs(result.timeMs) : '—'}
+      </span>
+    );
+  }
 
+  // Any status the board doesn't know about renders visibly rather than
+  // silently borrowing the timed cell's look.
   return (
-    <span className="tk-round-cell tk-round-cell--timed">
+    <span className="tk-round-cell tk-round-cell--unknown">
       R
       {round}
       {' '}
-      {result.timeMs != null ? formatRoundTimeMs(result.timeMs) : '—'}
+      ?
     </span>
   );
 }
@@ -200,6 +234,7 @@ function TimekeeperBoardInner({ view }: { view: SquadView }) {
     .filter((m): m is MembershipView => m != null);
 
   const absent = view.memberships.filter(m => m.membership.status === 'absent');
+  const disqualified = view.memberships.filter(m => m.membership.status === 'disqualified');
   const activeMembership = view.memberships.find(m => m.membership.id === view.activeMembershipId) ?? null;
 
   const { next, onDeck } = deriveUpcomingShooters(view.memberships, view.currentRound, view.activeMembershipId);
@@ -269,6 +304,55 @@ function TimekeeperBoardInner({ view }: { view: SquadView }) {
     const submittedCode = code;
     setCode('');
     runAction(() => activateByKnsaAction(view.squad.id, submittedCode));
+  }
+
+  function handleMarkDnf(membershipView: MembershipView) {
+    const raw = window.prompt(`Mark which round (1-5) as DNF for ${shooterName(membershipView)}?`);
+    if (raw === null) {
+      return;
+    }
+
+    const roundNumber = Number(raw.trim());
+    if (!Number.isInteger(roundNumber) || roundNumber < 1 || roundNumber > 5) {
+      setError('Enter a round number from 1 to 5.');
+
+      return;
+    }
+
+    const result = membershipView.roundResults.find(r => r.roundNumber === roundNumber);
+    if (!result) {
+      setError(`This card has no round ${roundNumber}.`);
+
+      return;
+    }
+
+    // DNF is a permanent marker with no undo on this screen — name what the
+    // round holds now so a mistyped digit doesn't quietly overwrite a time.
+    const current
+      = result.status === 'timed' && result.timeMs != null
+        ? formatRoundTimeMs(result.timeMs)
+        : result.status;
+    if (!window.confirm(`Round ${roundNumber} currently reads ${current}. Mark it DNF?`)) {
+      return;
+    }
+
+    runAction(() => flagDnfAction(view.squad.id, result.id));
+  }
+
+  function handleDisqualify(membershipView: MembershipView) {
+    const reason = window.prompt(
+      `Reason for disqualifying ${shooterName(membershipView)}? This ends their whole match, across every discipline.`
+    );
+    if (reason === null) {
+      return;
+    }
+    if (!reason.trim()) {
+      setError('A disqualification needs a reason.');
+
+      return;
+    }
+
+    runAction(() => disqualifyShooterAction(view.squad.id, membershipView.membership.id, reason));
   }
 
   return (
@@ -387,6 +471,22 @@ function TimekeeperBoardInner({ view }: { view: SquadView }) {
                         >
                           Mark absent
                         </button>
+                        <button
+                          type="button"
+                          className="tk-button tk-button--small"
+                          disabled={controlsDisabled}
+                          onClick={() => handleMarkDnf(m)}
+                        >
+                          Mark DNF
+                        </button>
+                        <button
+                          type="button"
+                          className="tk-button tk-button--small tk-button--danger"
+                          disabled={controlsDisabled}
+                          onClick={() => handleDisqualify(m)}
+                        >
+                          Disqualify
+                        </button>
                         {isReadyForSignOff(m) && !m.membership.signedOffAt && (
                           <button
                             type="button"
@@ -460,6 +560,29 @@ function TimekeeperBoardInner({ view }: { view: SquadView }) {
                   >
                     Mark present / rejoin
                   </button>
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
+
+        {disqualified.length > 0 && (
+          <section>
+            <div className="tk-section-title">Disqualified</div>
+            <div className="tk-list">
+              {disqualified.map(m => (
+                <div className="tk-list-row" key={m.membership.id}>
+                  <span>
+                    {shooterName(m)}
+                    {m.membership.disqualifiedReason && (
+                      <span className="tk-list-row__meta">
+                        {' '}
+                        ·
+                        {' '}
+                        {m.membership.disqualifiedReason}
+                      </span>
+                    )}
+                  </span>
                 </div>
               ))}
             </div>

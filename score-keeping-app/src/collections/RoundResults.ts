@@ -30,7 +30,9 @@ export const RoundResults: CollectionConfig = {
         { label: 'Pending', value: 'pending' },
         { label: 'Timed', value: 'timed' },
         { label: 'Malfunction (RS)', value: 'rs' },
-        { label: 'Skipped', value: 'skipped' }
+        { label: 'Skipped', value: 'skipped' },
+        { label: 'Did Not Finish (DNF)', value: 'dnf' },
+        { label: 'Disqualified (DQ)', value: 'dq' }
       ]
     },
     {

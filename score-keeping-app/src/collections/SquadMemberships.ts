@@ -56,8 +56,20 @@ export const SquadMemberships: CollectionConfig = {
         { label: 'Scheduled', value: 'scheduled' },
         { label: 'Present', value: 'present' },
         { label: 'Absent', value: 'absent' },
-        { label: 'Withdrawn', value: 'withdrawn' }
+        { label: 'Withdrawn', value: 'withdrawn' },
+        { label: 'Disqualified', value: 'disqualified' }
       ]
+    },
+    {
+      name: 'disqualifiedReason',
+      type: 'textarea',
+      admin: {
+        description: 'Why the shooter was disqualified — rule breach, unsafe handling. A DQ ends their whole match, across every discipline.'
+      }
+    },
+    {
+      name: 'disqualifiedAt',
+      type: 'date'
     },
     {
       name: 'reshootTimeMs',

@@ -266,7 +266,12 @@ export interface SquadMembership {
    * Current position in the live shooting queue. Mutable mid-match; renumbered on every queue mutation.
    */
   queuePosition: number;
-  status: 'scheduled' | 'present' | 'absent' | 'withdrawn';
+  status: 'scheduled' | 'present' | 'absent' | 'withdrawn' | 'disqualified';
+  /**
+   * Why the shooter was disqualified — rule breach, unsafe handling. A DQ ends their whole match, across every discipline.
+   */
+  disqualifiedReason?: string | null;
+  disqualifiedAt?: string | null;
   /**
    * The one allowed reshoot, in milliseconds. Overwritable before sign-off; blank until taken.
    */
@@ -286,7 +291,7 @@ export interface RoundResult {
   id: number;
   membership: number | SquadMembership;
   roundNumber: number;
-  status: 'pending' | 'timed' | 'rs' | 'skipped';
+  status: 'pending' | 'timed' | 'rs' | 'skipped' | 'dnf' | 'dq';
   /**
    * Full-precision recorded time in milliseconds, from session/stopped.lastShotTimeMs.
    */
@@ -506,6 +511,8 @@ export interface SquadMembershipsSelect<T extends boolean = true> {
   startingPosition?: T;
   queuePosition?: T;
   status?: T;
+  disqualifiedReason?: T;
+  disqualifiedAt?: T;
   reshootTimeMs?: T;
   signedOffAt?: T;
   updatedAt?: T;

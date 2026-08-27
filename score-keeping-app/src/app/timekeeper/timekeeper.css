@@ -386,6 +386,22 @@
   text-decoration: line-through;
 }
 
+.tk-round-cell--dnf {
+  color: var(--signal-stop);
+  font-weight: 700;
+}
+
+.tk-round-cell--dq {
+  color: var(--signal-stop);
+  font-weight: 700;
+  text-decoration: line-through;
+}
+
+.tk-round-cell--unknown {
+  color: var(--signal-stop);
+  font-weight: 700;
+}
+
 .tk-round-cell--reshoot {
   color: var(--signal-live);
 }
