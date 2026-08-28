@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { useSelector } from 'react-redux';
 import { DefaultMqttSettings } from '../constants';
 import { selectSettings } from '../store/settingsSlice';
@@ -13,7 +13,7 @@ interface SettingsProps {
   onDisconnect: () => void;
 }
 
-const Settings: React.FC<SettingsProps> = ({ onSave, onClose, onConnect, onDisconnect }) => {
+const Settings = ({ onSave, onClose, onConnect, onDisconnect }: SettingsProps) => {
   const settings = useSelector(selectSettings);
   const isConnected = useSelector(selectIsConnected);
 
@@ -86,7 +86,7 @@ const Settings: React.FC<SettingsProps> = ({ onSave, onClose, onConnect, onDisco
 
             <div className="form-group">
               <label htmlFor="brightness">
-                Brightness: {Math.round((brightness / 255) * 100)}%
+                Screen brightness: {Math.round((brightness / 255) * 100)}%
               </label>
               <input
                 id="brightness"

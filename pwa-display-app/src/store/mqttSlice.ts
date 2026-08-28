@@ -27,6 +27,8 @@ export interface MqttState {
   displayState: DisplayState;
   shotData: ShotData | null;
   sessionData: SessionData | null;
+  /** Every shot of the current (or most recently completed) session, in fire order. */
+  shots: ShotData[];
   deviceName: string | null;
 
   // Multi-device
@@ -45,6 +47,7 @@ const initialState: MqttState = {
   displayState: DisplayState.STARTUP,
   shotData: null,
   sessionData: null,
+  shots: [],
   deviceName: null,
 
   knownDevices: [],
@@ -180,6 +183,7 @@ export const mqttSlice = createSlice({
           state.deviceName = null;
           state.shotData = null;
           state.sessionData = null;
+          state.shots = [];
           state.countdownRemainingMs = 0;
           break;
       }
@@ -198,6 +202,7 @@ export const mqttSlice = createSlice({
         countdownStartTime: Date.now(),
       };
       state.sessionData = newSession;
+      state.shots = [];
 
       if (msg.startDelaySeconds && msg.startDelaySeconds > 0) {
         state.displayState = DisplayState.COUNTDOWN;
@@ -256,6 +261,17 @@ export const mqttSlice = createSlice({
         isFirstShot: msg.isFirstShot,
         timestamp: msg.timestamp,
       };
+      // A redelivered or firmware-corrected shot reuses its shotNumber; replace
+      // in place so the ladder and session stats don't double-count it.
+      const existingIndex = state.shots.findIndex(
+        (shot) => shot.shotNumber === msg.shotNumber,
+      );
+      if (existingIndex === -1) {
+        state.shots.push(state.shotData);
+      } else {
+        state.shots[existingIndex] = state.shotData;
+      }
+
       state.displayState = DisplayState.SHOWING_SHOT;
 
       if (state.sessionData) {
@@ -286,6 +302,7 @@ export const selectConnectionError = (state: RootState) => state.mqtt.connection
 export const selectDisplayState = (state: RootState) => state.mqtt.displayState;
 export const selectShotData = (state: RootState) => state.mqtt.shotData;
 export const selectSessionData = (state: RootState) => state.mqtt.sessionData;
+export const selectShots = (state: RootState) => state.mqtt.shots;
 export const selectDeviceName = (state: RootState) => state.mqtt.deviceName;
 export const selectKnownDevices = (state: RootState) => state.mqtt.knownDevices;
 export const selectSelectedDeviceId = (state: RootState) => state.mqtt.selectedDeviceId;
