@@ -72,16 +72,25 @@ export class TimerSimulator {
   }
 
   /**
-   * Disconnect from MQTT broker
+   * Disconnect from MQTT broker. Waits for the retained presence/state
+   * publishes to flush before the socket closes: a clean DISCONNECT suppresses
+   * the Last Will, so if "offline" never leaves the send buffer the broker
+   * keeps this device retained as "online" indefinitely.
    */
   async disconnect(): Promise<void> {
-    if (this.client) {
-      console.log('👋 Disconnecting from broker...');
-      await this.publishConnectionState(ConnectionState.DISCONNECTED);
-      this.publishPresence(false);
-      this.client.end();
-      this.client = null;
+    if (!this.client) {
+      return;
     }
+
+    console.log('👋 Disconnecting from broker...');
+    this.publishConnectionState(ConnectionState.DISCONNECTED);
+    this.publishPresence(false);
+
+    const client = this.client;
+    this.client = null;
+    await new Promise<void>((resolve) => {
+      client.end(false, {}, () => resolve());
+    });
   }
 
   /**

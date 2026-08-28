@@ -46,7 +46,9 @@
   list-style: none;
   flex: 1;
   min-height: 0;
-  overflow-y: hidden;
+  /* A long stage overflows the pane — scroll rather than silently clip rows
+     (the fastest/slowest highlights can sit past the fold on SESSION_ENDED). */
+  overflow-y: auto;
   display: flex;
   flex-direction: column;
 }

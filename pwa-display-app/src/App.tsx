@@ -103,10 +103,16 @@ function App() {
     return () => window.removeEventListener('keydown', handleKeyPress);
   }, []);
 
-  const brightnessFilter = `brightness(${(settings.brightness / 255).toFixed(2)})`;
+  // Only apply the filter when actually dimming — at full brightness it would be
+  // brightness(1.00), a no-op that still forces .app onto its own compositing
+  // layer and makes it the containing block for the fixed-position UI.
+  const isDimmed = settings.brightness < 255;
+  const appStyle = isDimmed
+    ? { filter: `brightness(${(settings.brightness / 255).toFixed(2)})` }
+    : undefined;
 
   return (
-    <div className="app" style={{ filter: brightnessFilter }}>
+    <div className="app" style={appStyle}>
       {/* Status Bar */}
       {showStatus && (
         <div className="status-bar">

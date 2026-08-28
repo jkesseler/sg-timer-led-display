@@ -1,3 +1,6 @@
+import { createHash } from 'node:crypto';
+import { hostname } from 'node:os';
+
 // MQTT topic scheme: timer/<deviceId>/<event>
 // Retained events (presence, connection/state, device/info) let late-joining
 // displays receive the current state immediately upon subscription — this
@@ -23,10 +26,16 @@ export function buildDeviceTopic(deviceId: string, event: string): string {
 // IDs look like a real board's.
 const DEVICE_ID_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 
-export function generateDeviceId(): string {
+// Derive a stable 6-char device ID from a seed — the machine hostname by
+// default. Unlike a random ID this is identical across runs, so re-running the
+// simulator overwrites its own retained topics instead of orphaning a fresh
+// timer/<id>/* tree on the broker every time. The firmware gets this for free
+// from its flash-backed ID.
+export function deriveDeviceId(seed: string): string {
+  const digest = createHash('sha1').update(seed).digest();
   let id = '';
   for (let i = 0; i < 6; i++) {
-    id += DEVICE_ID_ALPHABET[Math.floor(Math.random() * DEVICE_ID_ALPHABET.length)];
+    id += DEVICE_ID_ALPHABET[digest[i] % DEVICE_ID_ALPHABET.length];
   }
   return id;
 }
@@ -112,7 +121,7 @@ export interface SimulatorConfig {
 
 export const DEFAULT_CONFIG: SimulatorConfig = {
   brokerUrl: 'ws://localhost:9001',
-  deviceId: generateDeviceId(),
+  deviceId: deriveDeviceId(hostname()),
   deviceName: 'Simulated SG Timer',
   deviceModel: DeviceModels.SIMULATED,
   startDelay: 3.0,
