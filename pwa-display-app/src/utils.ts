@@ -9,15 +9,22 @@
  * Shot timers conventionally report to the hundredth of a second.
  */
 export function formatTimeValue(timeMs: number): string {
-  const totalSeconds = timeMs / 1000;
+  // Quantise to centiseconds first, then split into fields. Rounding after the
+  // split would let 59.999s render as "60.00" (and 119.999s as "1:60.00")
+  // instead of carrying the second into the minutes field.
+  const totalCentiseconds = Math.round(timeMs / 10);
+  const centiseconds = totalCentiseconds % 100;
+  const totalSeconds = Math.floor(totalCentiseconds / 100);
+  const centisecondsText = String(centiseconds).padStart(2, '0');
 
   if (totalSeconds < 60) {
-    return totalSeconds.toFixed(2);
+    return `${totalSeconds}.${centisecondsText}`;
   }
 
   const minutes = Math.floor(totalSeconds / 60);
-  const seconds = totalSeconds - minutes * 60;
-  return `${minutes}:${seconds.toFixed(2).padStart(5, '0')}`;
+  const seconds = totalSeconds % 60;
+
+  return `${minutes}:${String(seconds).padStart(2, '0')}.${centisecondsText}`;
 }
 
 /**

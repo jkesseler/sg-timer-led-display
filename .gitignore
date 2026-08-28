@@ -1,4 +1,7 @@
 .pio
 compile_commands.json
 .vscode
+node_modules/
 dist/
+.next
+.env

@@ -261,7 +261,17 @@ export const mqttSlice = createSlice({
         isFirstShot: msg.isFirstShot,
         timestamp: msg.timestamp,
       };
-      state.shots.push(state.shotData);
+      // A redelivered or firmware-corrected shot reuses its shotNumber; replace
+      // in place so the ladder and session stats don't double-count it.
+      const existingIndex = state.shots.findIndex(
+        (shot) => shot.shotNumber === msg.shotNumber,
+      );
+      if (existingIndex === -1) {
+        state.shots.push(state.shotData);
+      } else {
+        state.shots[existingIndex] = state.shotData;
+      }
+
       state.displayState = DisplayState.SHOWING_SHOT;
 
       if (state.sessionData) {

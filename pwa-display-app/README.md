@@ -182,21 +182,25 @@ Requires WebSocket support for MQTT over WebSocket connection.
 pwa-display-app/
 ├── src/
 │   ├── components/
-│   │   ├── TimerDisplay.jsx    # State-driven scoreboard display
-│   │   ├── SplitList.jsx       # Live split-times ladder
-│   │   └── Settings.jsx        # Configuration modal
-│   ├── hooks/
-│   │   └── useMqtt.js          # MQTT connection management
-│   ├── App.jsx                 # Main application
-│   ├── constants.js            # Display states & colors
-│   └── utils.js                # Helper functions
+│   │   ├── TimerDisplay.tsx    # State-driven scoreboard display
+│   │   ├── SplitList.tsx       # Live split-times ladder
+│   │   └── Settings.tsx        # Configuration modal
+│   ├── store/
+│   │   ├── store.ts            # Redux Toolkit store
+│   │   ├── mqttSlice.ts        # Connection / session / shot state
+│   │   ├── mqttMiddleware.ts   # MQTT client connection management
+│   │   ├── settingsSlice.ts    # Persisted broker & display settings
+│   │   └── beepMiddleware.ts   # Shot / countdown audio cues
+│   ├── App.tsx                 # Main application
+│   ├── constants.ts            # Display states & colors
+│   └── utils.ts                # Helper functions
 ├── docs/
 │   ├── DEVELOPMENT.md          # Development guide
 │   ├── TESTING.md              # Testing procedures
 │   └── ESP32-MQTT-BRIDGE.md    # ESP32 implementation
 ├── public/                     # Static assets
 ├── index.html
-├── vite.config.js              # Build configuration
+├── vite.config.ts              # Build configuration
 └── package.json
 ```
 
