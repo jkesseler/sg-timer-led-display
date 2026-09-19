@@ -53,12 +53,12 @@ async function main(): Promise<void> {
       startTime: '08:00',
       endTime: '09:00',
       match: match.id,
-      status: 'active',
     },
   })
+  await payload.update({ collection: 'matches', id: match.id, data: { currentSquad: squad.id } })
   const membership = await payload.create({
     collection: 'squad-memberships',
-    data: { squad: squad.id, shooter: shooter.id, discipline: 'OKP', startingPosition: 1, queuePosition: 1, status: 'present' },
+    data: { squad: squad.id, shooter: shooter.id, discipline: 'OKP', queuePosition: 1, status: 'present' },
   })
 
   const roundResults = await payload.find({

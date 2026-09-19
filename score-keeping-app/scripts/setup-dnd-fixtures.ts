@@ -37,13 +37,14 @@ async function main(): Promise<void> {
 
   const squad = await payload.create({
     collection: 'squads',
-    data: { label: 'DnD verification squad', startTime: '08:00', endTime: '09:00', match: match.id, status: 'active' },
+    data: { label: 'DnD verification squad', startTime: '08:00', endTime: '09:00', match: match.id },
   })
+  await payload.update({ collection: 'matches', id: match.id, data: { currentSquad: squad.id } })
 
   for (let i = 0; i < shooterIds.length; i++) {
     await payload.create({
       collection: 'squad-memberships',
-      data: { squad: squad.id, shooter: shooterIds[i], discipline: 'OKP', startingPosition: i + 1, queuePosition: i + 1, status: 'present' },
+      data: { squad: squad.id, shooter: shooterIds[i], discipline: 'OKP', queuePosition: i + 1, status: 'present' },
     })
   }
 

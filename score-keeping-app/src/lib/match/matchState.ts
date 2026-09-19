@@ -11,6 +11,15 @@ export interface MembershipView {
 // Pure — safe to import from client components (unlike loadSquadView.ts,
 // which pulls in the server-only `payload` package).
 
+/**
+ * A shooter who counts toward the live rotation. There is no check-in step —
+ * every membership shoots by default; only `absent` / `withdrawn` /
+ * `disqualified` take a shooter out.
+ */
+export function isActiveParticipant(membership: SquadMembership): boolean {
+  return membership.status === 'present';
+}
+
 /** The device belongs to the squad's match, not to the squad itself — every squad in a match shares the one timer. */
 export function resolveSquadDeviceId(squad: Squad): number | null {
   const match = squad.match;
@@ -53,7 +62,7 @@ export function formatRoundTimeMs(timeMs: number): string {
  * the reshoot/catch-up phase.
  */
 export function deriveCurrentRound(memberships: MembershipView[]): number | null {
-  const present = memberships.filter(m => m.membership.status === 'present');
+  const present = memberships.filter(m => isActiveParticipant(m.membership));
   let lowest: number | null = null;
 
   for (const { roundResults } of present) {
@@ -85,7 +94,7 @@ export function deriveUpcomingShooters(
   }
 
   const waiting = memberships
-    .filter(m => m.membership.status === 'present' && m.membership.id !== activeMembershipId)
+    .filter(m => isActiveParticipant(m.membership) && m.membership.id !== activeMembershipId)
     .filter(m => m.roundResults.some(r => r.roundNumber === currentRound && r.status === 'pending'))
     .sort((a, b) => a.membership.queuePosition - b.membership.queuePosition);
 
@@ -109,7 +118,7 @@ export function deriveOutstanding(memberships: MembershipView[]): OutstandingIte
   const items: OutstandingItem[] = [];
 
   for (const view of memberships) {
-    if (view.membership.status !== 'present') {
+    if (!isActiveParticipant(view.membership)) {
       continue;
     }
 

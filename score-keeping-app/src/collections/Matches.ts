@@ -4,7 +4,7 @@ export const Matches: CollectionConfig = {
   slug: 'matches',
   admin: {
     useAsTitle: 'label',
-    defaultColumns: ['label', 'device']
+    defaultColumns: ['label', 'device', 'currentSquad']
   },
   fields: [
     {
@@ -21,6 +21,14 @@ export const Matches: CollectionConfig = {
       required: true,
       admin: {
         description: 'The one timer used for every squad rotating through this match.'
+      }
+    },
+    {
+      name: 'currentSquad',
+      type: 'relationship',
+      relationTo: 'squads',
+      admin: {
+        description: 'The squad currently on the range for this match\'s timer. Set from the timekeeper\'s squad bar; /display reads it to choose whose roster to show. At most one squad per match is current.'
       }
     },
     {

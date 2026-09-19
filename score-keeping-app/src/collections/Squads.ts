@@ -4,7 +4,7 @@ export const Squads: CollectionConfig = {
   slug: 'squads',
   admin: {
     useAsTitle: 'label',
-    defaultColumns: ['label', 'match', 'startTime', 'endTime', 'status']
+    defaultColumns: ['label', 'match', 'startTime', 'endTime']
   },
   fields: [
     {
@@ -66,18 +66,6 @@ export const Squads: CollectionConfig = {
           validate: (value: string | null | undefined) =>
             typeof value === 'string' && /^\d{2}:\d{2}$/.test(value) ? true : 'Enter a time as HH:MM.'
         }
-      ]
-    },
-    {
-      name: 'status',
-      type: 'select',
-      required: true,
-      defaultValue: 'scheduled',
-      options: [
-        { label: 'Scheduled', value: 'scheduled' },
-        { label: 'Active', value: 'active' },
-        { label: 'Reshoot phase', value: 'reshoot-phase' },
-        { label: 'Completed', value: 'completed' }
       ]
     },
     {

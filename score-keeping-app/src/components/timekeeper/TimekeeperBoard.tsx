@@ -19,6 +19,7 @@ import {
   deriveUpcomingShooters,
   deriveOutstanding,
   isReadyForSignOff,
+  isActiveParticipant,
   formatRoundTimeMs,
   resolveSquadFirmwareDeviceId,
   type MembershipView
@@ -32,6 +33,7 @@ import {
   markPresentAction,
   offerCatchUpAction,
   markSignedOffAction,
+  clearSignOffAction,
   flagDnfAction,
   disqualifyShooterAction,
   type ActionResult
@@ -225,7 +227,7 @@ function TimekeeperBoardInner({ view }: { view: SquadView }) {
   }, [displayState, view.isSessionActive, router]);
 
   const serverPresent = view.memberships
-    .filter(m => m.membership.status === 'present')
+    .filter(m => isActiveParticipant(m.membership))
     .sort((a, b) => a.membership.queuePosition - b.membership.queuePosition);
   const serverIds = serverPresent.map(m => m.membership.id);
   const orderedIds = localOrder && localOrder.length === serverIds.length ? localOrder : serverIds;
@@ -492,12 +494,28 @@ function TimekeeperBoardInner({ view }: { view: SquadView }) {
                             type="button"
                             className="tk-button tk-button--small tk-button--primary"
                             disabled={isPending}
-                            onClick={() => runAction(() => markSignedOffAction(m.membership.id))}
+                            onClick={() => {
+                              if (window.confirm(`Mark ${shooterName(m)} as signed off? They must have physically signed the paper card.`)) {
+                                runAction(() => markSignedOffAction(m.membership.id));
+                              }
+                            }}
                           >
                             Mark signed
                           </button>
                         )}
-                        {m.membership.signedOffAt && <span className="tk-signed-tag">signed</span>}
+                        {m.membership.signedOffAt && (
+                          <span className="tk-signed-tag">
+                            signed
+                            <button
+                              type="button"
+                              className="tk-signed-tag__undo"
+                              disabled={isPending}
+                              onClick={() => runAction(() => clearSignOffAction(m.membership.id))}
+                            >
+                              undo
+                            </button>
+                          </span>
+                        )}
                       </div>
                     </SortableQueueRow>
                   );

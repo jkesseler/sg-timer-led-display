@@ -32,28 +32,23 @@ export const SquadMemberships: CollectionConfig = {
       options: DISCIPLINES.map(discipline => ({ label: discipline, value: discipline }))
     },
     {
-      name: 'startingPosition',
-      type: 'number',
-      required: true,
-      admin: {
-        description: 'Position number from the printed schedule — the starting order only.'
-      }
-    },
-    {
       name: 'queuePosition',
       type: 'number',
       required: true,
       admin: {
-        description: 'Current position in the live shooting queue. Mutable mid-match; renumbered on every queue mutation.'
+        description: 'Position in the live shooting queue. Mutable mid-match; renumbered on every queue mutation.'
       }
     },
     {
       name: 'status',
       type: 'select',
       required: true,
-      defaultValue: 'scheduled',
+      // There is no check-in step: every shooter on a squad is shooting by
+      // default. The timekeeper only ever moves them *out* — absent (no-show
+      // when their squad is called), withdrawn (pulled for the day), or
+      // disqualified.
+      defaultValue: 'present',
       options: [
-        { label: 'Scheduled', value: 'scheduled' },
         { label: 'Present', value: 'present' },
         { label: 'Absent', value: 'absent' },
         { label: 'Withdrawn', value: 'withdrawn' },

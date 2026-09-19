@@ -52,9 +52,20 @@ function DisplayApp() {
   const [showStatus, setShowStatus] = useState(false);
   const [roster, setRoster] = useState<RosterInfo | null>(null);
 
+  // Screen brightness is a per-viewer localStorage value, so it isn't known
+  // during SSR or on the first client render — gate the filter on this to
+  // avoid a hydration mismatch on <div className="app">.
+  const [isHydrated, setIsHydrated] = useState(false);
+
   // Track whether this is the initial mount so the reconnect effect
   // doesn't fire on first render (the startup effect handles that).
   const isInitialMount = useRef(true);
+
+  // Apply localStorage-derived styling (brightness) only after the first
+  // client render has matched the server.
+  useEffect(() => {
+    setIsHydrated(true);
+  }, []);
 
   // Startup: auto-connect and schedule startup-complete
   useEffect(() => {
@@ -146,10 +157,15 @@ function DisplayApp() {
     return () => window.removeEventListener('keydown', handleKeyPress);
   }, []);
 
-  const brightnessFilter = `brightness(${(settings.brightness / 255).toFixed(2)})`;
+  // brightness(1.00) at full brightness is a no-op that still forces .app onto
+  // its own compositing layer, so only set the filter when actually dimming.
+  const appStyle
+    = isHydrated && settings.brightness < 255
+      ? { filter: `brightness(${(settings.brightness / 255).toFixed(2)})` }
+      : undefined;
 
   return (
-    <div className="app" style={{ filter: brightnessFilter }}>
+    <div className="app" style={appStyle}>
       {/* Status Bar */}
       {showStatus && (
         <div className="status-bar">

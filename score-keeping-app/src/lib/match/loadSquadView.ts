@@ -12,20 +12,36 @@ export interface SquadView {
   liveSessions: MatchSession[];
 }
 
-/** Squads currently open for timekeeping — status active or reshoot-phase. */
+function relationshipSquad(value: Squad | number | null | undefined): Squad | null {
+  return value != null && typeof value === 'object' ? value : null;
+}
+
+/** The squad currently live on a timer, if any — a match's currentSquad. Usually 0 or 1. */
 export async function listOpenSquads(): Promise<Squad[]> {
+  const payload = await getPayload({ config });
+  const matches = await payload.find({
+    collection: 'matches',
+    where: { currentSquad: { exists: true } },
+    depth: 1,
+    limit: 50
+  });
+
+  return matches.docs.map(match => relationshipSquad(match.currentSquad)).filter((squad): squad is Squad => squad != null);
+}
+
+/** Every squad the timekeeper could switch to from the squad bar. */
+export async function listSelectableSquads(): Promise<Squad[]> {
   const payload = await getPayload({ config });
   const result = await payload.find({
     collection: 'squads',
-    where: { status: { in: ['active', 'reshoot-phase'] } },
     sort: 'startTime',
-    limit: 50
+    limit: 200
   });
 
   return result.docs;
 }
 
-/** The open squad (if any) currently rotating through the match that owns this device. */
+/** The squad currently rotating through the match that owns this device — its match's currentSquad. */
 export async function findOpenSquadForDevice(firmwareDeviceId: string): Promise<Squad | null> {
   const payload = await getPayload({ config });
 
@@ -42,22 +58,18 @@ export async function findOpenSquadForDevice(firmwareDeviceId: string): Promise<
   const matches = await payload.find({
     collection: 'matches',
     where: { device: { equals: device.id } },
+    depth: 1,
     limit: 20
   });
-  if (matches.docs.length === 0) {
-    return null;
+
+  for (const match of matches.docs) {
+    const current = relationshipSquad(match.currentSquad);
+    if (current) {
+      return current;
+    }
   }
 
-  const squads = await payload.find({
-    collection: 'squads',
-    where: {
-      and: [{ match: { in: matches.docs.map(m => m.id) } }, { status: { in: ['active', 'reshoot-phase'] } }]
-    },
-    sort: 'startTime',
-    limit: 1
-  });
-
-  return squads.docs[0] ?? null;
+  return null;
 }
 
 export async function loadSquadView(squadId: number): Promise<SquadView> {

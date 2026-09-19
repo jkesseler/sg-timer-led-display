@@ -36,7 +36,8 @@
   gap: 1.75rem;
   max-width: 96rem;
   margin: 0 auto;
-  padding: 2rem 1.75rem 4rem;
+  /* Bottom padding clears the fixed .tk-squad-bar. */
+  padding: 2rem 1.75rem 6rem;
 }
 
 .tk-main {
@@ -56,7 +57,7 @@
   border: 1px solid var(--line);
   border-radius: 0.9rem;
   padding: 1.5rem 1.75rem;
-  max-height: calc(100vh - 4rem);
+  max-height: calc(100vh - 7rem);
 }
 
 @media (max-width: 1100px) {
@@ -424,9 +425,32 @@
 }
 
 .tk-signed-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
   font-size: 0.8rem;
   color: var(--signal-ready);
   font-style: italic;
+}
+
+.tk-signed-tag__undo {
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  font-style: normal;
+  color: var(--ink-faint);
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.tk-signed-tag__undo:hover:not(:disabled) {
+  color: var(--ink-dim);
+}
+
+.tk-signed-tag__undo:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
 }
 
 /* ---- Outstanding / absent lists ---- */
@@ -513,4 +537,211 @@
 .tk-field input:focus-visible {
   outline: 2px solid var(--signal-ready);
   outline-offset: 1px;
+}
+
+/* ---- Active-squad bottom bar ---- */
+
+.tk-squad-bar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 40;
+  display: flex;
+  justify-content: center;
+  padding: 0.65rem 1.75rem;
+  background: var(--surface-1);
+  border-top: 1px solid var(--line);
+}
+
+.tk-squad-bar__toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
+  background: var(--surface-2);
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  padding: 0.5rem 0.95rem;
+  font-family: var(--font-ui);
+  color: var(--ink);
+  cursor: pointer;
+  transition: color 0.15s ease, border-color 0.15s ease, background 0.15s ease;
+}
+
+.tk-squad-bar__toggle:hover {
+  border-color: var(--signal-ready);
+  background: var(--surface-3);
+}
+
+.tk-squad-bar__toggle:focus-visible {
+  outline: 2px solid var(--signal-ready);
+  outline-offset: 2px;
+}
+
+.tk-squad-bar__label {
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+
+.tk-squad-bar__name {
+  font-size: 0.95rem;
+  font-weight: 700;
+}
+
+.tk-squad-bar__chevron {
+  color: var(--ink-dim);
+  font-size: 0.8rem;
+  transition: transform 0.15s ease;
+}
+
+.tk-squad-bar__chevron--open {
+  transform: rotate(180deg);
+}
+
+/* ---- Change-squad modal ---- */
+
+.tk-squad-modal__overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  background: rgba(10, 13, 16, 0.85);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.25rem;
+}
+
+.tk-squad-modal {
+  width: 100%;
+  max-width: 26rem;
+  max-height: 80vh;
+  overflow-y: auto;
+  background: var(--surface-1);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+  font-family: var(--font-ui);
+}
+
+.tk-squad-modal__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1.1rem 1.25rem;
+  border-bottom: 1px solid var(--line);
+}
+
+.tk-squad-modal__header h2 {
+  margin: 0;
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.tk-squad-modal__close {
+  background: none;
+  border: none;
+  color: var(--ink-dim);
+  font-size: 1.6rem;
+  line-height: 1;
+  cursor: pointer;
+  width: 2rem;
+  height: 2rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  transition: color 0.15s ease, background 0.15s ease;
+}
+
+.tk-squad-modal__close:hover {
+  color: var(--ink);
+  background: var(--surface-2);
+}
+
+.tk-squad-modal__close:focus-visible {
+  outline: 2px solid var(--signal-ready);
+  outline-offset: 2px;
+}
+
+.tk-squad-modal__error {
+  margin: 0.85rem 0.85rem 0;
+  border: 1px solid var(--signal-stop-dim);
+  background: rgba(241, 84, 63, 0.08);
+  color: var(--signal-stop);
+  border-radius: 0.5rem;
+  padding: 0.6rem 0.85rem;
+  font-size: 0.85rem;
+}
+
+.tk-squad-modal__list {
+  padding: 0.85rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.tk-squad-modal__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  width: 100%;
+  padding: 0.8rem 1rem;
+  border: 1px solid var(--line);
+  border-radius: 0.6rem;
+  background: var(--surface-1);
+  color: var(--ink);
+  font-family: var(--font-ui);
+  font-size: 0.98rem;
+  text-align: left;
+  text-decoration: none;
+  cursor: pointer;
+  transition: color 0.15s ease, border-color 0.15s ease, background 0.15s ease;
+}
+
+.tk-squad-modal__row:hover:not(:disabled) {
+  border-color: var(--line-strong);
+  background: var(--surface-2);
+}
+
+.tk-squad-modal__row:focus-visible {
+  outline: 2px solid var(--signal-ready);
+  outline-offset: 2px;
+}
+
+.tk-squad-modal__row:disabled {
+  opacity: 0.5;
+  cursor: progress;
+}
+
+.tk-squad-modal__row--current {
+  border-color: var(--signal-ready);
+  color: var(--signal-ready);
+}
+
+.tk-squad-modal__tag {
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  flex-shrink: 0;
+}
+
+.tk-squad-modal__row--current .tk-squad-modal__tag {
+  color: var(--signal-ready);
+}
+
+.tk-squad-modal__empty {
+  color: var(--ink-dim);
+  font-size: 0.9rem;
+  padding: 0.5rem;
+}
+
+.tk-squad-modal__empty a {
+  color: var(--signal-ready);
 }

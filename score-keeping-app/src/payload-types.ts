@@ -210,6 +210,10 @@ export interface Match {
    * The one timer used for every squad rotating through this match.
    */
   device: number | Device;
+  /**
+   * The squad currently on the range for this match's timer. Set from the timekeeper's squad bar; /display reads it to choose whose roster to show. At most one squad per match is current.
+   */
+  currentSquad?: (number | null) | Squad;
   squads?: {
     docs?: (number | Squad)[];
     hasNextPage?: boolean;
@@ -240,7 +244,6 @@ export interface Squad {
    * e.g. "09:00"
    */
   endTime: string;
-  status: 'scheduled' | 'active' | 'reshoot-phase' | 'completed';
   memberships?: {
     docs?: (number | SquadMembership)[];
     hasNextPage?: boolean;
@@ -259,14 +262,10 @@ export interface SquadMembership {
   shooter: number | Shooter;
   discipline: 'OKP' | 'OKKP' | 'SKP' | 'SKKP' | 'PCC 9mm' | 'PCC .22' | 'OKR' | 'OKKR' | 'SKR' | 'SKKR';
   /**
-   * Position number from the printed schedule — the starting order only.
-   */
-  startingPosition: number;
-  /**
-   * Current position in the live shooting queue. Mutable mid-match; renumbered on every queue mutation.
+   * Position in the live shooting queue. Mutable mid-match; renumbered on every queue mutation.
    */
   queuePosition: number;
-  status: 'scheduled' | 'present' | 'absent' | 'withdrawn' | 'disqualified';
+  status: 'present' | 'absent' | 'withdrawn' | 'disqualified';
   /**
    * Why the shooter was disqualified — rule breach, unsafe handling. A DQ ends their whole match, across every discipline.
    */
@@ -482,6 +481,7 @@ export interface DevicesSelect<T extends boolean = true> {
 export interface MatchesSelect<T extends boolean = true> {
   label?: T;
   device?: T;
+  currentSquad?: T;
   squads?: T;
   updatedAt?: T;
   createdAt?: T;
@@ -495,7 +495,6 @@ export interface SquadsSelect<T extends boolean = true> {
   match?: T;
   startTime?: T;
   endTime?: T;
-  status?: T;
   memberships?: T;
   updatedAt?: T;
   createdAt?: T;
@@ -508,7 +507,6 @@ export interface SquadMembershipsSelect<T extends boolean = true> {
   squad?: T;
   shooter?: T;
   discipline?: T;
-  startingPosition?: T;
   queuePosition?: T;
   status?: T;
   disqualifiedReason?: T;

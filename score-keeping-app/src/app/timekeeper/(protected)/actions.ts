@@ -4,7 +4,7 @@ import { getPayload } from 'payload';
 import { revalidatePath } from 'next/cache';
 import config from '@/payload.config';
 import { loadSquadView } from '@/lib/match/loadSquadView';
-import { resolveSquadDeviceId, type MembershipView } from '@/lib/match/matchState';
+import { isActiveParticipant, resolveSquadDeviceId, type MembershipView } from '@/lib/match/matchState';
 
 export interface ActionResult {
   ok: boolean;
@@ -42,8 +42,8 @@ async function activate(squadId: number, membershipId: number): Promise<ActionRe
   if (!membershipView) {
     return { ok: false, error: 'Unknown shooter for this squad.' };
   }
-  if (membershipView.membership.status !== 'present') {
-    return { ok: false, error: 'This shooter is not marked present.' };
+  if (!isActiveParticipant(membershipView.membership)) {
+    return { ok: false, error: 'This shooter is marked absent, withdrawn, or disqualified.' };
   }
 
   const target = resolveActivationTarget(membershipView);
@@ -67,6 +67,27 @@ async function activate(squadId: number, membershipId: number): Promise<ActionRe
 
 export async function activateMembershipAction(squadId: number, membershipId: number): Promise<ActionResult> {
   return activate(squadId, membershipId);
+}
+
+/**
+ * Picks up a squad from the timekeeper's squad bar: points its match's
+ * `currentSquad` at it, so /display and the timekeeper default both follow.
+ * Exactly one squad per match/timer is current at a time.
+ */
+export async function setCurrentSquadAction(squadId: number): Promise<ActionResult> {
+  const payload = await getPayload({ config });
+
+  const squad = await payload.findByID({ collection: 'squads', id: squadId }).catch(() => null);
+  if (!squad) {
+    return { ok: false, error: 'That squad no longer exists.' };
+  }
+
+  const matchId = typeof squad.match === 'object' ? squad.match.id : squad.match;
+  await payload.update({ collection: 'matches', id: matchId, data: { currentSquad: squadId } });
+
+  revalidatePath('/timekeeper');
+
+  return { ok: true };
 }
 
 /**
@@ -166,17 +187,12 @@ export async function markAbsentAction(squadId: number, membershipId: number): P
     return guardError;
   }
 
+  // Absent only pulls the shooter out of the live queue — their rounds stay
+  // pending. If they turn up later, markPresentAction rejoins them at the back
+  // of the queue with those rounds intact; if they never do, mark them
+  // withdrawn.
   const payload = await getPayload({ config });
-  const view = await loadSquadView(squadId);
-  const membershipView = view.memberships.find(m => m.membership.id === membershipId);
-
   await payload.update({ collection: 'squad-memberships', id: membershipId, data: { status: 'absent' } });
-
-  for (const result of membershipView?.roundResults ?? []) {
-    if (result.status === 'pending') {
-      await payload.update({ collection: 'round-results', id: result.id, data: { status: 'skipped' } });
-    }
-  }
 
   revalidatePath('/timekeeper');
 
@@ -193,13 +209,10 @@ export async function markPresentAction(squadId: number, membershipId: number): 
   const view = await loadSquadView(squadId);
   const maxPosition = Math.max(0, ...view.memberships.map(m => m.membership.queuePosition));
 
-  // Deliberately leaves any already-skipped rounds as skipped rather than
-  // reviving them to pending — reviving them would reopen the main
-  // rotation's current round for everyone (deriveCurrentRound takes the
-  // lowest pending round across all present members). Rounds skipped
-  // before this rejoin stay deferred to the outstanding-items/catch-up
-  // phase at the end; only rounds from here forward flow through the
-  // normal rotation.
+  // Rejoin at the back of the queue. Rounds were left pending while absent, so
+  // the shooter simply picks up wherever they are in their card — if the rest
+  // of the squad has moved ahead, they shoot their remaining rounds and normal
+  // rotation resumes after.
   await payload.update({
     collection: 'squad-memberships',
     id: membershipId,
@@ -354,6 +367,20 @@ export async function markSignedOffAction(membershipId: number): Promise<ActionR
     collection: 'squad-memberships',
     id: membershipId,
     data: { signedOffAt: new Date().toISOString() }
+  });
+
+  revalidatePath('/timekeeper');
+
+  return { ok: true };
+}
+
+/** Undo an accidental sign-off — clears signedOffAt so the shooter can be signed again. */
+export async function clearSignOffAction(membershipId: number): Promise<ActionResult> {
+  const payload = await getPayload({ config });
+  await payload.update({
+    collection: 'squad-memberships',
+    id: membershipId,
+    data: { signedOffAt: null }
   });
 
   revalidatePath('/timekeeper');

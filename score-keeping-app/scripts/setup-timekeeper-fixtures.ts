@@ -51,22 +51,22 @@ async function main(): Promise<void> {
       startTime: '08:00',
       endTime: '09:00',
       match: match.id,
-      status: 'active',
     },
   })
+  await payload.update({ collection: 'matches', id: match.id, data: { currentSquad: squad.id } })
   console.log('Created squad', squad.id)
 
   const membershipA = await payload.create({
     collection: 'squad-memberships',
-    data: { squad: squad.id, shooter: shooterA.id, discipline: 'OKP', startingPosition: 1, queuePosition: 1, status: 'present' },
+    data: { squad: squad.id, shooter: shooterA.id, discipline: 'OKP', queuePosition: 1, status: 'present' },
   })
   const membershipB = await payload.create({
     collection: 'squad-memberships',
-    data: { squad: squad.id, shooter: shooterB.id, discipline: 'OKP', startingPosition: 2, queuePosition: 2, status: 'present' },
+    data: { squad: squad.id, shooter: shooterB.id, discipline: 'OKP', queuePosition: 2, status: 'present' },
   })
   const membershipC = await payload.create({
     collection: 'squad-memberships',
-    data: { squad: squad.id, shooter: shooterC.id, discipline: 'SKP', startingPosition: 3, queuePosition: 3, status: 'present' },
+    data: { squad: squad.id, shooter: shooterC.id, discipline: 'SKP', queuePosition: 3, status: 'present' },
   })
   console.log('Created memberships', membershipA.id, membershipB.id, membershipC.id)
 
