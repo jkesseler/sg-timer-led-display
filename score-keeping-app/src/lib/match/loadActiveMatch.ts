@@ -1,6 +1,6 @@
+import type { Match, Shooter } from '@/payload-types';
 import { buildMatchState } from './buildMatchState';
 import type { Payload } from 'payload';
-import type { Match, Shooter } from '@/payload-types';
 import type { MatchSetup } from './buildMatchState';
 import type { MatchState } from './types';
 

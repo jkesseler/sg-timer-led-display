@@ -1,5 +1,6 @@
 import { configureStore, combineReducers } from '@reduxjs/toolkit';
 import { useDispatch, useSelector } from 'react-redux';
+import type { MqttServerConfig } from '@/lib/mqtt/config';
 import { beepMiddleware } from './beepMiddleware';
 import { matchListeners } from './matchListeners';
 import { matchSlice } from './matchSlice';
@@ -7,7 +8,6 @@ import { mqttMiddleware } from './mqttMiddleware';
 import { mqttSlice } from './mqttSlice';
 import { buildInitialSettings, settingsSlice } from './settingsSlice';
 import { createSyncMiddleware } from './syncMiddleware';
-import type { MqttServerConfig } from '@/lib/mqtt/config';
 import type { SyncTransport } from './syncMiddleware';
 import type { TypedUseSelectorHook } from 'react-redux';
 

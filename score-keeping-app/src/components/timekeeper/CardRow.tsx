@@ -7,9 +7,9 @@ import { findNextRoundToShoot, formatRoundTimeMs, formatScore, getCardWarnings, 
 import { cardScore, isShooterDisqualified } from '@/lib/match/score';
 import { armTurn, disqualify, markAbsent, reinstate, signOff, unsign } from '@/store/matchSlice';
 import { useAppDispatch } from '@/store/store';
-import { RoundEditor } from './RoundEditor';
 import type { CardWarning } from '@/lib/match/derive';
 import type { Card, MatchState, Round } from '@/lib/match/types';
+import { RoundEditor } from './RoundEditor';
 
 const WARNING_LABELS: Record<CardWarning, string> = {
   'multiple-rs': 'more than one RS',

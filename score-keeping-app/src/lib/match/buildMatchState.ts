@@ -1,5 +1,5 @@
-import { ROUNDS_PER_CARD } from './types';
 import type { Discipline } from '@/lib/domain/disciplines';
+import { ROUNDS_PER_CARD } from './types';
 import type { Card, MatchState, Round } from './types';
 
 export interface SetupSquad {

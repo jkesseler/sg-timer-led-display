@@ -1,7 +1,7 @@
 import { storage } from '@/lib/display/utils';
+import type { MatchState } from '@/lib/match/types';
 import { hydrate, isMatchChange, isResultAction, syncStatusChanged } from './matchSlice';
 import type { Middleware } from '@reduxjs/toolkit';
-import type { MatchState } from '@/lib/match/types';
 import type { MatchSliceState } from './matchSlice';
 
 export interface AuditEntry {

@@ -21,14 +21,14 @@ import { disconnectMqttClient } from '@/store/mqttMiddleware';
 import { selectDevice, selectDisplayState, selectIsConnected, selectKnownDevices, selectShots, startConnecting } from '@/store/mqttSlice';
 import { useAppDispatch, useAppSelector } from '@/store/store';
 import { getLocalMatchState, resolveInitialMatch } from '@/store/syncMiddleware';
-import { CardRow } from './CardRow';
-import { LateShooterForm, UnassignedResults } from './BoardSections';
-import type { FormEvent } from 'react';
-import type { DragEndEvent } from '@dnd-kit/core';
 import type { MatchState, SquadStatus } from '@/lib/match/types';
 import type { MqttServerConfig } from '@/lib/mqtt/config';
 import type { SyncStatus } from '@/store/matchSlice';
 import type { SyncTransport } from '@/store/syncMiddleware';
+import { CardRow } from './CardRow';
+import { LateShooterForm, UnassignedResults } from './BoardSections';
+import type { FormEvent } from 'react';
+import type { DragEndEvent } from '@dnd-kit/core';
 import type { ShooterOption } from './BoardSections';
 
 const syncTransport: SyncTransport = { saveMatchState, appendAudit };

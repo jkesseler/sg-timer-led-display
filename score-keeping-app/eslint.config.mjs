@@ -2,16 +2,16 @@ import eslint from '@eslint/js'
 import nextPlugin from '@next/eslint-plugin-next'
 import stylistic from '@stylistic/eslint-plugin'
 import { defineConfig } from 'eslint/config'
-import importPlugin from 'eslint-plugin-import'
-import reactPlugin from 'eslint-plugin-react'
+import { createTypeScriptImportResolver } from 'eslint-import-resolver-typescript'
+import { importX } from 'eslint-plugin-import-x'
 import reactHooksPlugin from 'eslint-plugin-react-hooks'
 import tsEslint from 'typescript-eslint'
 
 const eslintConfig = defineConfig([
   eslint.configs.recommended,
   tsEslint.configs.recommended,
-  importPlugin.flatConfigs.recommended,
-  importPlugin.flatConfigs.typescript,
+  importX.flatConfigs.recommended,
+  importX.flatConfigs.typescript,
   stylistic.configs.customize({
     indent: 2,
     quotes: 'single',
@@ -39,19 +39,12 @@ const eslintConfig = defineConfig([
     },
     plugins: {
       '@stylistic': stylistic,
-      react: reactPlugin,
       'react-hooks': reactHooksPlugin,
       '@next/next': nextPlugin,
     },
     settings: {
-      react: {
-        version: 'detect',
-      },
-      'import/resolver': {
-        typescript: true,
-        node: true,
-      },
-      'import/ignore': ['node_modules'],
+      'import-x/resolver-next': [createTypeScriptImportResolver()],
+      'import-x/ignore': ['node_modules'],
     },
     rules: {
       ...nextPlugin.configs.recommended.rules,
@@ -76,10 +69,10 @@ const eslintConfig = defineConfig([
         },
       ],
 
-      'import/named': 'error',
-      'import/no-duplicates': 'error',
+      'import-x/named': 'error',
+      'import-x/no-duplicates': 'error',
 
-      'import/order': [
+      'import-x/order': [
         'error',
         {
           groups: [
