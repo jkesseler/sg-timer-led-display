@@ -1,9 +1,18 @@
 'use client';
 
+import { useState } from 'react';
 import { Provider } from 'react-redux';
-import { store } from '@/store/store';
+import { makeStore } from '@/store/store';
 import type { ReactNode } from 'react';
+import type { SyncTransport } from '@/store/syncMiddleware';
 
-export function ReduxProvider({ children }: { children: ReactNode }) {
+interface ReduxProviderProps {
+  children: ReactNode;
+  sync?: SyncTransport;
+}
+
+export function ReduxProvider({ children, sync }: ReduxProviderProps) {
+  const [store] = useState(() => makeStore({ sync }));
+
   return <Provider store={store}>{children}</Provider>;
 }
