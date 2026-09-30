@@ -12,7 +12,7 @@ import {
 } from '@/store/mqttSlice';
 import type { ShotData, SessionData } from '@/lib/mqtt/types';
 import type { RosterInfo } from '@/lib/match/derive';
-import SplitList from './SplitList';
+import { SplitList } from './SplitList';
 import './TimerDisplay.css';
 
 const SESSION_DISPLAY_STATES: DisplayState[] = [

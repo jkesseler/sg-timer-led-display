@@ -81,7 +81,7 @@ function resolveActiveDeviceId(state: RootState): string | null {
     return selectedDeviceId;
   }
 
-  return knownDevices.find((d: { presence: string }) => d.presence === 'online')?.deviceId ?? null;
+  return knownDevices.find((device: { presence: string }) => device.presence === 'online')?.deviceId ?? null;
 }
 
 // ---------------------------------------------------------------------------
@@ -184,7 +184,7 @@ export const mqttMiddleware: Middleware = store => next => (action: any) => {
           return;
         }
       } else {
-        const known = state.mqtt.knownDevices.find(d => d.deviceId === deviceId);
+        const known = state.mqtt.knownDevices.find(device => device.deviceId === deviceId);
         if (known?.presence === 'offline') {
           return;
         }

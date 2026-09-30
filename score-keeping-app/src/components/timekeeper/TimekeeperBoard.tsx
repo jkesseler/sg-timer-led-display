@@ -5,7 +5,7 @@ import { DndContext, closestCenter, PointerSensor, TouchSensor, useSensor, useSe
 import { SortableContext, verticalListSortingStrategy, arrayMove } from '@dnd-kit/sortable';
 import { appendAudit, saveMatchState } from '@/app/timekeeper/(protected)/actions';
 import { ReduxProvider } from '@/components/display/ReduxProvider';
-import SplitList from '@/components/display/SplitList';
+import { SplitList } from '@/components/display/SplitList';
 import {
   deriveCurrentRound,
   deriveOutstanding,

@@ -177,14 +177,14 @@ function DisplayApp() {
               >
                 <option value="">
                   Auto (
-                  {knownDevices.find((d: KnownDevice) => d.presence === 'online')?.deviceId ?? 'none'}
+                  {knownDevices.find((device: KnownDevice) => device.presence === 'online')?.deviceId ?? 'none'}
                   )
                 </option>
-                {knownDevices.map((d: KnownDevice) => (
-                  <option key={d.deviceId} value={d.deviceId}>
-                    {d.deviceName ?? d.deviceId}
+                {knownDevices.map((device: KnownDevice) => (
+                  <option key={device.deviceId} value={device.deviceId}>
+                    {device.deviceName ?? device.deviceId}
                     {' '}
-                    {d.presence === 'offline' ? '(offline)' : ''}
+                    {device.presence === 'offline' ? '(offline)' : ''}
                   </option>
                 ))}
               </select>

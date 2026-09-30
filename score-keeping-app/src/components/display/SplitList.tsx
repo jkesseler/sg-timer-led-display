@@ -97,5 +97,3 @@ export const SplitList = ({ shots, highlightExtremes = false }: SplitListProps) 
     </div>
   );
 };
-
-export default SplitList;

@@ -57,7 +57,7 @@ function resolveActiveDeviceId(
     return pinned;
   }
 
-  return devices.find(d => d.presence === 'online')?.deviceId ?? null;
+  return devices.find(device => device.presence === 'online')?.deviceId ?? null;
 }
 
 export const mqttSlice = createSlice({
@@ -99,7 +99,7 @@ export const mqttSlice = createSlice({
       action: PayloadAction<{ deviceId: string; presence: 'online' | 'offline' }>
     ) {
       const { deviceId, presence } = action.payload;
-      const idx = state.knownDevices.findIndex(d => d.deviceId === deviceId);
+      const idx = state.knownDevices.findIndex(device => device.deviceId === deviceId);
       if (idx === -1) {
         state.knownDevices.push({ deviceId, presence, lastSeenMs: Date.now() });
       } else {
@@ -117,7 +117,7 @@ export const mqttSlice = createSlice({
       }>
     ) {
       const { deviceId, info } = action.payload;
-      const idx = state.knownDevices.findIndex(d => d.deviceId === deviceId);
+      const idx = state.knownDevices.findIndex(device => device.deviceId === deviceId);
       const patch = {
         deviceName: info.deviceName,
         deviceModel: info.deviceModel,
