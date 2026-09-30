@@ -1,0 +1,48 @@
+services:
+  scoring-app:
+    image: node:24-bookworm-slim
+    restart: on-failure
+    working_dir: /home/node/app
+    ports:
+      - '3000:3000'
+    volumes:
+      - /home/jorgen/workspaces/personal/sg-timer-led-display/score-keeping-app/:/home/node/app
+      - /home/jorgen/workspaces/personal/sg-timer-led-display/score-keeping-app/node_modules:/home/node/app/node_modules
+    command: ["node", "node_modules/next/dist/bin/next", "dev", "-p", "3000"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      mosquitto:
+        condition: service_started
+    env_file:
+      - .env
+    environment:
+      - DATABASE_URL=postgres://postgres:postgres@postgres:5432/score-keeping-app
+      - MQTT_BROKER_URL=mqtt://mosquitto:1883
+      - NODE_OPTIONS=--no-deprecation
+
+  postgres:
+    image: postgres:17-alpine
+    restart: on-failure
+    environment:
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: score-keeping-app
+    ports:
+      - '5432:5432'
+    volumes:
+      - /home/jorgen/workspaces/personal/sg-timer-led-display/score-keeping-app/pg-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  mosquitto:
+    image: eclipse-mosquitto:2
+    restart: on-failure
+    ports:
+      - '1883:1883'
+      - '9001:9001'
+    volumes:
+      - /home/jorgen/workspaces/personal/sg-timer-led-display/score-keeping-app/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
