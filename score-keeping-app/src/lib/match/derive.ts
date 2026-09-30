@@ -1,0 +1,194 @@
+import type { CardScore } from './score';
+import type { Card, MatchState } from './types';
+
+export const NO_SCORE = '--:--';
+
+/**
+ * SS.CC, zero-padded, truncated (not rounded) — the safe direction to be
+ * wrong in a competitive context: rounding up could make a slower recorded
+ * time display as faster than a genuinely quicker one. Full millisecond
+ * precision stays in storage; only the display is lossy.
+ */
+export function formatRoundTimeMs(timeMs: number): string {
+  const centiseconds = Math.floor(timeMs / 10);
+
+  return formatCentiseconds(centiseconds);
+}
+
+/** Averages round to the nearest hundredth, unlike round times. */
+export function formatScore(score: CardScore): string {
+  if (score.status === 'scored') {
+    return formatCentiseconds(Math.round(score.scoreMs / 10));
+  }
+  if (score.status === 'dq') {
+    return 'DQ';
+  }
+  if (score.status === 'uncountable') {
+    return NO_SCORE;
+  }
+
+  return '—';
+}
+
+function formatCentiseconds(centiseconds: number): string {
+  const seconds = Math.floor(centiseconds / 100);
+  const remainderCentiseconds = centiseconds % 100;
+
+  return `${String(seconds).padStart(2, '0')}.${String(remainderCentiseconds).padStart(2, '0')}`;
+}
+
+export function getSquadCards(state: MatchState, squadId: string): Card[] {
+  return state.cards
+    .filter(card => card.squadId === squadId)
+    .sort((a, b) => a.queuePosition - b.queuePosition);
+}
+
+/**
+ * The lowest round number (1-5) that still has a pending result among
+ * present cards. Null once none remain — the squad has moved into the
+ * reshoot/catch-up phase.
+ */
+export function deriveCurrentRound(cards: Card[]): number | null {
+  let lowest: number | null = null;
+
+  for (const card of cards) {
+    if (card.presence !== 'present') {
+      continue;
+    }
+    for (const round of card.rounds) {
+      if (round.status === 'pending' && (lowest === null || round.n < lowest)) {
+        lowest = round.n;
+      }
+    }
+  }
+
+  return lowest;
+}
+
+/**
+ * Next / on-deck shooters for the current round, derived live from the
+ * mutable queue — never computed once from starting order. The active card
+ * is excluded. Both are null once nothing remains for the current round;
+ * the reshoot/catch-up phase has its own queue in deriveOutstanding.
+ */
+export function deriveUpcomingShooters(cards: Card[], currentRound: number | null, activeCardId: string | null) {
+  if (currentRound === null) {
+    return { next: null, onDeck: null };
+  }
+
+  const waiting = cards
+    .filter(card => card.presence === 'present' && card.id !== activeCardId)
+    .filter(card => card.rounds.some(round => round.n === currentRound && round.status === 'pending'))
+    .sort((a, b) => a.queuePosition - b.queuePosition);
+
+  return { next: waiting[0] ?? null, onDeck: waiting[1] ?? null };
+}
+
+export interface OutstandingItem {
+  card: Card;
+  kind: 'rs' | 'skipped';
+  round: number;
+}
+
+/**
+ * Reshoots (RS rounds with no reshoot time yet) and catch-up rounds
+ * (skipped, e.g. a late arrival) — the queue after the main 5-round
+ * rotation. FIFO by round number as a deterministic default; the
+ * timekeeper can offer them in any order.
+ */
+export function deriveOutstanding(cards: Card[]): OutstandingItem[] {
+  const items: OutstandingItem[] = [];
+
+  for (const card of cards) {
+    if (card.presence !== 'present') {
+      continue;
+    }
+    for (const round of card.rounds) {
+      if (round.status === 'rs' && round.reshootTimeMs === null) {
+        items.push({ card, kind: 'rs', round: round.n });
+      } else if (round.status === 'skipped') {
+        items.push({ card, kind: 'skipped', round: round.n });
+      }
+    }
+  }
+
+  return items.sort((a, b) => a.round - b.round);
+}
+
+export function isReadyForSignOff(card: Card): boolean {
+  const isAllShot = card.rounds.every(round => round.status !== 'pending');
+  const hasUnresolvedRs = card.rounds.some(round => round.status === 'rs' && round.reshootTimeMs === null);
+
+  return isAllShot && !hasUnresolvedRs;
+}
+
+export type CardWarning = 'multiple-rs' | 'signed-with-open-rounds';
+
+/** Rule breaches are shown, never enforced — Range Office may override any of them. */
+export function getCardWarnings(card: Card): CardWarning[] {
+  const warnings: CardWarning[] = [];
+
+  if (card.rounds.filter(round => round.status === 'rs').length > 1) {
+    warnings.push('multiple-rs');
+  }
+  if (card.signedOffAt !== null && !isReadyForSignOff(card)) {
+    warnings.push('signed-with-open-rounds');
+  }
+
+  return warnings;
+}
+
+/** The selected squad's card wins, so a shooter in two squads is armed where the timekeeper is working. */
+export function findCardByKnsa(state: MatchState, knsa: string, squadId: string | null): Card | null {
+  const code = knsa.trim();
+  if (!code) {
+    return null;
+  }
+
+  const matches = state.cards.filter(card => card.knsaNumber === code);
+
+  return matches.find(card => card.squadId === squadId) ?? matches[0] ?? null;
+}
+
+/** The squad in play: the active turn's squad, else the first squad marked active. */
+export function findCurrentSquadId(state: MatchState): string | null {
+  if (state.activeTurn) {
+    const activeCardId = state.activeTurn.cardId;
+    const activeCard = state.cards.find(card => card.id === activeCardId);
+    if (activeCard) {
+      return activeCard.squadId;
+    }
+  }
+
+  return state.squads.find(squad => squad.status === 'active')?.id ?? null;
+}
+
+export interface RosterInfo {
+  current: string | null;
+  next: string | null;
+  onDeck: string | null;
+}
+
+export function deriveRoster(state: MatchState): RosterInfo {
+  const squadId = findCurrentSquadId(state);
+  if (!squadId) {
+    return { current: null, next: null, onDeck: null };
+  }
+
+  const cards = getSquadCards(state, squadId);
+  const activeCardId = state.activeTurn?.cardId ?? null;
+  const current = cards.find(card => card.id === activeCardId)?.shooterName ?? null;
+  const currentRound = deriveCurrentRound(cards);
+
+  if (currentRound !== null) {
+    const { next, onDeck } = deriveUpcomingShooters(cards, currentRound, activeCardId);
+
+    return { current, next: next?.shooterName ?? null, onDeck: onDeck?.shooterName ?? null };
+  }
+
+  const outstanding = deriveOutstanding(cards).filter(item => item.card.id !== activeCardId);
+  const next = outstanding[0] ? `${outstanding[0].card.shooterName} (reshoot)` : null;
+  const onDeck = outstanding[1] ? `${outstanding[1].card.shooterName} (reshoot)` : null;
+
+  return { current, next, onDeck };
+}
