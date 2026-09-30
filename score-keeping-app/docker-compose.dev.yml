@@ -6,38 +6,41 @@ services:
     ports:
       - '3000:3000'
     volumes:
-      - /home/jorgen/workspaces/personal/sg-timer-led-display/score-keeping-app/:/home/node/app
-      - /home/jorgen/workspaces/personal/sg-timer-led-display/score-keeping-app/node_modules:/home/node/app/node_modules
-    command: ["node", "node_modules/next/dist/bin/next", "dev", "-p", "3000"]
+      - .:/home/node/app
+      - node_modules:/home/node/app/node_modules
+    command: sh -c "npm install && npm run dev"
     depends_on:
-      postgres:
+      mongo:
         condition: service_healthy
       mosquitto:
         condition: service_started
     env_file:
       - .env
     environment:
-      - DATABASE_URL=postgres://postgres:postgres@postgres:5432/score-keeping-app
-      - MQTT_BROKER_URL=mqtt://mosquitto:1883
-      - NODE_OPTIONS=--no-deprecation
+      DATABASE_URI: mongodb://mongo:27017/score-keeping-app
+      # Read by the browser, which runs on the host — not the in-network name.
+      MQTT_WS_URL: ws://localhost:9001
+      NODE_OPTIONS: --no-deprecation
+      WATCHPACK_POLLING: 'true'
 
-  postgres:
-    image: postgres:17-alpine
+  mongo:
+    image: mongo:8
     restart: on-failure
-    environment:
-      POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: score-keeping-app
+    command:
+      - --storageEngine=wiredTiger
     ports:
-      - '5432:5432'
+      - '27017:27017'
     volumes:
-      - /home/jorgen/workspaces/personal/sg-timer-led-display/score-keeping-app/pg-data:/var/lib/postgresql/data
+      - mongo-data:/data/db
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping')"]
       interval: 10s
       timeout: 5s
       retries: 5
       start_period: 10s
 
+  # Stands in for the external broker in development; the app only knows it
+  # through MQTT_WS_URL, and the host-side ble-bridge through MQTT_BROKER_URL.
   mosquitto:
     image: eclipse-mosquitto:2
     restart: on-failure
@@ -45,4 +48,8 @@ services:
       - '1883:1883'
       - '9001:9001'
     volumes:
-      - /home/jorgen/workspaces/personal/sg-timer-led-display/score-keeping-app/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+      - ./mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+
+volumes:
+  mongo-data:
+  node_modules:

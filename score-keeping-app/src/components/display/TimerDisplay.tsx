@@ -11,7 +11,7 @@ import {
   selectCountdownRemainingMs
 } from '@/store/mqttSlice';
 import type { ShotData, SessionData } from '@/lib/mqtt/types';
-import type { RosterInfo } from '@/app/display/actions';
+import type { RosterInfo } from '@/lib/match/derive';
 import SplitList from './SplitList';
 import './TimerDisplay.css';
 

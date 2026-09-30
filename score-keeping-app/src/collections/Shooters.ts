@@ -1,3 +1,4 @@
+import { uuidIdField } from '../fields/uuidId';
 import type { CollectionConfig } from 'payload';
 
 export const Shooters: CollectionConfig = {
@@ -8,6 +9,7 @@ export const Shooters: CollectionConfig = {
     listSearchableFields: ['firstName', 'lastName', 'knsaNumber', 'asnNumber']
   },
   fields: [
+    uuidIdField,
     {
       name: 'firstName',
       type: 'text',

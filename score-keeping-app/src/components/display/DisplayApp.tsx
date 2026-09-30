@@ -18,11 +18,13 @@ import { disconnectMqttClient } from '@/store/mqttMiddleware';
 import {
   selectSettings,
   updateSettings,
+  resetBrokerSettings,
   increaseBrightness,
   decreaseBrightness
 } from '@/store/settingsSlice';
+import type { RosterInfo } from '@/lib/match/derive';
 import type { MqttSettings, KnownDevice } from '@/lib/mqtt/types';
-import { getRosterForDevice, type RosterInfo } from '@/app/display/actions';
+import { getRosterForDevice } from '@/app/display/actions';
 import Settings from './Settings';
 import { TimerDisplay } from './TimerDisplay';
 import './DisplayApp.css';
@@ -249,6 +251,10 @@ function DisplayApp() {
           onClose={() => setShowSettings(false)}
           onConnect={() => dispatch(startConnecting())}
           onDisconnect={disconnectMqttClient}
+          onResetBroker={() => {
+            dispatch(resetBrokerSettings());
+            setShowSettings(false);
+          }}
         />
       )}
     </div>

@@ -1,4 +1,4 @@
-// Any setup scripts you might need go here
+import dotenv from 'dotenv'
 
-// Load .env files
-import 'dotenv/config'
+// test.env first: tests must never write to the dev database from .env.
+dotenv.config({ path: ['test.env', '.env'], quiet: true })

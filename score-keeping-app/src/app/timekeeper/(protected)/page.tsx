@@ -1,40 +1,45 @@
-import Link from 'next/link';
-import { listOpenSquads, loadSquadView } from '@/lib/match/loadSquadView';
+import { getPayload } from 'payload';
 import { TimekeeperBoard } from '@/components/timekeeper/TimekeeperBoard';
+import { buildFreshMatchState, findActiveMatch, findMatchState } from '@/lib/match/loadActiveMatch';
+import { getMqttConfig } from '@/lib/mqtt/config';
+import config from '@/payload.config';
 
-export default async function TimekeeperPage({
-  searchParams
-}: {
-  searchParams: Promise<{ squad?: string }>;
-}) {
-  const { squad: squadParam } = await searchParams;
-  const openSquads = await listOpenSquads();
+export default async function TimekeeperPage() {
+  const payload = await getPayload({ config });
+  const match = await findActiveMatch(payload);
 
-  const squadId = squadParam ? Number(squadParam) : openSquads.length === 1 ? openSquads[0].id : undefined;
-
-  if (!squadId) {
+  if (!match) {
     return (
       <div className="tk-layout">
         <div className="tk-main">
-          <h1 className="tk-squad-title">Select a squad</h1>
-          {openSquads.length === 0 && (
-            <p style={{ color: 'var(--ink-dim)' }}>
-              No squad is currently active or in reshoot-phase. Set one active in /admin.
-            </p>
-          )}
-          <div className="tk-list">
-            {openSquads.map(squad => (
-              <Link href={`/timekeeper?squad=${squad.id}`} key={squad.id} className="tk-list-row" style={{ textDecoration: 'none' }}>
-                <span>{squad.label || `Squad #${squad.id}`}</span>
-              </Link>
-            ))}
-          </div>
+          <h1 className="tk-squad-title">No active match</h1>
+          <p className="tk-muted">Tick "active" on a match in /admin.</p>
         </div>
       </div>
     );
   }
 
-  const view = await loadSquadView(squadId);
+  const [freshState, serverState, shooters, mqttConfig] = await Promise.all([
+    buildFreshMatchState(payload, match),
+    findMatchState(payload, match.id),
+    payload.find({ collection: 'shooters', sort: 'lastName', depth: 0, pagination: false }),
+    getMqttConfig()
+  ]);
 
-  return <TimekeeperBoard view={view} />;
+  return (
+    <>
+      <h1 className="tk-match-title">{match.label || 'Match'}</h1>
+      <TimekeeperBoard
+        matchId={match.id}
+        freshState={freshState}
+        serverState={serverState}
+        shooters={shooters.docs.map(shooter => ({
+          id: shooter.id,
+          name: `${shooter.firstName} ${shooter.lastName}`,
+          knsaNumber: shooter.knsaNumber ?? null
+        }))}
+        mqttConfig={mqttConfig}
+      />
+    </>
+  );
 }

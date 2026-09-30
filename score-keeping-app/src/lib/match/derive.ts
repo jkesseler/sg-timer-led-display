@@ -192,3 +192,30 @@ export function deriveRoster(state: MatchState): RosterInfo {
 
   return { current, next, onDeck };
 }
+
+/** The round a shooter shoots when armed: the next pending round, then an open reshoot, then a catch-up round. */
+export function findNextRoundToShoot(card: Card): number | null {
+  const pending = card.rounds.find(round => round.status === 'pending');
+  if (pending) {
+    return pending.n;
+  }
+
+  const openReshoot = card.rounds.find(round => round.status === 'rs' && round.reshootTimeMs === null);
+  if (openReshoot) {
+    return openReshoot.n;
+  }
+
+  return card.rounds.find(round => round.status === 'skipped')?.n ?? null;
+}
+
+const TIME_INPUT_PATTERN = /^\d{1,3}([.,]\d{1,3})?$/;
+
+/** Parses a typed time in seconds ("12.34" or "12,34") to ms; null when it is not a time. */
+export function parseTimeInput(text: string): number | null {
+  const trimmed = text.trim();
+  if (!TIME_INPUT_PATTERN.test(trimmed)) {
+    return null;
+  }
+
+  return Math.round(Number(trimmed.replace(',', '.')) * 1000);
+}

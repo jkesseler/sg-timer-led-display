@@ -1,3 +1,4 @@
+import { uuidIdField } from '../fields/uuidId';
 import type { CollectionConfig } from 'payload';
 
 export const Devices: CollectionConfig = {
@@ -7,6 +8,7 @@ export const Devices: CollectionConfig = {
     defaultColumns: ['label', 'deviceId']
   },
   fields: [
+    uuidIdField,
     {
       name: 'deviceId',
       type: 'text',

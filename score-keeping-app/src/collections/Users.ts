@@ -1,3 +1,4 @@
+import { uuidIdField } from '../fields/uuidId';
 import type { CollectionConfig } from 'payload';
 
 export const Users: CollectionConfig = {
@@ -7,6 +8,7 @@ export const Users: CollectionConfig = {
   },
   auth: true,
   fields: [
+    uuidIdField,
     // Email added by default
     {
       name: 'role',

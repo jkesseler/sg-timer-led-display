@@ -1,199 +1,91 @@
 'use client';
 
-import { useEffect, useState, useTransition, type FormEvent, type ReactNode } from 'react';
-import { useRouter } from 'next/navigation';
-import { useDispatch, useSelector } from 'react-redux';
-import {
-  DndContext,
-  closestCenter,
-  PointerSensor,
-  TouchSensor,
-  useSensor,
-  useSensors,
-  type DragEndEvent
-} from '@dnd-kit/core';
-import { SortableContext, verticalListSortingStrategy, useSortable, arrayMove } from '@dnd-kit/sortable';
-import { CSS } from '@dnd-kit/utilities';
-import type { SquadView } from '@/lib/match/loadSquadView';
-import {
-  deriveUpcomingShooters,
-  deriveOutstanding,
-  isReadyForSignOff,
-  formatRoundTimeMs,
-  resolveSquadFirmwareDeviceId,
-  type MembershipView
-} from '@/lib/match/matchState';
-import {
-  activateMembershipAction,
-  activateByKnsaAction,
-  cancelActivationAction,
-  reorderQueueAction,
-  markAbsentAction,
-  markPresentAction,
-  offerCatchUpAction,
-  markSignedOffAction,
-  flagDnfAction,
-  disqualifyShooterAction,
-  type ActionResult
-} from '@/app/timekeeper/(protected)/actions';
+import { useEffect, useState } from 'react';
+import { DndContext, closestCenter, PointerSensor, TouchSensor, useSensor, useSensors } from '@dnd-kit/core';
+import { SortableContext, verticalListSortingStrategy, arrayMove } from '@dnd-kit/sortable';
+import { appendAudit, saveMatchState } from '@/app/timekeeper/(protected)/actions';
 import { ReduxProvider } from '@/components/display/ReduxProvider';
 import SplitList from '@/components/display/SplitList';
-import { startConnecting, selectDevice, selectShots, selectDisplayState } from '@/store/mqttSlice';
-import { disconnectMqttClient } from '@/store/mqttMiddleware';
+import {
+  deriveCurrentRound,
+  deriveOutstanding,
+  deriveUpcomingShooters,
+  findCardByKnsa,
+  findCurrentSquadId,
+  findNextRoundToShoot,
+  getSquadCards
+} from '@/lib/match/derive';
 import { DisplayState } from '@/lib/mqtt/types';
+import { armTurn, cancelTurn, hydrate, markPresent, reorderQueue, setSquadStatus } from '@/store/matchSlice';
+import { disconnectMqttClient } from '@/store/mqttMiddleware';
+import { selectDevice, selectDisplayState, selectIsConnected, selectKnownDevices, selectShots, startConnecting } from '@/store/mqttSlice';
+import { useAppDispatch, useAppSelector } from '@/store/store';
+import { getLocalMatchState, resolveInitialMatch } from '@/store/syncMiddleware';
+import { CardRow } from './CardRow';
+import { LateShooterForm, UnassignedResults } from './BoardSections';
+import type { FormEvent } from 'react';
+import type { DragEndEvent } from '@dnd-kit/core';
+import type { MatchState, SquadStatus } from '@/lib/match/types';
+import type { MqttServerConfig } from '@/lib/mqtt/config';
+import type { SyncStatus } from '@/store/matchSlice';
+import type { SyncTransport } from '@/store/syncMiddleware';
+import type { ShooterOption } from './BoardSections';
 
-const ROUND_NUMBERS = [1, 2, 3, 4, 5] as const;
-const LIVE_SHOT_STATES: DisplayState[] = [DisplayState.WAITING_FOR_SHOTS, DisplayState.SHOWING_SHOT];
+const syncTransport: SyncTransport = { saveMatchState, appendAudit };
 
-function shooterName(view: MembershipView): string {
-  const shooter = view.membership.shooter;
+const SYNC_LABELS: Record<SyncStatus, string> = {
+  synced: 'Saved',
+  dirty: 'Saving…',
+  error: 'Not saved to server — retrying'
+};
 
-  return typeof shooter === 'object' ? `${shooter.firstName} ${shooter.lastName}` : `Shooter #${shooter}`;
+const SQUAD_STATUSES: SquadStatus[] = ['scheduled', 'active', 'completed'];
+
+interface TimekeeperBoardProps {
+  matchId: string;
+  freshState: MatchState;
+  serverState: MatchState | null;
+  shooters: ShooterOption[];
+  mqttConfig: MqttServerConfig;
 }
 
-function roundCell(view: MembershipView, round: number, liveTimeMs: number | null): ReactNode {
-  const result = view.roundResults.find(r => r.roundNumber === round);
+export const TimekeeperBoard = ({ mqttConfig, ...props }: TimekeeperBoardProps) => (
+  <ReduxProvider sync={syncTransport} mqttConfig={mqttConfig}>
+    <BoardContent {...props} />
+  </ReduxProvider>
+);
 
-  if (liveTimeMs != null && result?.status === 'pending') {
-    return (
-      <span className="tk-round-cell tk-round-cell--live">
-        R
-        {round}
-        {' '}
-        {formatRoundTimeMs(liveTimeMs)}
-      </span>
-    );
-  }
-  if (!result || result.status === 'pending') {
-    return (
-      <span className="tk-round-cell">
-        R
-        {round}
-        {' '}
-        —
-      </span>
-    );
-  }
-  if (result.status === 'rs') {
-    return (
-      <span className="tk-round-cell tk-round-cell--rs">
-        R
-        {round}
-        {' '}
-        RS
-      </span>
-    );
-  }
-  if (result.status === 'skipped') {
-    return (
-      <span className="tk-round-cell tk-round-cell--skipped">
-        R
-        {round}
-        {' '}
-        —
-      </span>
-    );
-  }
-  if (result.status === 'dnf') {
-    return (
-      <span className="tk-round-cell tk-round-cell--dnf">
-        R
-        {round}
-        {' '}
-        DNF
-      </span>
-    );
-  }
-  if (result.status === 'dq') {
-    return (
-      <span className="tk-round-cell tk-round-cell--dq">
-        R
-        {round}
-        {' '}
-        DQ
-      </span>
-    );
-  }
-  if (result.status === 'timed') {
-    return (
-      <span className="tk-round-cell tk-round-cell--timed">
-        R
-        {round}
-        {' '}
-        {result.timeMs != null ? formatRoundTimeMs(result.timeMs) : '—'}
-      </span>
-    );
-  }
+type BoardContentProps = Omit<TimekeeperBoardProps, 'mqttConfig'>;
 
-  // Any status the board doesn't know about renders visibly rather than
-  // silently borrowing the timed cell's look.
-  return (
-    <span className="tk-round-cell tk-round-cell--unknown">
-      R
-      {round}
-      {' '}
-      ?
-    </span>
-  );
-}
+const BoardContent = ({ matchId, freshState, serverState, shooters }: BoardContentProps) => {
+  const dispatch = useAppDispatch();
+  const match = useAppSelector(state => state.match.current);
+  const syncStatus = useAppSelector(state => state.match.syncStatus);
+  const shots = useAppSelector(selectShots);
+  const displayState = useAppSelector(selectDisplayState);
+  const isBrokerConnected = useAppSelector(selectIsConnected);
+  const knownDevices = useAppSelector(selectKnownDevices);
 
-function SortableQueueRow({
-  id,
-  disabled,
-  active,
-  children
-}: {
-  id: number;
-  disabled: boolean;
-  active: boolean;
-  children: ReactNode;
-}) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id, disabled });
-  const style = { transform: CSS.Transform.toString(transform), transition };
-
-  return (
-    <div
-      ref={setNodeRef}
-      style={style}
-      className={`tk-queue-row${active ? ' tk-queue-row--active' : ''}${isDragging ? ' tk-queue-row--dragging' : ''}`}
-    >
-      <span className="tk-queue-row__handle" aria-label="Drag to reorder" {...(disabled ? {} : { ...attributes, ...listeners })}>
-        ⠿
-      </span>
-      {children}
-    </div>
-  );
-}
-
-export function TimekeeperBoard({ view }: { view: SquadView }) {
-  return (
-    <ReduxProvider>
-      <TimekeeperBoardInner view={view} />
-    </ReduxProvider>
-  );
-}
-
-function TimekeeperBoardInner({ view }: { view: SquadView }) {
-  const router = useRouter();
-  const dispatch = useDispatch();
-  const shots = useSelector(selectShots);
-  const displayState = useSelector(selectDisplayState);
-
-  const [isPending, startTransition] = useTransition();
-  const [error, setError] = useState<string | null>(null);
+  const [selectedSquadId, setSelectedSquadId] = useState<string | null>(null);
   const [code, setCode] = useState('');
-  const [localOrder, setLocalOrder] = useState<number[] | null>(null);
+  const [message, setMessage] = useState<string | null>(null);
 
-  const deviceId = resolveSquadFirmwareDeviceId(view.squad);
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 150, tolerance: 8 } })
+  );
 
-  // A live MQTT connection, pinned to this squad's device — reused from the
-  // /display route's store so shot data streams in during a turn without
-  // waiting for the server-side subscriber to write it to Payload.
+  const deviceId = match?.deviceId ?? null;
+
+  useEffect(() => {
+    dispatch(hydrate(resolveInitialMatch(matchId, getLocalMatchState(), serverState, () => freshState)));
+  }, [dispatch, matchId, serverState, freshState]);
+
   useEffect(() => {
     dispatch(startConnecting());
 
     return () => disconnectMqttClient();
-  }, []);
+  }, [dispatch]);
 
   useEffect(() => {
     if (deviceId) {
@@ -201,85 +93,51 @@ function TimekeeperBoardInner({ view }: { view: SquadView }) {
     }
   }, [deviceId, dispatch]);
 
-  // The server-provided view always wins once it arrives (after a refresh) —
-  // drop the optimistic drag order so future divergences reflect fresh data.
-  useEffect(() => {
-    setLocalOrder(null);
-  }, [view]);
-
-  // Auto-advance once a turn ends, without waiting for the timekeeper to
-  // click End Turn / Refresh. The browser's own MQTT feed sees
-  // session/stopped the moment it happens, but the round-result write is
-  // done by a separate server-side subscriber on its own subscription to
-  // the same broker — there's no ordering guarantee between the two, so
-  // poll briefly rather than assuming one refresh lands after the DB write.
-  // Stops itself the instant the server confirms the turn is over.
-  useEffect(() => {
-    if (displayState !== DisplayState.SESSION_ENDED || !view.isSessionActive) {
-      return;
-    }
-
-    const interval = setInterval(() => router.refresh(), 700);
-
-    return () => clearInterval(interval);
-  }, [displayState, view.isSessionActive, router]);
-
-  const serverPresent = view.memberships
-    .filter(m => m.membership.status === 'present')
-    .sort((a, b) => a.membership.queuePosition - b.membership.queuePosition);
-  const serverIds = serverPresent.map(m => m.membership.id);
-  const orderedIds = localOrder && localOrder.length === serverIds.length ? localOrder : serverIds;
-  const present = orderedIds
-    .map(id => serverPresent.find(m => m.membership.id === id))
-    .filter((m): m is MembershipView => m != null);
-
-  const absent = view.memberships.filter(m => m.membership.status === 'absent');
-  const disqualified = view.memberships.filter(m => m.membership.status === 'disqualified');
-  const activeMembership = view.memberships.find(m => m.membership.id === view.activeMembershipId) ?? null;
-
-  const { next, onDeck } = deriveUpcomingShooters(view.memberships, view.currentRound, view.activeMembershipId);
-  const outstanding = view.currentRound === null ? deriveOutstanding(view.memberships) : [];
-
-  // The round currently being shot, live, straight off the MQTT feed — not
-  // yet written to Payload (that only happens once session/stopped arrives
-  // at the server). Only trusted once shots are actually streaming in for
-  // this activation, so a stale previous session's shots can't leak in
-  // during the gap between the timekeeper's click and the range officer's
-  // physical Start press.
-  const liveRoundNumber
-    = view.isSessionActive && activeMembership
-      ? (activeMembership.roundResults.find(r => r.status === 'pending')?.roundNumber ?? null)
-      : null;
-  const hasLiveShots = view.isSessionActive && LIVE_SHOT_STATES.includes(displayState) && shots.length > 0;
-  const liveTimeMs = hasLiveShots ? shots[shots.length - 1].absoluteTimeMs : null;
-
-  const controlsDisabled = view.isSessionActive || isPending;
-
-  const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
-    useSensor(TouchSensor, { activationConstraint: { delay: 150, tolerance: 8 } })
-  );
-
-  function runAction(action: () => Promise<ActionResult>) {
-    setError(null);
-    startTransition(async () => {
-      const result = await action();
-      if (!result.ok) {
-        setError(result.error ?? 'Something went wrong.');
-      }
-      router.refresh();
-    });
+  if (!match) {
+    return <div className="tk-layout"><p className="tk-muted">Loading match…</p></div>;
   }
 
-  function handleCancelActivation() {
-    // A pending activation (before the range officer has pressed Start) is
-    // always safe to cancel outright — nothing has happened yet. Once shots
-    // may already be in flight (status active), confirm first.
-    const liveStatus = view.liveSessions[0]?.status;
-    if (liveStatus === 'active' && !window.confirm('A turn may already be in progress on the timer. Cancel this activation anyway?')) {
+  const squadId = selectedSquadId ?? findCurrentSquadId(match) ?? match.squads[0]?.id ?? null;
+  const squad = match.squads.find(candidate => candidate.id === squadId) ?? null;
+  const squadCards = squadId ? getSquadCards(match, squadId) : [];
+  const presentCards = squadCards.filter(card => card.presence === 'present');
+  const absentCards = squadCards.filter(card => card.presence === 'absent');
+  const activeTurn = match.activeTurn;
+  const activeCard = match.cards.find(card => card.id === activeTurn?.cardId) ?? null;
+  const currentRound = deriveCurrentRound(squadCards);
+  const { next, onDeck } = deriveUpcomingShooters(squadCards, currentRound, activeTurn?.cardId ?? null);
+  const outstanding = currentRound === null ? deriveOutstanding(squadCards) : [];
+  const timer = knownDevices.find(device => device.deviceId === deviceId);
+  const isTimerOnline = timer?.presence === 'online';
+  const hasLiveShots = activeTurn?.phase === 'running' && displayState !== DisplayState.SESSION_ENDED && shots.length > 0;
+  const liveTimeMs = hasLiveShots ? shots[shots.length - 1].absoluteTimeMs : null;
+
+  function handleScanSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const submittedCode = code.trim();
+    setCode('');
+
+    if (!match || !submittedCode) {
       return;
     }
-    runAction(() => cancelActivationAction(view.squad.id));
+
+    const card = findCardByKnsa(match, submittedCode, squadId);
+    if (!card) {
+      setMessage(`No shooter with KNSA number ${submittedCode} in this match.`);
+
+      return;
+    }
+
+    const round = findNextRoundToShoot(card);
+    if (round === null) {
+      setMessage(`${card.shooterName} has nothing left to shoot.`);
+
+      return;
+    }
+
+    setMessage(null);
+    setSelectedSquadId(card.squadId);
+    dispatch(armTurn({ cardId: card.id, round }));
   }
 
   function handleDragEnd(event: DragEndEvent) {
@@ -288,127 +146,110 @@ function TimekeeperBoardInner({ view }: { view: SquadView }) {
       return;
     }
 
-    const oldIndex = orderedIds.indexOf(Number(active.id));
-    const newIndex = orderedIds.indexOf(Number(over.id));
+    const orderedIds = presentCards.map(card => card.id);
+    const oldIndex = orderedIds.indexOf(String(active.id));
+    const newIndex = orderedIds.indexOf(String(over.id));
     if (oldIndex === -1 || newIndex === -1) {
       return;
     }
 
-    const newOrder = arrayMove(orderedIds, oldIndex, newIndex);
-    setLocalOrder(newOrder);
-    runAction(() => reorderQueueAction(view.squad.id, newOrder));
-  }
-
-  function handleScanSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const submittedCode = code;
-    setCode('');
-    runAction(() => activateByKnsaAction(view.squad.id, submittedCode));
-  }
-
-  function handleMarkDnf(membershipView: MembershipView) {
-    const raw = window.prompt(`Mark which round (1-5) as DNF for ${shooterName(membershipView)}?`);
-    if (raw === null) {
-      return;
-    }
-
-    const roundNumber = Number(raw.trim());
-    if (!Number.isInteger(roundNumber) || roundNumber < 1 || roundNumber > 5) {
-      setError('Enter a round number from 1 to 5.');
-
-      return;
-    }
-
-    const result = membershipView.roundResults.find(r => r.roundNumber === roundNumber);
-    if (!result) {
-      setError(`This card has no round ${roundNumber}.`);
-
-      return;
-    }
-
-    // DNF is a permanent marker with no undo on this screen — name what the
-    // round holds now so a mistyped digit doesn't quietly overwrite a time.
-    const current
-      = result.status === 'timed' && result.timeMs != null
-        ? formatRoundTimeMs(result.timeMs)
-        : result.status;
-    if (!window.confirm(`Round ${roundNumber} currently reads ${current}. Mark it DNF?`)) {
-      return;
-    }
-
-    runAction(() => flagDnfAction(view.squad.id, result.id));
-  }
-
-  function handleDisqualify(membershipView: MembershipView) {
-    const reason = window.prompt(
-      `Reason for disqualifying ${shooterName(membershipView)}? This ends their whole match, across every discipline.`
-    );
-    if (reason === null) {
-      return;
-    }
-    if (!reason.trim()) {
-      setError('A disqualification needs a reason.');
-
-      return;
-    }
-
-    runAction(() => disqualifyShooterAction(view.squad.id, membershipView.membership.id, reason));
+    const absentIds = absentCards.map(card => card.id);
+    dispatch(reorderQueue({ cardIds: [...arrayMove(orderedIds, oldIndex, newIndex), ...absentIds] }));
   }
 
   return (
     <div className="tk-layout">
       <div className="tk-main">
-        <h1 className="tk-squad-title">{view.squad.label || `Squad #${view.squad.id}`}</h1>
+        <div className="tk-status-line">
+          <span className={`tk-pill tk-pill--${syncStatus}`}>{SYNC_LABELS[syncStatus]}</span>
+          <span className={`tk-pill${isTimerOnline ? ' tk-pill--synced' : ' tk-pill--error'}`}>
+            Timer
+            {' '}
+            {deviceId ?? 'none'}
+            :
+            {' '}
+            {isTimerOnline ? 'online' : 'offline'}
+          </span>
+          <span className={`tk-pill${isBrokerConnected ? ' tk-pill--synced' : ' tk-pill--error'}`}>
+            MQTT
+            {' '}
+            {isBrokerConnected ? 'connected' : 'disconnected'}
+          </span>
+        </div>
 
-        <section className="tk-card tk-status-card">
-          <div>
-            <div className="tk-status-card__round">
-              {view.currentRound !== null ? `Round ${view.currentRound} of 5` : 'Reshoot / catch-up phase'}
-            </div>
-            <span className={`tk-status-badge${view.isSessionActive ? ' tk-status-badge--active' : ''}`}>
-              <span className="tk-status-badge__dot" />
-              {view.isSessionActive
-                ? (
-                    <span>
-                      Turn in progress:
-                      {' '}
-                      <strong>{activeMembership ? shooterName(activeMembership) : 'unknown shooter'}</strong>
-                    </span>
-                  )
-                : (
-                    <span>Scanner and manual selection armed</span>
-                  )}
-            </span>
-          </div>
-          <div style={{ display: 'flex', gap: '0.6rem' }}>
-            {view.isSessionActive && (
-              <button
-                type="button"
-                className="tk-button tk-button--danger"
-                disabled={isPending}
-                onClick={handleCancelActivation}
-              >
-                Cancel activation
-              </button>
-            )}
-            <button type="button" className="tk-button" onClick={() => router.refresh()} disabled={isPending}>
-              End Turn / Refresh
+        <nav className="tk-tabs" aria-label="Squads">
+          {match.squads.map(candidate => (
+            <button
+              key={candidate.id}
+              type="button"
+              className={`tk-tab${candidate.id === squadId ? ' tk-tab--selected' : ''}`}
+              onClick={() => setSelectedSquadId(candidate.id)}
+            >
+              {candidate.label}
+              <span className="tk-tab__meta">
+                {candidate.discipline}
+                {' '}
+                ·
+                {' '}
+                {candidate.status}
+              </span>
             </button>
-          </div>
-        </section>
+          ))}
+        </nav>
+
+        {squad && (
+          <section className="tk-card tk-status-card">
+            <div>
+              <div className="tk-status-card__round">
+                {currentRound !== null ? `Round ${currentRound} of 5` : 'Reshoot / catch-up phase'}
+              </div>
+              <span className={`tk-status-badge${activeTurn ? ' tk-status-badge--active' : ''}`}>
+                <span className="tk-status-badge__dot" />
+                {activeTurn && activeCard
+                  ? (
+                      <span>
+                        {activeTurn.phase === 'running' ? 'Shooting: ' : 'Armed: '}
+                        <strong>{activeCard.shooterName}</strong>
+                        {' '}
+                        round
+                        {' '}
+                        {activeTurn.round}
+                      </span>
+                    )
+                  : <span>Nobody armed — scan a card or click a name</span>}
+              </span>
+            </div>
+            <div className="tk-status-card__actions">
+              <label className="tk-round-editor__label" htmlFor="squad-status">Squad</label>
+              <select
+                id="squad-status"
+                className="tk-input"
+                value={squad.status}
+                onChange={event => dispatch(setSquadStatus({ squadId: squad.id, status: event.target.value as SquadStatus }))}
+              >
+                {SQUAD_STATUSES.map(status => <option key={status} value={status}>{status}</option>)}
+              </select>
+              {activeTurn && (
+                <button type="button" className="tk-button tk-button--danger" onClick={() => dispatch(cancelTurn())}>
+                  Cancel turn
+                </button>
+              )}
+            </div>
+          </section>
+        )}
 
         <section className="tk-roster">
           <div className="tk-roster__item">
             <span className="tk-roster__label">Next</span>
-            <span className="tk-roster__name">{next ? shooterName(next) : '—'}</span>
+            <span className="tk-roster__name">{next?.shooterName ?? '—'}</span>
           </div>
           <div className="tk-roster__item tk-roster__item--on-deck">
             <span className="tk-roster__label">On deck</span>
-            <span className="tk-roster__name">{onDeck ? shooterName(onDeck) : '—'}</span>
+            <span className="tk-roster__name">{onDeck?.shooterName ?? '—'}</span>
           </div>
         </section>
 
-        {error && <div className="tk-error">{error}</div>}
+        {message && <div className="tk-error">{message}</div>}
 
         <section className="tk-card">
           <div className="tk-section-title">Scan or enter KNSA number</div>
@@ -419,89 +260,22 @@ function TimekeeperBoardInner({ view }: { view: SquadView }) {
               value={code}
               onChange={event => setCode(event.target.value)}
               placeholder="scan card or type KNSA number"
-              disabled={controlsDisabled}
               autoFocus
             />
-            <button type="submit" className="tk-button tk-button--primary" disabled={controlsDisabled}>
-              Activate
-            </button>
+            <button type="submit" className="tk-button tk-button--primary">Arm</button>
           </form>
         </section>
+
+        <UnassignedResults match={match} squadCards={presentCards} />
 
         <section>
           <div className="tk-section-title">Queue</div>
           <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-            <SortableContext items={orderedIds} strategy={verticalListSortingStrategy}>
+            <SortableContext items={presentCards.map(card => card.id)} strategy={verticalListSortingStrategy}>
               <div className="tk-queue">
-                {present.map((m, index) => {
-                  const isActive = m.membership.id === view.activeMembershipId;
-
-                  return (
-                    <SortableQueueRow key={m.membership.id} id={m.membership.id} disabled={controlsDisabled} active={isActive}>
-                      <span className="tk-queue-row__position">{index + 1}</span>
-                      <button
-                        type="button"
-                        className="tk-queue-row__name"
-                        disabled={controlsDisabled}
-                        onClick={() => runAction(() => activateMembershipAction(view.squad.id, m.membership.id))}
-                      >
-                        {shooterName(m)}
-                      </button>
-                      <span className="tk-queue-row__discipline">{m.membership.discipline}</span>
-                      <div className="tk-queue-row__rounds">
-                        {ROUND_NUMBERS.map(round => (
-                          <span key={round}>
-                            {roundCell(m, round, isActive && round === liveRoundNumber ? liveTimeMs : null)}
-                          </span>
-                        ))}
-                        {m.membership.reshootTimeMs != null && (
-                          <span className="tk-round-cell tk-round-cell--reshoot">
-                            RS→
-                            {formatRoundTimeMs(m.membership.reshootTimeMs)}
-                          </span>
-                        )}
-                      </div>
-                      <div className="tk-queue-row__spacer" />
-                      <div className="tk-queue-row__actions">
-                        <button
-                          type="button"
-                          className="tk-button tk-button--small"
-                          disabled={controlsDisabled}
-                          onClick={() => runAction(() => markAbsentAction(view.squad.id, m.membership.id))}
-                        >
-                          Mark absent
-                        </button>
-                        <button
-                          type="button"
-                          className="tk-button tk-button--small"
-                          disabled={controlsDisabled}
-                          onClick={() => handleMarkDnf(m)}
-                        >
-                          Mark DNF
-                        </button>
-                        <button
-                          type="button"
-                          className="tk-button tk-button--small tk-button--danger"
-                          disabled={controlsDisabled}
-                          onClick={() => handleDisqualify(m)}
-                        >
-                          Disqualify
-                        </button>
-                        {isReadyForSignOff(m) && !m.membership.signedOffAt && (
-                          <button
-                            type="button"
-                            className="tk-button tk-button--small tk-button--primary"
-                            disabled={isPending}
-                            onClick={() => runAction(() => markSignedOffAction(m.membership.id))}
-                          >
-                            Mark signed
-                          </button>
-                        )}
-                        {m.membership.signedOffAt && <span className="tk-signed-tag">signed</span>}
-                      </div>
-                    </SortableQueueRow>
-                  );
-                })}
+                {presentCards.map((card, index) => (
+                  <CardRow key={card.id} match={match} card={card} position={index + 1} liveTimeMs={liveTimeMs} />
+                ))}
               </div>
             </SortableContext>
           </DndContext>
@@ -512,14 +286,14 @@ function TimekeeperBoardInner({ view }: { view: SquadView }) {
             <div className="tk-section-title">Outstanding (reshoots &amp; catch-up rounds)</div>
             <div className="tk-list">
               {outstanding.map(item => (
-                <div className="tk-list-row" key={`${item.membership.membership.id}-${item.roundNumber}`}>
+                <div className="tk-list-row" key={`${item.card.id}-${item.round}`}>
                   <span>
-                    {shooterName(item.membership)}
+                    {item.card.shooterName}
                     {' '}
                     <span className="tk-list-row__meta">
                       round
                       {' '}
-                      {item.roundNumber}
+                      {item.round}
                       {' '}
                       ·
                       {' '}
@@ -529,15 +303,9 @@ function TimekeeperBoardInner({ view }: { view: SquadView }) {
                   <button
                     type="button"
                     className="tk-button tk-button--small"
-                    disabled={controlsDisabled}
-                    onClick={() =>
-                      runAction(() =>
-                        item.kind === 'rs'
-                          ? activateMembershipAction(view.squad.id, item.membership.membership.id)
-                          : offerCatchUpAction(view.squad.id, item.roundResultId)
-                      )}
+                    onClick={() => dispatch(armTurn({ cardId: item.card.id, round: item.round }))}
                   >
-                    {item.kind === 'rs' ? 'Shoot reshoot' : 'Shoot catch-up round'}
+                    Arm
                   </button>
                 </div>
               ))}
@@ -545,19 +313,14 @@ function TimekeeperBoardInner({ view }: { view: SquadView }) {
           </section>
         )}
 
-        {absent.length > 0 && (
+        {absentCards.length > 0 && (
           <section>
             <div className="tk-section-title">Absent</div>
             <div className="tk-list">
-              {absent.map(m => (
-                <div className="tk-list-row" key={m.membership.id}>
-                  <span>{shooterName(m)}</span>
-                  <button
-                    type="button"
-                    className="tk-button tk-button--small"
-                    disabled={controlsDisabled}
-                    onClick={() => runAction(() => markPresentAction(view.squad.id, m.membership.id))}
-                  >
+              {absentCards.map(card => (
+                <div className="tk-list-row" key={card.id}>
+                  <span>{card.shooterName}</span>
+                  <button type="button" className="tk-button tk-button--small" onClick={() => dispatch(markPresent({ cardId: card.id }))}>
                     Mark present / rejoin
                   </button>
                 </div>
@@ -566,28 +329,7 @@ function TimekeeperBoardInner({ view }: { view: SquadView }) {
           </section>
         )}
 
-        {disqualified.length > 0 && (
-          <section>
-            <div className="tk-section-title">Disqualified</div>
-            <div className="tk-list">
-              {disqualified.map(m => (
-                <div className="tk-list-row" key={m.membership.id}>
-                  <span>
-                    {shooterName(m)}
-                    {m.membership.disqualifiedReason && (
-                      <span className="tk-list-row__meta">
-                        {' '}
-                        ·
-                        {' '}
-                        {m.membership.disqualifiedReason}
-                      </span>
-                    )}
-                  </span>
-                </div>
-              ))}
-            </div>
-          </section>
-        )}
+        {squad && <LateShooterForm squadId={squad.id} squadCards={squadCards} shooters={shooters} />}
       </div>
 
       <aside className="tk-splits-pane">
@@ -595,4 +337,4 @@ function TimekeeperBoardInner({ view }: { view: SquadView }) {
       </aside>
     </div>
   );
-}
+};

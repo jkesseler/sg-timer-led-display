@@ -9,7 +9,7 @@ export interface AuditEntry {
   matchId: string;
   at: string;
   type: string;
-  payload: object | null;
+  payload: Record<string, unknown> | null;
 }
 
 /** The server side of the sync. Both calls must be idempotent: a retry after a lost response resends the same data. */
@@ -158,7 +158,7 @@ export function createSyncMiddleware({
       isSnapshotDirty = true;
 
       if (isChange) {
-        const changeAction = action as { type: string; payload: object | null; meta: { id: string; at: string } };
+        const changeAction = action as { type: string; payload: Record<string, unknown> | null; meta: { id: string; at: string } };
         enqueueAudit({
           actionId: changeAction.meta.id,
           matchId: state.matchId,

@@ -5,9 +5,11 @@ import {
   deriveRoster,
   deriveUpcomingShooters,
   findCardByKnsa,
+  findNextRoundToShoot,
   formatRoundTimeMs,
   getCardWarnings,
-  isReadyForSignOff
+  isReadyForSignOff,
+  parseTimeInput
 } from '@/lib/match/derive';
 import { buildCard, buildState } from './matchFixtures';
 
@@ -119,5 +121,41 @@ describe('formatRoundTimeMs', () => {
   it('truncates to hundredths', () => {
     expect(formatRoundTimeMs(1999)).toBe('01.99');
     expect(formatRoundTimeMs(12345)).toBe('12.34');
+  });
+});
+
+describe('findNextRoundToShoot', () => {
+  it('picks the next pending round first', () => {
+    const card = buildCard({ id: '1', rounds: [{ status: 'timed', timeMs: 1 }, { status: 'rs' }, { status: 'pending' }, { status: 'pending' }, { status: 'skipped' }] });
+
+    expect(findNextRoundToShoot(card)).toBe(3);
+  });
+
+  it('then an open reshoot, then a catch-up round', () => {
+    const withReshoot = buildCard({ id: '1', rounds: [{ status: 'skipped' }, { status: 'rs' }, { status: 'timed', timeMs: 1 }, { status: 'timed', timeMs: 1 }, { status: 'timed', timeMs: 1 }] });
+    const withCatchUp = buildCard({ id: '2', rounds: [{ status: 'skipped' }, { status: 'rs', reshootTimeMs: 1 }, { status: 'timed', timeMs: 1 }, { status: 'timed', timeMs: 1 }, { status: 'dnf' }] });
+
+    expect(findNextRoundToShoot(withReshoot)).toBe(2);
+    expect(findNextRoundToShoot(withCatchUp)).toBe(1);
+  });
+
+  it('is null when nothing is left to shoot', () => {
+    const card = buildCard({ id: '1', rounds: Array.from({ length: 5 }, () => ({ status: 'dnf' as const })) });
+
+    expect(findNextRoundToShoot(card)).toBeNull();
+  });
+});
+
+describe('parseTimeInput', () => {
+  it('parses seconds with a dot or comma', () => {
+    expect(parseTimeInput('12.34')).toBe(12340);
+    expect(parseTimeInput(' 7,5 ')).toBe(7500);
+    expect(parseTimeInput('9')).toBe(9000);
+  });
+
+  it('rejects anything that is not a time', () => {
+    expect(parseTimeInput('')).toBeNull();
+    expect(parseTimeInput('abc')).toBeNull();
+    expect(parseTimeInput('-1')).toBeNull();
   });
 });

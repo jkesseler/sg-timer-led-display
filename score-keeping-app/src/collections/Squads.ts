@@ -1,12 +1,15 @@
+import { DISCIPLINES } from '../lib/domain/disciplines';
+import { uuidIdField } from '../fields/uuidId';
 import type { CollectionConfig } from 'payload';
 
 export const Squads: CollectionConfig = {
   slug: 'squads',
   admin: {
     useAsTitle: 'label',
-    defaultColumns: ['label', 'match', 'startTime', 'endTime', 'status']
+    defaultColumns: ['label', 'match', 'discipline', 'startTime', 'endTime']
   },
   fields: [
+    uuidIdField,
     {
       name: 'label',
       type: 'text',
@@ -69,21 +72,15 @@ export const Squads: CollectionConfig = {
       ]
     },
     {
-      name: 'status',
+      name: 'discipline',
       type: 'select',
       required: true,
-      defaultValue: 'scheduled',
-      options: [
-        { label: 'Scheduled', value: 'scheduled' },
-        { label: 'Active', value: 'active' },
-        { label: 'Reshoot phase', value: 'reshoot-phase' },
-        { label: 'Completed', value: 'completed' }
-      ]
+      options: DISCIPLINES.map(discipline => ({ label: discipline, value: discipline }))
     },
     {
-      name: 'memberships',
+      name: 'members',
       type: 'join',
-      collection: 'squad-memberships',
+      collection: 'squad-members',
       on: 'squad'
     }
   ]

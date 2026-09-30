@@ -1,6 +1,5 @@
 import { useState } from 'react';
 import { useSelector } from 'react-redux';
-import { DefaultMqttSettings } from '@/lib/display/constants';
 import { selectSettings } from '@/store/settingsSlice';
 import { selectIsConnected } from '@/store/mqttSlice';
 import type { MqttSettings } from '@/lib/mqtt/types';
@@ -11,13 +10,14 @@ interface SettingsProps {
   onClose: () => void;
   onConnect: () => void;
   onDisconnect: () => void;
+  onResetBroker: () => void;
 }
 
-const Settings = ({ onSave, onClose, onConnect, onDisconnect }: SettingsProps) => {
+const Settings = ({ onSave, onClose, onConnect, onDisconnect, onResetBroker }: SettingsProps) => {
   const settings = useSelector(selectSettings);
   const isConnected = useSelector(selectIsConnected);
 
-  const [broker, setBroker] = useState<string>(settings.broker || DefaultMqttSettings.broker);
+  const [broker, setBroker] = useState<string>(settings.broker);
   const [username, setUsername] = useState<string>(settings.username || '');
   const [password, setPassword] = useState<string>(settings.password || '');
   const [brightness, setBrightness] = useState<number>(settings.brightness || 200);
@@ -55,7 +55,11 @@ const Settings = ({ onSave, onClose, onConnect, onDisconnect }: SettingsProps) =
                 placeholder="ws://localhost:9001"
                 disabled={isConnected}
               />
-              <small>WebSocket URL (ws:// or wss://)</small>
+              <small>
+                WebSocket URL (ws:// or wss://). Server default:
+                {' '}
+                {settings.defaults.broker || 'none'}
+              </small>
             </div>
 
             <div className="form-group">
@@ -131,6 +135,9 @@ const Settings = ({ onSave, onClose, onConnect, onDisconnect }: SettingsProps) =
         </div>
 
         <div className="settings-footer">
+          <button className="button button-secondary" onClick={onResetBroker} disabled={isConnected}>
+            Reset to server default
+          </button>
           <button className="button button-secondary" onClick={onClose}>
             Cancel
           </button>

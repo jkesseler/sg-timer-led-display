@@ -72,9 +72,9 @@ export interface Config {
     devices: Device;
     matches: Match;
     squads: Squad;
-    'squad-memberships': SquadMembership;
-    'round-results': RoundResult;
-    'match-sessions': MatchSession;
+    'squad-members': SquadMember;
+    'match-states': MatchState;
+    'match-audit': MatchAudit;
     'payload-kv': PayloadKv;
     'payload-locked-documents': PayloadLockedDocument;
     'payload-preferences': PayloadPreference;
@@ -85,7 +85,7 @@ export interface Config {
       squads: 'squads';
     };
     squads: {
-      memberships: 'squad-memberships';
+      members: 'squad-members';
     };
   };
   collectionsSelect: {
@@ -94,16 +94,16 @@ export interface Config {
     devices: DevicesSelect<false> | DevicesSelect<true>;
     matches: MatchesSelect<false> | MatchesSelect<true>;
     squads: SquadsSelect<false> | SquadsSelect<true>;
-    'squad-memberships': SquadMembershipsSelect<false> | SquadMembershipsSelect<true>;
-    'round-results': RoundResultsSelect<false> | RoundResultsSelect<true>;
-    'match-sessions': MatchSessionsSelect<false> | MatchSessionsSelect<true>;
+    'squad-members': SquadMembersSelect<false> | SquadMembersSelect<true>;
+    'match-states': MatchStatesSelect<false> | MatchStatesSelect<true>;
+    'match-audit': MatchAuditSelect<false> | MatchAuditSelect<true>;
     'payload-kv': PayloadKvSelect<false> | PayloadKvSelect<true>;
     'payload-locked-documents': PayloadLockedDocumentsSelect<false> | PayloadLockedDocumentsSelect<true>;
     'payload-preferences': PayloadPreferencesSelect<false> | PayloadPreferencesSelect<true>;
     'payload-migrations': PayloadMigrationsSelect<false> | PayloadMigrationsSelect<true>;
   };
   db: {
-    defaultIDType: number;
+    defaultIDType: string;
   };
   fallbackLocale: null;
   globals: {};
@@ -141,7 +141,7 @@ export interface UserAuthOperations {
  * via the `definition` "users".
  */
 export interface User {
-  id: number;
+  id: string;
   role: 'admin' | 'timekeeper';
   updatedAt: string;
   createdAt: string;
@@ -167,7 +167,7 @@ export interface User {
  * via the `definition` "shooters".
  */
 export interface Shooter {
-  id: number;
+  id: string;
   firstName: string;
   lastName: string;
   displayName?: string | null;
@@ -184,7 +184,7 @@ export interface Shooter {
  * via the `definition` "devices".
  */
 export interface Device {
-  id: number;
+  id: string;
   /**
    * The firmware's 6-character device ID, as published on timer/<deviceId>/... MQTT topics.
    */
@@ -201,17 +201,22 @@ export interface Device {
  * via the `definition` "matches".
  */
 export interface Match {
-  id: number;
+  id: string;
   /**
    * e.g. "Saturday match, 30 August".
    */
   label?: string | null;
+  date: string;
   /**
    * The one timer used for every squad rotating through this match.
    */
-  device: number | Device;
+  device: string | Device;
+  /**
+   * The timekeeper and /display work on the active match. If several are ticked, the newest date wins.
+   */
+  active?: boolean | null;
   squads?: {
-    docs?: (number | Squad)[];
+    docs?: (string | Squad)[];
     hasNextPage?: boolean;
     totalDocs?: number;
   };
@@ -223,7 +228,7 @@ export interface Match {
  * via the `definition` "squads".
  */
 export interface Squad {
-  id: number;
+  id: string;
   /**
    * Optional friendly name, e.g. "08:00 squad". Defaults to the start–end time range when left blank.
    */
@@ -231,7 +236,7 @@ export interface Squad {
   /**
    * The match this squad rotates through — its timer device comes from here, not from the squad.
    */
-  match: number | Match;
+  match: string | Match;
   /**
    * e.g. "08:00"
    */
@@ -240,9 +245,9 @@ export interface Squad {
    * e.g. "09:00"
    */
   endTime: string;
-  status: 'scheduled' | 'active' | 'reshoot-phase' | 'completed';
-  memberships?: {
-    docs?: (number | SquadMembership)[];
+  discipline: 'OKP' | 'OKKP' | 'SKP' | 'SKKP' | 'PCC 9mm' | 'PCC .22' | 'OKR' | 'OKKR' | 'SKR' | 'SKKR';
+  members?: {
+    docs?: (string | SquadMember)[];
     hasNextPage?: boolean;
     totalDocs?: number;
   };
@@ -251,83 +256,62 @@ export interface Squad {
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
- * via the `definition` "squad-memberships".
+ * via the `definition` "squad-members".
  */
-export interface SquadMembership {
-  id: number;
-  squad: number | Squad;
-  shooter: number | Shooter;
-  discipline: 'OKP' | 'OKKP' | 'SKP' | 'SKKP' | 'PCC 9mm' | 'PCC .22' | 'OKR' | 'OKKR' | 'SKR' | 'SKKR';
+export interface SquadMember {
+  id: string;
+  squad: string | Squad;
+  shooter: string | Shooter;
   /**
    * Position number from the printed schedule — the starting order only.
    */
   startingPosition: number;
-  /**
-   * Current position in the live shooting queue. Mutable mid-match; renumbered on every queue mutation.
-   */
-  queuePosition: number;
-  status: 'scheduled' | 'present' | 'absent' | 'withdrawn' | 'disqualified';
-  /**
-   * Why the shooter was disqualified — rule breach, unsafe handling. A DQ ends their whole match, across every discipline.
-   */
-  disqualifiedReason?: string | null;
-  disqualifiedAt?: string | null;
-  /**
-   * The one allowed reshoot, in milliseconds. Overwritable before sign-off; blank until taken.
-   */
-  reshootTimeMs?: number | null;
-  /**
-   * Set manually by the timekeeper once the shooter has physically signed the paper card.
-   */
-  signedOffAt?: string | null;
   updatedAt: string;
   createdAt: string;
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
- * via the `definition` "round-results".
+ * via the `definition` "match-states".
  */
-export interface RoundResult {
-  id: number;
-  membership: number | SquadMembership;
-  roundNumber: number;
-  status: 'pending' | 'timed' | 'rs' | 'skipped' | 'dnf' | 'dq';
-  /**
-   * Full-precision recorded time in milliseconds, from session/stopped.lastShotTimeMs.
-   */
-  timeMs?: number | null;
-  /**
-   * The MQTT session/started.sessionId this round was bound to.
-   */
-  timerSessionId?: number | null;
-  startedAtMs?: number | null;
-  stoppedAtMs?: number | null;
-  device?: (number | null) | Device;
+export interface MatchState {
+  id: string;
+  match: string | Match;
+  revision: number;
+  state:
+    | {
+        [k: string]: unknown;
+      }
+    | unknown[]
+    | string
+    | number
+    | boolean
+    | null;
   updatedAt: string;
   createdAt: string;
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
- * via the `definition` "match-sessions".
+ * via the `definition` "match-audit".
  */
-export interface MatchSession {
-  id: number;
-  device: number | Device;
-  status: 'pending' | 'active' | 'completed' | 'abandoned';
+export interface MatchAudit {
+  id: string;
   /**
-   * Stamped from session/started.sessionId once the range officer presses Start.
+   * The Redux action id; makes retried writes idempotent.
    */
-  timerSessionId?: number | null;
-  startedAtMs?: number | null;
-  stoppedAtMs?: number | null;
-  /**
-   * The round-result this session is bound to — set at activation, the durable (shooter, discipline, round) binding. Exactly one of roundResult / reshootFor is set per session.
-   */
-  roundResult?: (number | null) | RoundResult;
-  /**
-   * Set instead of roundResult when this session is a deferred reshoot: the result goes to the membership's reshootTimeMs field, never back into the RS-marked round.
-   */
-  reshootFor?: (number | null) | SquadMembership;
+  actionId: string;
+  match: string | Match;
+  at: string;
+  by?: (string | null) | User;
+  type: string;
+  payload?:
+    | {
+        [k: string]: unknown;
+      }
+    | unknown[]
+    | string
+    | number
+    | boolean
+    | null;
   updatedAt: string;
   createdAt: string;
 }
@@ -336,7 +320,7 @@ export interface MatchSession {
  * via the `definition` "payload-kv".
  */
 export interface PayloadKv {
-  id: number;
+  id: string;
   key: string;
   data:
     | {
@@ -353,44 +337,44 @@ export interface PayloadKv {
  * via the `definition` "payload-locked-documents".
  */
 export interface PayloadLockedDocument {
-  id: number;
+  id: string;
   document?:
     | ({
         relationTo: 'users';
-        value: number | User;
+        value: string | User;
       } | null)
     | ({
         relationTo: 'shooters';
-        value: number | Shooter;
+        value: string | Shooter;
       } | null)
     | ({
         relationTo: 'devices';
-        value: number | Device;
+        value: string | Device;
       } | null)
     | ({
         relationTo: 'matches';
-        value: number | Match;
+        value: string | Match;
       } | null)
     | ({
         relationTo: 'squads';
-        value: number | Squad;
+        value: string | Squad;
       } | null)
     | ({
-        relationTo: 'squad-memberships';
-        value: number | SquadMembership;
+        relationTo: 'squad-members';
+        value: string | SquadMember;
       } | null)
     | ({
-        relationTo: 'round-results';
-        value: number | RoundResult;
+        relationTo: 'match-states';
+        value: string | MatchState;
       } | null)
     | ({
-        relationTo: 'match-sessions';
-        value: number | MatchSession;
+        relationTo: 'match-audit';
+        value: string | MatchAudit;
       } | null);
   globalSlug?: string | null;
   user: {
     relationTo: 'users';
-    value: number | User;
+    value: string | User;
   };
   updatedAt: string;
   createdAt: string;
@@ -400,10 +384,10 @@ export interface PayloadLockedDocument {
  * via the `definition` "payload-preferences".
  */
 export interface PayloadPreference {
-  id: number;
+  id: string;
   user: {
     relationTo: 'users';
-    value: number | User;
+    value: string | User;
   };
   key?: string | null;
   value?:
@@ -423,7 +407,7 @@ export interface PayloadPreference {
  * via the `definition` "payload-migrations".
  */
 export interface PayloadMigration {
-  id: number;
+  id: string;
   name?: string | null;
   batch?: number | null;
   updatedAt: string;
@@ -434,6 +418,7 @@ export interface PayloadMigration {
  * via the `definition` "users_select".
  */
 export interface UsersSelect<T extends boolean = true> {
+  id?: T;
   role?: T;
   updatedAt?: T;
   createdAt?: T;
@@ -457,6 +442,7 @@ export interface UsersSelect<T extends boolean = true> {
  * via the `definition` "shooters_select".
  */
 export interface ShootersSelect<T extends boolean = true> {
+  id?: T;
   firstName?: T;
   lastName?: T;
   displayName?: T;
@@ -470,6 +456,7 @@ export interface ShootersSelect<T extends boolean = true> {
  * via the `definition` "devices_select".
  */
 export interface DevicesSelect<T extends boolean = true> {
+  id?: T;
   deviceId?: T;
   label?: T;
   updatedAt?: T;
@@ -480,8 +467,11 @@ export interface DevicesSelect<T extends boolean = true> {
  * via the `definition` "matches_select".
  */
 export interface MatchesSelect<T extends boolean = true> {
+  id?: T;
   label?: T;
+  date?: T;
   device?: T;
+  active?: T;
   squads?: T;
   updatedAt?: T;
   createdAt?: T;
@@ -491,61 +481,52 @@ export interface MatchesSelect<T extends boolean = true> {
  * via the `definition` "squads_select".
  */
 export interface SquadsSelect<T extends boolean = true> {
+  id?: T;
   label?: T;
   match?: T;
   startTime?: T;
   endTime?: T;
-  status?: T;
-  memberships?: T;
+  discipline?: T;
+  members?: T;
   updatedAt?: T;
   createdAt?: T;
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
- * via the `definition` "squad-memberships_select".
+ * via the `definition` "squad-members_select".
  */
-export interface SquadMembershipsSelect<T extends boolean = true> {
+export interface SquadMembersSelect<T extends boolean = true> {
+  id?: T;
   squad?: T;
   shooter?: T;
-  discipline?: T;
   startingPosition?: T;
-  queuePosition?: T;
-  status?: T;
-  disqualifiedReason?: T;
-  disqualifiedAt?: T;
-  reshootTimeMs?: T;
-  signedOffAt?: T;
   updatedAt?: T;
   createdAt?: T;
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
- * via the `definition` "round-results_select".
+ * via the `definition` "match-states_select".
  */
-export interface RoundResultsSelect<T extends boolean = true> {
-  membership?: T;
-  roundNumber?: T;
-  status?: T;
-  timeMs?: T;
-  timerSessionId?: T;
-  startedAtMs?: T;
-  stoppedAtMs?: T;
-  device?: T;
+export interface MatchStatesSelect<T extends boolean = true> {
+  id?: T;
+  match?: T;
+  revision?: T;
+  state?: T;
   updatedAt?: T;
   createdAt?: T;
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
- * via the `definition` "match-sessions_select".
+ * via the `definition` "match-audit_select".
  */
-export interface MatchSessionsSelect<T extends boolean = true> {
-  device?: T;
-  status?: T;
-  timerSessionId?: T;
-  startedAtMs?: T;
-  stoppedAtMs?: T;
-  roundResult?: T;
-  reshootFor?: T;
+export interface MatchAuditSelect<T extends boolean = true> {
+  id?: T;
+  actionId?: T;
+  match?: T;
+  at?: T;
+  by?: T;
+  type?: T;
+  payload?: T;
   updatedAt?: T;
   createdAt?: T;
 }

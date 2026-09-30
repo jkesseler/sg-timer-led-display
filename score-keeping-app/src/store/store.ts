@@ -5,8 +5,9 @@ import { matchListeners } from './matchListeners';
 import { matchSlice } from './matchSlice';
 import { mqttMiddleware } from './mqttMiddleware';
 import { mqttSlice } from './mqttSlice';
-import { settingsSlice } from './settingsSlice';
+import { buildInitialSettings, settingsSlice } from './settingsSlice';
 import { createSyncMiddleware } from './syncMiddleware';
+import type { MqttServerConfig } from '@/lib/mqtt/config';
 import type { SyncTransport } from './syncMiddleware';
 import type { TypedUseSelectorHook } from 'react-redux';
 
@@ -21,15 +22,17 @@ export type RootState = ReturnType<typeof rootReducer>;
 interface StoreOptions {
   /** Only the timekeeper persists match changes; /display never writes. */
   sync?: SyncTransport;
+  mqttConfig?: MqttServerConfig;
 }
 
 /**
  * One store per mounted provider — a module-level store would be shared
  * between requests while Next renders client components on the server.
  */
-export function makeStore({ sync }: StoreOptions = {}) {
+export function makeStore({ sync, mqttConfig }: StoreOptions = {}) {
   return configureStore({
     reducer: rootReducer,
+    preloadedState: { settings: buildInitialSettings(mqttConfig) },
     middleware: (getDefaultMiddleware) => {
       const middleware = getDefaultMiddleware({ thunk: true })
         .concat(mqttMiddleware as ReturnType<typeof getDefaultMiddleware>[number])
