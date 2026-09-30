@@ -4,16 +4,17 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-The repository is a monorepo with four components that interoperate over a shared MQTT contract:
+The repository is a monorepo whose components interoperate over a shared MQTT contract:
 
 | Directory | What it is | Toolchain |
 |---|---|---|
 | `ESP32-S3-firmware/` | Main display-board firmware (the bridge described above) | PlatformIO / C++ |
 | `BLE-LoRa-Bridge/` | Second firmware for LilyGo LoRa32 boards — relays timer events over LoRa for long range. **Reuses source files from `ESP32-S3-firmware/`** (see below) | PlatformIO / C++ |
 | `mqtt-simulator/` | Node/TypeScript tool that emulates firmware MQTT output for testing | `npm` / tsx |
-| `pwa-display-app/` | React + Vite PWA that consumes the same MQTT events as an alternative display | `npm` / Vite |
+| `pwa-display-app/` | React + Vite PWA that consumes the same MQTT events as an alternative display (superseded by `score-keeping-app`'s `/display`) | `npm` / Vite |
+| `score-keeping-app/` | Payload + Next.js match scoring app (MongoDB); the timekeeper browser's Redux state is leading. Includes `ble-bridge/`, a Node process that connects to the timer over BLE in place of the ESP32 | `npm` / Next.js |
 
-All three other components agree on the firmware's MQTT topic contract `timer/<deviceId>/<event>` — the simulator *produces* those events, the PWA *consumes* them.
+All other components agree on the firmware's MQTT topic contract `timer/<deviceId>/<event>` — the simulator and `ble-bridge` *produce* those events, the PWA and `score-keeping-app` *consume* them.
 
 **Ignore `__NO_COMMIT__/` directories** (at repo root and under `docs/`) — they are local scratch files, excluded from context and never committed.
 

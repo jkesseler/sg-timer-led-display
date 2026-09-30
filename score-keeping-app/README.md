@@ -1,74 +1,133 @@
 # score-keeping-app
 
-Match score-keeping application for shooting matches timed with the BLE shot
-timer described in the repository root [`CLAUDE.md`](../CLAUDE.md). Built on
-[PayloadCMS](https://payloadcms.com) 3 + Next.js (App Router), with Postgres
-as the database. It absorbs [`pwa-display-app/`](../pwa-display-app) as the
-`/display` route rather than running it as a separate app.
+Match score-keeping for shooting matches timed with the BLE shot timer
+described in the repository root [`CLAUDE.md`](../CLAUDE.md). Built on
+[PayloadCMS](https://payloadcms.com) 3 + Next.js (App Router) with MongoDB.
+It absorbs [`pwa-display-app/`](../pwa-display-app) as the `/display` route.
 
-See [`.claude/PLAN/score-keeping-plan-prompt.md`](../.claude/PLAN/score-keeping-plan-prompt.md)
-for the full requirements this app implements.
+The design is in
+[`.claude/PLAN/score-keeping-rework-plan-nextjs.md`](../.claude/PLAN/score-keeping-rework-plan-nextjs.md).
+
+## How it fits together
+
+- **The timekeeper's browser is leading.** The match lives in Redux
+  (`src/store/matchSlice.ts`). Every change is written to `localStorage` at
+  once and pushed to the server as a backup (`src/store/syncMiddleware.ts`):
+  results immediately, everything else after ~500 ms, with retries until the
+  server accepts it.
+- **Nothing blocks a correction.** Every edit is accepted; rule breaches
+  (a second RS, signing with open rounds) only show as warnings.
+- **Timer results arrive over MQTT** as `timer/<deviceId>/<event>`, from the
+  ESP32 bridge or from the Node BLE bridge in [`ble-bridge/`](ble-bridge).
+  The browser binds a session to whichever shooter is armed; a result with
+  nobody armed is kept as "unassigned".
+- **Audit log:** every change is also appended to `match-audit` with the
+  logged-in user. It has no UI on the board.
 
 ## Local setup
 
-### 1. Database
+### 1. Environment
 
-This app needs a local Postgres instance. Either:
+```bash
+cp .env.example .env   # then set PAYLOAD_SECRET
+```
 
-- **Docker** — `docker-compose up -d` (starts Postgres on `5432`, matching
-  the default `.env`).
-- **A local Postgres install** — create a database and point `DATABASE_URL`
-  in `.env` at it.
+| Variable | Used by | Example |
+|---|---|---|
+| `DATABASE_URI` | Payload | `mongodb://127.0.0.1:27017/score-keeping-app` |
+| `PAYLOAD_SECRET` | Payload | any long random string |
+| `MQTT_WS_URL` | browser (WebSocket), handed over by the server at request time | `ws://localhost:9001` |
+| `MQTT_USERNAME` / `MQTT_PASSWORD` | browser (optional) | |
+| `MQTT_BROKER_URL` | `ble-bridge` (TCP), in `ble-bridge/.env` | `mqtt://localhost:1883` |
 
-### 2. Install and run
+When `MQTT_WS_URL` is unset, the browser uses `ws://<host it loaded the page
+from>:9001`, so a TV opening `http://<laptop>:3000/display` finds the
+laptop's broker without setup. A broker saved in the `/display` Settings
+panel overrides both; "Reset to server default" clears it.
+
+### 2. Run with Docker (development)
+
+```bash
+docker compose -f docker-compose.dev.yml up
+```
+
+Starts the app on `3000`, MongoDB on `27017` and Mosquitto on `1883` (MQTT)
+and `9001` (WebSocket). `node_modules` lives in a Docker volume, so the
+container installs its own dependencies.
+
+### 3. Or run on the host
+
+Start MongoDB and an MQTT broker yourself, then:
 
 ```bash
 npm install
 npm run dev
 ```
 
-Open `http://localhost:3000/admin` and follow the on-screen instructions to
-create your first admin user.
+### 4. Seed a match
+
+```bash
+npm run seed
+```
+
+Creates an admin (`admin@timer.tsd` / `qazwsx123`), timer device `TKUI01` and
+an active match with two squads. Open `http://localhost:3000/timekeeper`.
+
+## MQTT broker outside development
+
+The broker is an external process. A production `mosquitto.conf` for the
+laptop:
+
+```
+listener 1883
+protocol mqtt
+
+listener 9001
+protocol websockets
+
+allow_anonymous false
+password_file /etc/mosquitto/passwd
+```
+
+Create the password file with `mosquitto_passwd -c /etc/mosquitto/passwd <user>`
+and set the same user in `MQTT_USERNAME` / `MQTT_PASSWORD` (app) and
+`ble-bridge/.env`.
 
 ## Collections
 
-- **`users`** — Payload's auth-enabled collection, gates both `/admin` and
-  `/timekeeper`. Has an `admin` / `timekeeper` `role` field.
-- **`shooters`** — first/last name, optional ASN and KNSA membership numbers.
-  `knsaNumber` is the barcode scan lookup key; it's optional because not
-  every shooter has a scannable card.
-- **`devices`** — registry of known timer `deviceId`s (the firmware's 6-char
-  ID) with a friendly label, used to bind a timer device to a squad.
-- **`squads`** — a time block with an ordered list of shooters (via
-  `squad-memberships`) and the timer device bound to it.
-- **`squad-memberships`** — one row per (squad, shooter, discipline). Owns
-  the live queue position, presence status, and the one allowed reshoot.
-  Auto-seeds 5 `round-results` rows on create.
-- **`round-results`** — one row per (membership, round 1-5): `pending`,
-  `timed`, `rs` (malfunction), or `skipped`.
-- **`match-sessions`** — the MQTT session-binding ledger: which timer
-  session became which round-result (or reshoot), written by the
-  server-side MQTT subscriber (`src/lib/mqtt/serverSubscriber.ts`,
-  started once from `src/instrumentation.ts`).
+- **`users`**: auth for `/admin` and `/timekeeper`, with an `admin` /
+  `timekeeper` role.
+- **`shooters`**: names, optional ASN and KNSA numbers. `knsaNumber` is the
+  barcode scan key.
+- **`devices`**: timer device IDs (ESP32 or `ble-bridge`) with a label.
+- **`matches`**: label, date, timer device, and `active`. The app works on
+  the active match (the newest date if several are ticked).
+- **`squads`**: time block and discipline within a match.
+- **`squad-members`**: shooter + starting position in a squad. One card per
+  shooter per squad.
+- **`match-states`**: the backup of the browser's match state, one per match.
+- **`match-audit`**: append-only log of every match change. No update or
+  delete.
+
+All document IDs are UUIDs.
 
 ## Routes
 
-- **`/display`** — the public, unauthenticated scoreboard (absorbs
-  [`pwa-display-app/`](../pwa-display-app), which this route now supersedes).
-  Subscribes to MQTT directly from the browser (`src/store/`, ported
-  near-verbatim) and polls the live squad queue for the `Next:`/`On deck:`
-  callouts (`src/app/display/actions.ts`).
-- **`/timekeeper`** — auth-gated squad-running screen: scan-or-manual
-  shooter activation, queue mutations, reshoot/catch-up handling.
-- **`/admin`** — Payload's own admin UI, for shooter/device/squad CRUD.
+- **`/timekeeper`**: runs the active match: scan or click to arm a shooter,
+  edit any round, RS/DNF/DQ with undo, sign-off, late shooters, unassigned
+  results, final scores.
+- **`/display`**: public scoreboard. Live timer feed over MQTT; the
+  `Next:`/`On deck:` names come from the saved match state (polled every 3 s).
+- **`/admin`**: Payload admin for setup data.
 
 ## Scripts
 
-- `npm run dev` — Next.js dev server.
-- `npm run build` — production build.
-- `npm run generate:types` — regenerate `src/payload-types.ts` from the
-  current collection config.
-- `npm run test:int` — Vitest integration tests (`tests/int/`).
-- `npm run test:e2e` — Playwright end-to-end tests (`tests/e2e/`).
-- `npx tsx scripts/verify-mqtt-binding.ts` — headless verification of the
-  MQTT session-binding logic against a running dev server + real broker.
+- `npm run dev`: Next.js dev server.
+- `npm run seed`: fill the database with a test match.
+- `npm run bridge`: start the BLE bridge (see [`ble-bridge/README.md`](ble-bridge/README.md)).
+- `npm run generate:types`: regenerate `src/payload-types.ts`.
+- `npm run test:int`: Vitest tests in `tests/int/`. The Payload tests need
+  MongoDB at `DATABASE_URI` from `test.env`.
+- `npm run test:e2e`: Playwright tests in `tests/e2e/`, against a running app
+  with a freshly seeded database and a broker (`PLAYWRIGHT_BASE_URL`,
+  `MQTT_BROKER_URL`).
