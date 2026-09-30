@@ -1,0 +1,26 @@
+{
+  "name": "score-keeping-ble-bridge",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Software ESP32: relays BLE shot timer events to MQTT using the firmware's topic contract",
+  "scripts": {
+    "start": "tsx src/index.ts",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit -p ."
+  },
+  "dependencies": {
+    "@abandonware/noble": "^1.9.2-26",
+    "dotenv": "17.4.2",
+    "mqtt": "^5.15.2"
+  },
+  "devDependencies": {
+    "@types/node": "26.5.1",
+    "tsx": "4.23.13",
+    "typescript": "7.0.2",
+    "vitest": "5.0.0"
+  },
+  "engines": {
+    "node": ">=20.9.0"
+  }
+}
