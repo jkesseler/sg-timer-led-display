@@ -18,8 +18,6 @@ services:
       - .env
     environment:
       DATABASE_URI: mongodb://mongo:27017/score-keeping-app
-      # Read by the browser, which runs on the host — not the in-network name.
-      MQTT_WS_URL: ws://localhost:9001
       NODE_OPTIONS: --no-deprecation
       WATCHPACK_POLLING: 'true'
 

@@ -229,6 +229,7 @@ export interface Match {
  */
 export interface Squad {
   id: string;
+  title?: string | null;
   /**
    * Optional friendly name, e.g. "08:00 squad". Defaults to the start–end time range when left blank.
    */
@@ -482,6 +483,7 @@ export interface MatchesSelect<T extends boolean = true> {
  */
 export interface SquadsSelect<T extends boolean = true> {
   id?: T;
+  title?: T;
   label?: T;
   match?: T;
   startTime?: T;

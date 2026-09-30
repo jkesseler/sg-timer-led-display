@@ -5,11 +5,33 @@ import type { CollectionConfig } from 'payload';
 export const Squads: CollectionConfig = {
   slug: 'squads',
   admin: {
-    useAsTitle: 'label',
+    useAsTitle: 'title',
     defaultColumns: ['label', 'match', 'discipline', 'startTime', 'endTime']
   },
   fields: [
     uuidIdField,
+    {
+      name: 'title',
+      type: 'text',
+      // Persisted, not computed on read: the relationship picker fetches only
+      // the title field, so an afterRead fallback would see no times there.
+      admin: { hidden: true },
+      hooks: {
+        beforeChange: [
+          ({ siblingData }) => {
+            const { label, startTime, endTime, discipline } = siblingData as {
+              label?: string;
+              startTime?: string;
+              endTime?: string;
+              discipline?: string;
+            };
+            const name = label || `${startTime} - ${endTime}`;
+
+            return discipline ? `${name} · ${discipline}` : name;
+          }
+        ]
+      }
+    },
     {
       name: 'label',
       type: 'text',

@@ -36,7 +36,7 @@ cp .env.example .env   # then set PAYLOAD_SECRET
 |---|---|---|
 | `DATABASE_URI` | Payload | `mongodb://127.0.0.1:27017/score-keeping-app` |
 | `PAYLOAD_SECRET` | Payload | any long random string |
-| `MQTT_WS_URL` | browser (WebSocket), handed over by the server at request time | `ws://localhost:9001` |
+| `MQTT_WS_URL` | browser (WebSocket), handed over by the server at request time; leave unset unless the broker is on another host | `ws://broker.example:9001` |
 | `MQTT_USERNAME` / `MQTT_PASSWORD` | browser (optional) | |
 | `MQTT_BROKER_URL` | `ble-bridge` (TCP), in `ble-bridge/.env` | `mqtt://localhost:1883` |
 
@@ -44,6 +44,9 @@ When `MQTT_WS_URL` is unset, the browser uses `ws://<host it loaded the page
 from>:9001`, so a TV opening `http://<laptop>:3000/display` finds the
 laptop's broker without setup. A broker saved in the `/display` Settings
 panel overrides both; "Reset to server default" clears it.
+
+Open `/timekeeper` on the laptop itself (`http://localhost:3000`): the board
+needs a secure context (`localhost` or HTTPS) for `crypto.randomUUID()`.
 
 ### 2. Run with Docker (development)
 
