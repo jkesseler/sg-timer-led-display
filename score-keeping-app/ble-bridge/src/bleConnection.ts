@@ -1,11 +1,9 @@
 import { setTimeout as delay } from 'node:timers/promises';
 import { findTimerDevice, normalizeUuid } from './protocols/timerDevices.js';
-import type { Peripheral } from '@abandonware/noble';
+import type { Noble, Peripheral } from '@stoprocent/noble';
 import type { TimerEvent } from './protocols/timerEvent.js';
 import type { DeviceFilter, TimerDeviceDefinition } from './protocols/timerDevices.js';
 import type { ConnectionState, TimerIdentity } from './publisher.js';
-
-type Noble = typeof import('@abandonware/noble');
 
 /** Firmware BLE_RECONNECT_INTERVAL: wait between a lost/failed connection and the next scan. */
 export const BLE_RECONNECT_INTERVAL_MS = 5000;
@@ -27,7 +25,7 @@ interface DiscoveredTimer {
 }
 
 function waitForPoweredOn(noble: Noble, onError: (error: Error) => void) {
-  if (noble._state === 'poweredOn') {
+  if (noble.state === 'poweredOn') {
     return Promise.resolve();
   }
 
@@ -102,7 +100,7 @@ export class BleConnection {
 
   async run() {
     // Loaded lazily so the parser tests never load the native module.
-    const { default: noble } = await import('@abandonware/noble');
+    const { default: noble } = await import('@stoprocent/noble');
     this.noble = noble;
 
     await waitForPoweredOn(noble, this.options.onError);

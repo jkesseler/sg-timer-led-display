@@ -8,17 +8,16 @@ Supported timers, in scan priority order (the first match wins): Special Pie M1A
 
 The bridge runs on the host, not in Docker. It needs the Bluetooth adapter.
 
-1. Install a C++ toolchain. The noble native modules are built during install (Fedora: `sudo dnf install gcc-c++ make`).
-2. Install the dependencies: `npm install` (in this folder). If you installed the dependencies before you installed the toolchain, run `npm rebuild` instead.
-3. Give Node raw HCI socket access, so that you do not have to run it as root:
+1. Install the dependencies: `npm install` (in this folder). No compiler is needed: [`@stoprocent/noble`](https://github.com/stoprocent/noble) ships prebuilt binaries for linux-x64 and linux-arm64, so `allowScripts` in `package.json` skips its native rebuild.
+2. Give Node raw HCI socket access, so that you do not have to run it as root:
 
    ```bash
    sudo setcap cap_net_raw+eip $(readlink -f $(which node))
    ```
 
    Do this again after each Node upgrade, because the capability is set on the binary.
-4. Copy `.env.example` to `.env` and set `BRIDGE_DEVICE_ID`.
-5. In Payload admin, add a `devices` entry with the same ID. Select that device on the match, as you do for an ESP32.
+3. Copy `.env.example` to `.env` and set `BRIDGE_DEVICE_ID`.
+4. In Payload admin, add a `devices` entry with the same ID. Select that device on the match, as you do for an ESP32.
 
 ## Run
 
@@ -50,4 +49,4 @@ The tests do not load noble. The BLE scan, connect and reconnect code is tested 
 
 ## If noble conflicts with bluetoothd
 
-noble uses raw HCI sockets. On a desktop where `bluetoothd` also uses the adapter, noble and `bluetoothd` can conflict: scans find nothing, or connections drop. If this occurs, replace `src/bleConnection.ts` with an implementation that uses [`node-ble`](https://github.com/chrvadala/node-ble), which talks to BlueZ over D-Bus. The parsers in `src/protocols/` and the publisher stay the same.
+noble uses raw HCI sockets. On a desktop where `bluetoothd` also uses the adapter, noble and `bluetoothd` can conflict: scans find nothing, or connections drop. If this occurs, try noble's D-Bus binding, which talks to BlueZ instead of the raw socket: `withBindings('dbus')` from `@stoprocent/noble`. It needs `dbus-next` installed (last released in 2022) and is not in noble's type definitions. The parsers in `src/protocols/` and the publisher stay the same.
