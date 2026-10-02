@@ -186,13 +186,7 @@ const BoardContent = ({ matchId, freshState, serverState, shooters }: BoardConte
               onClick={() => setSelectedSquadId(candidate.id)}
             >
               {candidate.label}
-              <span className="tk-tab__meta">
-                {candidate.discipline}
-                {' '}
-                ·
-                {' '}
-                {candidate.status}
-              </span>
+              <span className="tk-tab__meta">{candidate.status}</span>
             </button>
           ))}
         </nav>

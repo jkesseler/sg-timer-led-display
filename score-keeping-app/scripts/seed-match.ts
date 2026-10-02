@@ -43,19 +43,19 @@ async function main(): Promise<void> {
 
   const morningSquad = await payload.create({
     collection: 'squads',
-    data: { match: match.id, startTime: '08:00', endTime: '09:00', discipline: 'OKP' },
+    data: { match: match.id, startTime: '08:00', endTime: '09:00' },
   })
   const laterSquad = await payload.create({
     collection: 'squads',
-    data: { match: match.id, startTime: '09:00', endTime: '10:00', discipline: 'SKP' },
+    data: { match: match.id, startTime: '09:00', endTime: '10:00' },
   })
 
   const memberships = [
-    { squad: morningSquad.id, shooter: shooters[0].id, startingPosition: 1 },
-    { squad: morningSquad.id, shooter: shooters[1].id, startingPosition: 2 },
-    { squad: morningSquad.id, shooter: shooters[2].id, startingPosition: 3 },
-    { squad: laterSquad.id, shooter: shooters[2].id, startingPosition: 1 },
-    { squad: laterSquad.id, shooter: shooters[3].id, startingPosition: 2 },
+    { squad: morningSquad.id, shooter: shooters[0].id, startingPosition: 1, discipline: 'OKP' as const },
+    { squad: morningSquad.id, shooter: shooters[1].id, startingPosition: 2, discipline: 'SKP' as const },
+    { squad: morningSquad.id, shooter: shooters[2].id, startingPosition: 3, discipline: 'OKP' as const },
+    { squad: laterSquad.id, shooter: shooters[2].id, startingPosition: 1, discipline: 'SKP' as const },
+    { squad: laterSquad.id, shooter: shooters[3].id, startingPosition: 2, discipline: 'OKKP' as const },
   ]
   for (const data of memberships) {
     await payload.create({ collection: 'squad-members', data })

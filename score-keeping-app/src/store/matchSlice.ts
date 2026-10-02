@@ -1,6 +1,7 @@
 import { createSlice, isAnyOf } from '@reduxjs/toolkit';
 import { buildPendingRounds } from '@/lib/match/buildMatchState';
 import { deriveCurrentRound, getSquadCards } from '@/lib/match/derive';
+import type { Discipline } from '@/lib/domain/disciplines';
 import type { Card, MatchState, Round, RoundStatus, SquadStatus } from '@/lib/match/types';
 import type { PayloadAction } from '@reduxjs/toolkit';
 
@@ -32,6 +33,7 @@ interface NewCard {
   shooterId: string;
   shooterName: string;
   knsaNumber: string | null;
+  discipline: Discipline;
 }
 
 const initialState: MatchSliceState = { current: null, syncStatus: 'synced' };
@@ -281,6 +283,7 @@ export const matchSlice = createSlice({
           shooterId: action.payload.shooterId,
           shooterName: action.payload.shooterName,
           knsaNumber: action.payload.knsaNumber,
+          discipline: action.payload.discipline,
           queuePosition: squadCards.length,
           presence: 'present',
           rounds: buildPendingRounds(),

@@ -31,6 +31,7 @@ export interface Card {
   shooterId: string;
   shooterName: string;
   knsaNumber: string | null;
+  discipline: Discipline;
   queuePosition: number;
   presence: Presence;
   rounds: Round[];
@@ -43,7 +44,6 @@ export interface MatchSquad {
   label: string;
   start: string;
   end: string;
-  discipline: Discipline;
   status: SquadStatus;
 }
 

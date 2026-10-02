@@ -246,7 +246,6 @@ export interface Squad {
    * e.g. "09:00"
    */
   endTime: string;
-  discipline: 'OKP' | 'OKKP' | 'SKP' | 'SKKP' | 'PCC 9mm' | 'PCC .22' | 'OKR' | 'OKKR' | 'SKR' | 'SKKR';
   members?: {
     docs?: (string | SquadMember)[];
     hasNextPage?: boolean;
@@ -267,6 +266,7 @@ export interface SquadMember {
    * Position number from the printed schedule — the starting order only.
    */
   startingPosition: number;
+  discipline: 'OKP' | 'OKKP' | 'SKP' | 'SKKP' | 'PCC 9mm' | 'PCC .22' | 'OKR' | 'OKKR' | 'SKR' | 'SKKR';
   updatedAt: string;
   createdAt: string;
 }
@@ -488,7 +488,6 @@ export interface SquadsSelect<T extends boolean = true> {
   match?: T;
   startTime?: T;
   endTime?: T;
-  discipline?: T;
   members?: T;
   updatedAt?: T;
   createdAt?: T;
@@ -502,6 +501,7 @@ export interface SquadMembersSelect<T extends boolean = true> {
   squad?: T;
   shooter?: T;
   startingPosition?: T;
+  discipline?: T;
   updatedAt?: T;
   createdAt?: T;
 }

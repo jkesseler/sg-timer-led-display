@@ -43,10 +43,10 @@ describe('buildMatchState', () => {
     const state = buildMatchState({
       matchId: 'm',
       deviceId: 'ABC123',
-      squads: [{ id: 's', label: 'A', startTime: '08:00', endTime: '09:00', discipline: 'OKP' }],
+      squads: [{ id: 's', label: 'A', startTime: '08:00', endTime: '09:00' }],
       members: [
-        { id: 'late', squadId: 's', shooterId: 'p2', startingPosition: 2 },
-        { id: 'early', squadId: 's', shooterId: 'p1', startingPosition: 1 }
+        { id: 'late', squadId: 's', shooterId: 'p2', startingPosition: 2, discipline: 'SKP' },
+        { id: 'early', squadId: 's', shooterId: 'p1', startingPosition: 1, discipline: 'OKP' }
       ],
       shooters: [
         { id: 'p1', firstName: 'Jan', lastName: 'Jansen', knsaNumber: '111' },
@@ -54,9 +54,9 @@ describe('buildMatchState', () => {
       ]
     });
 
-    expect(state.cards.map(card => [card.id, card.queuePosition, card.shooterName])).toEqual([
-      ['early', 0, 'Jan Jansen'],
-      ['late', 1, 'Piet Pietersen']
+    expect(state.cards.map(card => [card.id, card.queuePosition, card.shooterName, card.discipline])).toEqual([
+      ['early', 0, 'Jan Jansen', 'OKP'],
+      ['late', 1, 'Piet Pietersen', 'SKP']
     ]);
     expect(state.cards[0].rounds.every(round => round.status === 'pending')).toBe(true);
     expect(state.squads[0].status).toBe('scheduled');
@@ -65,7 +65,7 @@ describe('buildMatchState', () => {
 
 describe('turns', () => {
   it('records the timer result on the armed round and activates the squad', () => {
-    const state = run(buildState([buildCard({ id: 'a' })], { squads: [{ id: 'squad-a', label: 'A', start: '', end: '', discipline: 'OKP', status: 'scheduled' }] }),
+    const state = run(buildState([buildCard({ id: 'a' })], { squads: [{ id: 'squad-a', label: 'A', start: '', end: '', status: 'scheduled' }] }),
       armTurn({ cardId: 'a', round: 1 }),
       turnStopped({ lastShotTimeMs: 4321 }));
 
@@ -186,11 +186,12 @@ describe('presence, queue and late shooters', () => {
 
   it('adds a late shooter at the back of the queue', () => {
     const state = run(buildState([buildCard({ id: 'a', queuePosition: 0 })]),
-      addCard({ squadId: 'squad-a', shooterId: 'late', shooterName: 'Late Comer', knsaNumber: '999' }));
+      addCard({ squadId: 'squad-a', shooterId: 'late', shooterName: 'Late Comer', knsaNumber: '999', discipline: 'SKKP' }));
 
     const lateCard = state.cards[1];
 
     expect(lateCard.shooterName).toBe('Late Comer');
+    expect(lateCard.discipline).toBe('SKKP');
     expect(lateCard.queuePosition).toBe(1);
     expect(lateCard.id).toMatch(/^[0-9a-f-]{36}$/);
   });

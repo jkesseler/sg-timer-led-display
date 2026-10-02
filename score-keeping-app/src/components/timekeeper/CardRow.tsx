@@ -83,6 +83,8 @@ export const CardRow = ({ match, card, position, liveTimeMs }: CardRowProps) => 
         >
           {card.shooterName}
         </button>
+        {/* Absent on cards saved before discipline moved from squad to member. */}
+        {card.discipline && <span className="tk-queue-row__discipline">{card.discipline}</span>}
         <div className="tk-queue-row__rounds">
           {card.rounds.map((round) => {
             const isLiveRound = isActive && activeTurn?.phase === 'running' && activeTurn.round === round.n;

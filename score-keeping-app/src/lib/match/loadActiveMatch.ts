@@ -58,14 +58,14 @@ export async function loadMatchSetup(payload: Payload, match: Match): Promise<Ma
       id: squad.id,
       label: squad.label ?? `${squad.startTime} - ${squad.endTime}`,
       startTime: squad.startTime,
-      endTime: squad.endTime,
-      discipline: squad.discipline
+      endTime: squad.endTime
     })),
     members: members.docs.map(member => ({
       id: member.id,
       squadId: relationId(member.squad),
       shooterId: relationId(member.shooter),
-      startingPosition: member.startingPosition
+      startingPosition: member.startingPosition,
+      discipline: member.discipline
     })),
     shooters: [...shooters.values()].map(shooter => ({
       id: shooter.id,

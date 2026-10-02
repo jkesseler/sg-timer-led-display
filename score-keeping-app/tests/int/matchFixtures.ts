@@ -11,6 +11,7 @@ interface CardSpec {
   squadId?: string;
   shooterId?: string;
   knsaNumber?: string;
+  discipline?: Card['discipline'];
   queuePosition?: number;
   presence?: Card['presence'];
   rounds?: RoundSpec[];
@@ -40,6 +41,7 @@ export function buildCard(spec: CardSpec): Card {
     shooterId: spec.shooterId ?? `shooter-${spec.id}`,
     shooterName: `Shooter ${spec.id}`,
     knsaNumber: spec.knsaNumber ?? null,
+    discipline: spec.discipline ?? 'OKP',
     queuePosition: spec.queuePosition ?? 0,
     presence: spec.presence ?? 'present',
     rounds: spec.rounds ? buildRounds(spec.rounds) : pendingRounds(),
@@ -54,8 +56,8 @@ export function buildState(cards: Card[], overrides: Partial<MatchState> = {}): 
     deviceId: 'ABC123',
     revision: 0,
     squads: [
-      { id: 'squad-a', label: 'A', start: '08:00', end: '09:00', discipline: 'OKP', status: 'active' },
-      { id: 'squad-b', label: 'B', start: '09:00', end: '10:00', discipline: 'SKP', status: 'scheduled' }
+      { id: 'squad-a', label: 'A', start: '08:00', end: '09:00', status: 'active' },
+      { id: 'squad-b', label: 'B', start: '09:00', end: '10:00', status: 'scheduled' }
     ],
     cards,
     activeTurn: null,

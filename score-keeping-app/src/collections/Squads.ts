@@ -1,4 +1,3 @@
-import { DISCIPLINES } from '../lib/domain/disciplines';
 import { uuidIdField } from '../fields/uuidId';
 import type { CollectionConfig } from 'payload';
 
@@ -6,7 +5,7 @@ export const Squads: CollectionConfig = {
   slug: 'squads',
   admin: {
     useAsTitle: 'title',
-    defaultColumns: ['label', 'match', 'discipline', 'startTime', 'endTime']
+    defaultColumns: ['label', 'match', 'startTime', 'endTime']
   },
   fields: [
     uuidIdField,
@@ -19,15 +18,13 @@ export const Squads: CollectionConfig = {
       hooks: {
         beforeChange: [
           ({ siblingData }) => {
-            const { label, startTime, endTime, discipline } = siblingData as {
+            const { label, startTime, endTime } = siblingData as {
               label?: string;
               startTime?: string;
               endTime?: string;
-              discipline?: string;
             };
-            const name = label || `${startTime} - ${endTime}`;
 
-            return discipline ? `${name} · ${discipline}` : name;
+            return label || `${startTime} - ${endTime}`;
           }
         ]
       }
@@ -94,16 +91,15 @@ export const Squads: CollectionConfig = {
       ]
     },
     {
-      name: 'discipline',
-      type: 'select',
-      required: true,
-      options: DISCIPLINES.map(discipline => ({ label: discipline, value: discipline }))
-    },
-    {
       name: 'members',
       type: 'join',
       collection: 'squad-members',
-      on: 'squad'
+      on: 'squad',
+      admin: {
+        // Squad is implied here; discipline is per member (one squad mixes disciplines).
+        defaultColumns: ['shooter', 'startingPosition', 'discipline']
+      },
+      defaultSort: 'startingPosition'
     }
   ]
 };

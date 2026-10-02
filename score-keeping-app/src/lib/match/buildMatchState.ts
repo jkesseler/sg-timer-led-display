@@ -7,7 +7,6 @@ export interface SetupSquad {
   label: string;
   startTime: string;
   endTime: string;
-  discipline: Discipline;
 }
 
 export interface SetupMember {
@@ -15,6 +14,7 @@ export interface SetupMember {
   squadId: string;
   shooterId: string;
   startingPosition: number;
+  discipline: Discipline;
 }
 
 export interface SetupShooter {
@@ -59,6 +59,7 @@ export function buildMatchState(setup: MatchSetup): MatchState {
         shooterId: member.shooterId,
         shooterName: shooter ? `${shooter.firstName} ${shooter.lastName}` : 'Unknown shooter',
         knsaNumber: shooter?.knsaNumber ?? null,
+        discipline: member.discipline,
         queuePosition: index,
         presence: 'present',
         rounds: buildPendingRounds(),
@@ -77,7 +78,6 @@ export function buildMatchState(setup: MatchSetup): MatchState {
       label: squad.label,
       start: squad.startTime,
       end: squad.endTime,
-      discipline: squad.discipline,
       status: 'scheduled'
     })),
     cards,

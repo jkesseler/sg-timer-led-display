@@ -33,9 +33,9 @@ async function createMatch() {
 describe('collections on Mongo', () => {
   it('gives every document a UUID id and keeps relationships working', async () => {
     const match = await createMatch();
-    const squad = await payload.create({ collection: 'squads', data: { match: match.id, startTime: '08:00', endTime: '09:00', discipline: 'OKP' } });
+    const squad = await payload.create({ collection: 'squads', data: { match: match.id, startTime: '08:00', endTime: '09:00' } });
     const shooter = await payload.create({ collection: 'shooters', data: { firstName: 'Jan', lastName: 'Jansen', knsaNumber: `K${Date.now()}` } });
-    const member = await payload.create({ collection: 'squad-members', data: { squad: squad.id, shooter: shooter.id, startingPosition: 1 } });
+    const member = await payload.create({ collection: 'squad-members', data: { squad: squad.id, shooter: shooter.id, startingPosition: 1, discipline: 'OKP' } });
 
     const loaded = await payload.findByID({ collection: 'squad-members', id: member.id, depth: 2 });
 

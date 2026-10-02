@@ -1,9 +1,11 @@
 'use client';
 
 import { useState } from 'react';
+import { DISCIPLINES } from '@/lib/domain/disciplines';
 import { formatRoundTimeMs } from '@/lib/match/derive';
 import { addCard, assignResult, discardUnassignedResult } from '@/store/matchSlice';
 import { useAppDispatch } from '@/store/store';
+import type { Discipline } from '@/lib/domain/disciplines';
 import type { Card, MatchState, UnassignedResult } from '@/lib/match/types';
 
 export interface ShooterOption {
@@ -84,8 +86,11 @@ interface LateShooterFormProps {
 export const LateShooterForm = ({ squadId, squadCards, shooters }: LateShooterFormProps) => {
   const dispatch = useAppDispatch();
   const [shooterId, setShooterId] = useState('');
+  const [discipline, setDiscipline] = useState<Discipline>(DISCIPLINES[0]);
 
-  const available = shooters.filter(shooter => !squadCards.some(card => card.shooterId === shooter.id));
+  // A shooter can be in one squad once per discipline.
+  const available = shooters.filter(shooter =>
+    !squadCards.some(card => card.shooterId === shooter.id && card.discipline === discipline));
   const selected = available.find(shooter => shooter.id === shooterId);
 
   function handleAdd() {
@@ -93,7 +98,7 @@ export const LateShooterForm = ({ squadId, squadCards, shooters }: LateShooterFo
       return;
     }
 
-    dispatch(addCard({ squadId, shooterId: selected.id, shooterName: selected.name, knsaNumber: selected.knsaNumber }));
+    dispatch(addCard({ squadId, shooterId: selected.id, shooterName: selected.name, knsaNumber: selected.knsaNumber, discipline }));
     setShooterId('');
   }
 
@@ -104,6 +109,14 @@ export const LateShooterForm = ({ squadId, squadCards, shooters }: LateShooterFo
         <select className="tk-input" value={shooterId} onChange={event => setShooterId(event.target.value)} aria-label="Shooter">
           <option value="">Choose a shooter…</option>
           {available.map(shooter => <option key={shooter.id} value={shooter.id}>{shooter.name}</option>)}
+        </select>
+        <select
+          className="tk-input"
+          value={discipline}
+          onChange={event => setDiscipline(event.target.value as Discipline)}
+          aria-label="Discipline"
+        >
+          {DISCIPLINES.map(option => <option key={option} value={option}>{option}</option>)}
         </select>
         <button type="button" className="tk-button tk-button--small tk-button--primary" disabled={!selected} onClick={handleAdd}>
           Add
