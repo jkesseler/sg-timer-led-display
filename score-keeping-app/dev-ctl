@@ -1,0 +1,101 @@
+#!/bin/bash
+# Controls the development Docker Compose stack (scoring-app, mongo, mosquitto).
+
+set -euo pipefail
+
+cd "$(dirname "$0")"
+
+COMPOSE_FILE="docker-compose.dev.yml"
+
+print_help() {
+  echo "Usage: ./dev-ctl [services] [--start|--up|--stop|--restart|--down|--logs|--ps] [--no-recreate|--follow]"
+  echo "Services: scoring-app, mongo, mosquitto (default: all)"
+  echo "Example: ./dev-ctl --start"
+  echo "Example: ./dev-ctl scoring-app --start"
+  echo "Example: ./dev-ctl scoring-app mongo --start"
+  echo "Example: ./dev-ctl scoring-app --start --no-recreate"
+  echo "Example: ./dev-ctl --stop"
+  echo "Example: ./dev-ctl scoring-app --restart"
+  echo "Example: ./dev-ctl --down"
+  echo "Example: ./dev-ctl --logs"
+  echo "Example: ./dev-ctl scoring-app --logs --follow"
+  echo "Example: ./dev-ctl --ps"
+}
+
+if [ "$#" -eq 0 ]; then
+  print_help
+  exit 0
+fi
+
+SERVICES=()
+RECREATE=true
+ACTION="up"
+FOLLOW=false
+
+for arg in "$@"; do
+  case "$arg" in
+    --help|-h) print_help; exit 0 ;;
+    --start|--up) ACTION="up" ;;
+    --stop) ACTION="stop" ;;
+    --restart) ACTION="restart" ;;
+    --down) ACTION="down" ;;
+    --logs) ACTION="logs" ;;
+    --ps) ACTION="ps" ;;
+    --no-recreate) RECREATE=false ;;
+    --follow|-f) FOLLOW=true ;;
+    -*)
+      echo "Error: unknown option $arg" >&2
+      print_help
+      exit 1
+      ;;
+    *) SERVICES+=("$arg") ;;
+  esac
+done
+
+if [ ! -f "$COMPOSE_FILE" ]; then
+  echo "Error: $COMPOSE_FILE not found" >&2
+  exit 1
+fi
+
+if [ ! -f ".env" ]; then
+  echo "Error: .env not found (copy .env.example to .env)" >&2
+  exit 1
+fi
+
+compose() {
+  docker compose -f "$COMPOSE_FILE" "$@"
+}
+
+case "$ACTION" in
+  up)
+    UP_ARGS=(-d)
+    if [ "$RECREATE" = true ]; then
+      UP_ARGS+=(--force-recreate)
+    fi
+    compose up "${UP_ARGS[@]}" "${SERVICES[@]}"
+    ;;
+  stop)
+    compose stop "${SERVICES[@]}"
+    ;;
+  restart)
+    compose restart "${SERVICES[@]}"
+    ;;
+  down)
+    # `down` removes the whole project; it does not take service names.
+    if [ "${#SERVICES[@]}" -gt 0 ]; then
+      compose rm --stop --force "${SERVICES[@]}"
+    else
+      compose down
+    fi
+    ;;
+  logs)
+    LOGS_ARGS=(--tail=100)
+    if [ "$FOLLOW" = true ]; then
+      LOGS_ARGS+=(--follow)
+    fi
+    compose logs "${LOGS_ARGS[@]}" "${SERVICES[@]}"
+    ;;
+  ps)
+    compose ps "${SERVICES[@]}"
+    ;;
+esac
