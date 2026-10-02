@@ -17,6 +17,8 @@ export interface BleConnectionOptions {
   onConnectionStateChange(state: ConnectionState, timer?: TimerIdentity): void;
   onTimerEvent(event: TimerEvent): void;
   onError(error: Error): void;
+  /** Every notification as received, before parsing; for diagnosing protocol mismatches. */
+  onRawData?(data: Uint8Array): void;
 }
 
 interface DiscoveredTimer {
@@ -185,6 +187,14 @@ export class BleConnection {
   }
 
   private async subscribeToTimer(peripheral: Peripheral, definition: TimerDeviceDefinition, deviceModel: string) {
+    // Windows does not answer the device's security request on its own; it only
+    // shows an "Add a device" toast. Pairing here bonds the link (ConfirmOnly,
+    // encryption: noble's defaults) and is a no-op when already paired.
+    // Only noble's Windows binding implements pairing.
+    if (definition.requiresPairing && process.platform === 'win32') {
+      await peripheral.pairAsync();
+    }
+
     const { characteristics } = await peripheral.discoverSomeServicesAndCharacteristicsAsync(
       [normalizeUuid(definition.serviceUuid)],
       [normalizeUuid(definition.characteristicUuid)],
@@ -197,6 +207,8 @@ export class BleConnection {
 
     const protocol = definition.createProtocol(deviceModel);
     characteristic.on('data', (data: Buffer) => {
+      this.options.onRawData?.(data);
+
       for (const event of protocol.processTimerData(data)) {
         this.options.onTimerEvent(event);
       }

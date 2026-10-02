@@ -14,6 +14,8 @@ export interface TimerDeviceDefinition {
   characteristicUuid: string;
   /** Shot number the device puts on the wire for the first shot of a session. */
   shotIndexBase: number;
+  /** The device sends no notifications until the link is bonded and encrypted. */
+  requiresPairing?: boolean;
   matchesDevice(device: AdvertisedDevice): boolean;
   getDeviceModel(deviceName?: string): string;
   createProtocol(deviceModel: string): TimerProtocol;
@@ -64,6 +66,9 @@ export const SG_TIMER: TimerDeviceDefinition = {
   serviceUuid: '7520FFFF-14D2-4CDA-8B6B-697C554C9311',
   characteristicUuid: '75200001-14D2-4CDA-8B6B-697C554C9311',
   shotIndexBase: SG_TIMER_SHOT_INDEX_BASE,
+  // Verified on the SG Timer GO: it sends a security request (Just Works) and
+  // drops the link ~30 s later if nobody pairs. The ESP32 stack pairs automatically.
+  requiresPairing: true,
   matchesDevice: device => isAdvertisingService(device, SG_TIMER.serviceUuid),
   getDeviceModel: getSgTimerModel,
   createProtocol: deviceModel => new SgTimerProtocol(deviceModel),

@@ -165,4 +165,34 @@ describe('SgTimerProtocol', () => {
         .toEqual([{ type: 'sessionStarted', sessionId: 4, startDelaySeconds: 1 }]);
     });
   });
+
+  // Notifications captured from an SG Timer GO (SG-SST4B11880) on 75200001: one 5-shot string.
+  describe('captured SG Timer GO session', () => {
+    const CAPTURED_PACKETS = [
+      '07006abf9cd9001e',
+      '05056abf9cd9',
+      '0b046abf9cd90000000005a0',
+      '0b046abf9cd9000100000a28',
+      '0b046abf9cd9000200000e2e',
+      '0b046abf9cd9000300001220',
+      '0b046abf9cd9000400001612',
+      '07036abf9cd90005',
+    ];
+
+    it('decodes the whole string', () => {
+      const events = CAPTURED_PACKETS.flatMap(hex => protocol.processTimerData(Buffer.from(hex, 'hex')));
+      const sessionId = 0x6ABF9CD9;
+
+      expect(events[0]).toEqual({ type: 'sessionStarted', sessionId, startDelaySeconds: 3 });
+      expect(events[1]).toEqual({ type: 'countdownComplete', sessionId });
+
+      const shots = events.slice(2, 7).map(event => (event.type === 'shotDetected' ? event.shot : undefined));
+      expect(shots.map(shot => shot?.shotNumber)).toEqual([1, 2, 3, 4, 5]);
+      expect(shots.map(shot => shot?.absoluteTimeMs)).toEqual([1440, 2600, 3630, 4640, 5650]);
+      expect(shots.map(shot => shot?.splitTimeMs)).toEqual([0, 1160, 1030, 1010, 1010]);
+
+      expect(events[7]).toEqual({ type: 'sessionStopped', sessionId, totalShots: 5 });
+      expect(events).toHaveLength(8);
+    });
+  });
 });

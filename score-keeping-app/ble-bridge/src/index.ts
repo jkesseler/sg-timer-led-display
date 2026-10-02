@@ -76,6 +76,10 @@ const bleConnection = new BleConnection({
   onError: (error) => {
     console.error(`[ble-bridge] ${error.message}`);
   },
+  // stderr, because stdout is reserved for event lines.
+  onRawData: process.env.BLE_DEBUG
+    ? data => console.error(`[ble-bridge] raw ${Buffer.from(data).toString('hex')}`)
+    : undefined,
 });
 
 async function shutdown() {
