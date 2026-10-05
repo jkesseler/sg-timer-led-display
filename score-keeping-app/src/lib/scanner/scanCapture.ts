@@ -50,8 +50,9 @@ const DEFAULT_OPTIONS: Required<ScanCaptureOptions> = {
  * Modifier and lock keys (Shift, NumLock, ...) are skipped rather than
  * treated as a break: scanners in keyboard-emulation mode often send them
  * around the digits, and a reset there left the buffer too short by the time
- * Enter arrived — a likely cause of the terminating Enter "never arriving"
- * seen earlier against the NETUM NT-EM61 (not yet re-verified on hardware).
+ * Enter arrived. That was why the terminating Enter seemed to "never arrive"
+ * against the NETUM NT-EM61; scanning works on it since this was fixed
+ * (verified on hardware 2026-10-05).
  *
  * Returns a cleanup function.
  */

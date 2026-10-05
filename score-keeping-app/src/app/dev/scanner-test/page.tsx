@@ -10,15 +10,10 @@ export default function ScannerTestPage() {
   const [value, setValue] = useState('');
   const [keyLog, setKeyLog] = useState<string[]>([]);
 
-  // KNOWN BUG (unresolved, deferred): the scanner's terminating Enter
-  // reliably fires as a real keydown with key="Enter" (confirmed against a
-  // plain vanilla <textarea> via MDN's own KeyboardEvent.key demo — the
-  // hardware and browser side are both fine) but this handler still doesn't
-  // reach the Enter branch reliably when the input is fed by the physical
-  // scanner. Not yet root-caused. Revisit before wiring scanning into the
-  // real timekeeper screen — src/lib/scanner/scanCapture.ts has the same
-  // open issue. Manual shooter selection is unaffected and stays the
-  // primary supported path in the meantime.
+  // The timekeeper screen uses src/lib/scanner/scanCapture.ts instead. Its
+  // dropped-Enter bug was the burst reset on modifier keys (Shift, NumLock)
+  // the scanner sends around the digits; fixed and verified on hardware.
+  // This page stays useful for its raw key log when trying a new scanner.
   function handleKeyDown(event: KeyboardEvent<HTMLInputElement>) {
     setKeyLog(prev =>
       [`key=${JSON.stringify(event.key)} code=${event.code} keyCode=${event.keyCode}`, ...prev].slice(0, 40)
