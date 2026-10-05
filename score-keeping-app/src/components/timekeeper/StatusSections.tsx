@@ -3,6 +3,7 @@
 import { cancelTurn, setSquadStatus } from '@/store/matchSlice';
 import { useAppDispatch, useAppSelector } from '@/store/store';
 import {
+  selectIsScannerListening,
   selectMessage,
   selectRoster,
   selectScanCode,
@@ -181,11 +182,13 @@ export const Message = () => <MessageView message={useAppSelector(selectMessage)
 
 interface ScanFormViewProps {
   code: string;
+  /** False while a shooter is armed: neither the scanner nor the form may replace the active turn. */
+  isListening: boolean;
   onCodeChange: (code: string) => void;
   onSubmit: () => void;
 }
 
-export const ScanFormView = ({ code, onCodeChange, onSubmit }: ScanFormViewProps) => {
+export const ScanFormView = ({ code, isListening, onCodeChange, onSubmit }: ScanFormViewProps) => {
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     onSubmit();
@@ -200,12 +203,14 @@ export const ScanFormView = ({ code, onCodeChange, onSubmit }: ScanFormViewProps
           className="tk-scan-input"
           value={code}
           onChange={event => onCodeChange(event.target.value)}
-          placeholder="scan card or type KNSA number"
+          placeholder={isListening ? 'scan card or type KNSA number' : 'finish or cancel the current turn first'}
           aria-label="KNSA number"
+          disabled={!isListening}
           autoFocus
         />
-        <button type="submit" className="tk-button tk-button--primary">Arm</button>
+        <button type="submit" className="tk-button tk-button--primary" disabled={!isListening}>Arm</button>
       </form>
+      <p className="tk-muted">{isListening ? 'Scanner ready' : 'Scanner paused while a shooter is armed'}</p>
     </section>
   );
 };
@@ -216,6 +221,7 @@ export const ScanForm = () => {
   return (
     <ScanFormView
       code={useAppSelector(selectScanCode)}
+      isListening={useAppSelector(selectIsScannerListening)}
       onCodeChange={code => dispatch(scanCodeChanged(code))}
       onSubmit={() => dispatch(submitScan())}
     />

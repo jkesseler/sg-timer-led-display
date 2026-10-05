@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { addCard, hydrate, setRoundTime } from '@/store/matchSlice';
+import { addCard, armTurn, cancelTurn, hydrate, setRoundTime } from '@/store/matchSlice';
 import { makeStore } from '@/store/store';
 import {
   selectCardRowView,
+  selectIsScannerListening,
   selectLateShooterView,
   selectPresentCardIds,
   selectRoundEditorView,
@@ -10,7 +11,7 @@ import {
   selectSelectedSquadId
 } from '@/store/timekeeperSelectors';
 import { editorTimeTextChanged, lateShooterChanged, loaded, roundEditorToggled, scanCodeChanged } from '@/store/timekeeperSlice';
-import { moveQueueCard, saveEditorTime, submitScan } from '@/store/timekeeperThunks';
+import { handleScannedCard, moveQueueCard, saveEditorTime, submitScan } from '@/store/timekeeperThunks';
 import { buildCard, buildState } from './matchFixtures';
 import type { MatchState } from '@/lib/match/types';
 
@@ -129,6 +130,38 @@ describe('scan', () => {
 
     expect(store.getState().timekeeper.message).toBe('No shooter with KNSA number 999 in this match.');
     expect(store.getState().match.current?.activeTurn).toBeNull();
+  });
+});
+
+describe('barcode scanner', () => {
+  it('arms the scanned shooter while nobody is armed', () => {
+    const store = buildStore(buildTwoCardMatch());
+    expect(selectIsScannerListening(store.getState())).toBe(true);
+
+    store.dispatch(scanCodeChanged('222'));
+    store.dispatch(handleScannedCard('222'));
+
+    expect(store.getState().match.current?.activeTurn).toMatchObject({ cardId: 'b', round: 1 });
+    expect(store.getState().timekeeper.scanCode).toBe('');
+    expect(selectIsScannerListening(store.getState())).toBe(false);
+  });
+
+  it('does not replace the armed shooter', () => {
+    const store = buildStore(buildTwoCardMatch());
+    store.dispatch(armTurn({ cardId: 'a', round: 2 }));
+
+    store.dispatch(handleScannedCard('222'));
+
+    expect(store.getState().match.current?.activeTurn).toMatchObject({ cardId: 'a', round: 2 });
+  });
+
+  it('listens again once the turn is cancelled', () => {
+    const store = buildStore(buildTwoCardMatch());
+    store.dispatch(armTurn({ cardId: 'a', round: 2 }));
+
+    store.dispatch(cancelTurn());
+
+    expect(selectIsScannerListening(store.getState())).toBe(true);
   });
 });
 

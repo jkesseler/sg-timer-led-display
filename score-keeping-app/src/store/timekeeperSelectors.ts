@@ -46,6 +46,9 @@ const selectPickedSquadId = (state: RootState) => state.timekeeper.selectedSquad
 
 export const selectActiveTurn = (state: RootState) => state.match.current?.activeTurn ?? null;
 
+/** The barcode scanner arms shooters only while nobody is armed or shooting. */
+export const selectIsScannerListening = (state: RootState) => state.match.current !== null && selectActiveTurn(state) === null;
+
 // --- Squad --------------------------------------------------------------
 
 /** The picked tab, else the squad in play, else the first squad. */

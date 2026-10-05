@@ -15,6 +15,13 @@ export interface ScanEvent {
   burstDurationMs: number;
 }
 
+// Keys a scanner may interleave with the payload; they neither add to nor break a burst.
+const IGNORED_KEYS = new Set(['Shift', 'Control', 'Alt', 'AltGraph', 'Meta', 'NumLock', 'CapsLock', 'ScrollLock']);
+
+function isEnterKey(event: KeyboardEvent): boolean {
+  return event.key === 'Enter' || event.code === 'Enter' || event.code === 'NumpadEnter';
+}
+
 const DEFAULT_OPTIONS: Required<ScanCaptureOptions> = {
   maxKeystrokeGapMs: 50,
   minCodeLength: 4
@@ -40,17 +47,13 @@ const DEFAULT_OPTIONS: Required<ScanCaptureOptions> = {
  * happens to have focus mid-scan, the digits are also typed into it as a
  * side effect; that's an accepted edge case, not the common path.
  *
- * Returns a cleanup function.
+ * Modifier and lock keys (Shift, NumLock, ...) are skipped rather than
+ * treated as a break: scanners in keyboard-emulation mode often send them
+ * around the digits, and a reset there left the buffer too short by the time
+ * Enter arrived — a likely cause of the terminating Enter "never arriving"
+ * seen earlier against the NETUM NT-EM61 (not yet re-verified on hardware).
  *
- * KNOWN BUG (unresolved, deferred): against the physical NETUM NT-EM61,
- * scans reliably land as text but the terminating Enter has not been
- * reliably observed reaching a handler in this app — even though a plain
- * vanilla <textarea> with a raw addEventListener (tested via MDN's
- * KeyboardEvent.key demo) does receive a proper Enter keydown/keyup pair,
- * so the hardware and browser are not at fault. Not yet root-caused;
- * revisit before wiring this into the real timekeeper screen. Manual
- * shooter selection is unaffected and stays the primary supported path
- * until this is fixed.
+ * Returns a cleanup function.
  */
 export function createScanCapture(onScan: (event: ScanEvent) => void, options: ScanCaptureOptions = {}): () => void {
   const { maxKeystrokeGapMs, minCodeLength } = { ...DEFAULT_OPTIONS, ...options };
@@ -60,9 +63,13 @@ export function createScanCapture(onScan: (event: ScanEvent) => void, options: S
   let lastKeystrokeAtMs = 0;
 
   function handleKeyDown(event: KeyboardEvent): void {
+    if (IGNORED_KEYS.has(event.key)) {
+      return;
+    }
+
     const now = Date.now();
 
-    if (event.key === 'Enter') {
+    if (isEnterKey(event)) {
       // Read the buffer as-is — the terminator's own arrival gap isn't
       // meaningful burst timing (some scanners pace it differently from the
       // payload characters), so it must never trigger the reset below.

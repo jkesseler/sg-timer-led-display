@@ -5,6 +5,7 @@ import { useAppSelector } from '@/store/store';
 import { selectSplitsView } from '@/store/timekeeperSelectors';
 import { AbsentList, LateShooterForm, OutstandingList, UnassignedResults } from './ListSections';
 import { Queue } from './Queue';
+import { ScanCapture } from './ScanCapture';
 import { Message, Roster, ScanForm, SquadStatusCard, SquadTabs, StatusLine } from './StatusSections';
 
 const SplitsPane = () => {
@@ -20,6 +21,7 @@ const SplitsPane = () => {
 /** Layout only: every section reads its own data from the store. */
 export const TimekeeperBoard = () => (
   <div className="tk-layout">
+    <ScanCapture />
     <div className="tk-main">
       <StatusLine />
       <SquadTabs />

@@ -9,6 +9,7 @@ import { serverConfigLoaded } from './settingsSlice';
 import { getLocalMatchState, resolveInitialMatch } from './syncMiddleware';
 import {
   selectAbsentCardIds,
+  selectActiveTurn,
   selectDqDialog,
   selectEditor,
   selectLateShooterView,
@@ -63,10 +64,10 @@ export const loadTimekeeper = (): AppThunk<Promise<void>> => async (dispatch) =>
   }
 };
 
-/** Arms the scanned shooter's next round, preferring their card in the selected squad. */
-export const submitScan = (): AppThunk => (dispatch, getState) => {
+/** Arms the next round of the shooter with this KNSA number, preferring their card in the selected squad. */
+const armByKnsa = (knsaNumber: string): AppThunk => (dispatch, getState) => {
   const state = getState();
-  const code = selectScanCode(state).trim();
+  const code = knsaNumber.trim();
   const match = selectMatch(state);
   dispatch(scanCodeChanged(''));
 
@@ -91,6 +92,25 @@ export const submitScan = (): AppThunk => (dispatch, getState) => {
   dispatch(messageShown(null));
   dispatch(squadSelected(card.squadId));
   dispatch(armTurn({ cardId: card.id, round }));
+};
+
+/** The KNSA number typed into the scan form. */
+export const submitScan = (): AppThunk => (dispatch, getState) => {
+  dispatch(armByKnsa(selectScanCode(getState())));
+};
+
+/**
+ * A card read by the barcode scanner. The capture is switched off while a
+ * shooter is armed; this guard covers a scan that lands in the same tick.
+ */
+export const handleScannedCard = (code: string): AppThunk => (dispatch, getState) => {
+  if (selectActiveTurn(getState())) {
+    dispatch(scanCodeChanged(''));
+
+    return;
+  }
+
+  dispatch(armByKnsa(code));
 };
 
 export const saveEditorTime = (): AppThunk => (dispatch, getState) => {
