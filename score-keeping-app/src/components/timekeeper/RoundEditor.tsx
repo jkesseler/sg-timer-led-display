@@ -1,10 +1,19 @@
 'use client';
 
-import { useState } from 'react';
-import { parseTimeInput } from '@/lib/match/derive';
-import { armTurn, flagDnf, flagRs, setReshootTime, setRoundStatus, setRoundTime } from '@/store/matchSlice';
-import { useAppDispatch } from '@/store/store';
-import type { Card, RoundStatus } from '@/lib/match/types';
+import { useId } from 'react';
+import { useAppDispatch, useAppSelector } from '@/store/store';
+import { selectEditor, selectRoundEditorView } from '@/store/timekeeperSelectors';
+import { editorReshootTextChanged, editorTimeTextChanged, roundEditorClosed } from '@/store/timekeeperSlice';
+import {
+  armEditorRound,
+  clearEditorReshoot,
+  clearEditorTime,
+  saveEditorReshoot,
+  saveEditorTime,
+  setEditorRoundStatus
+} from '@/store/timekeeperThunks';
+import type { RoundStatus } from '@/lib/match/types';
+import type { RoundEditorView as RoundEditorData } from '@/store/timekeeperSelectors';
 
 const STATUS_BUTTONS: { status: RoundStatus; label: string }[] = [
   { status: 'pending', label: 'Pending' },
@@ -14,147 +23,120 @@ const STATUS_BUTTONS: { status: RoundStatus; label: string }[] = [
   { status: 'skipped', label: 'Skipped' }
 ];
 
-// Seconds with full ms precision, so saving an untouched value never changes it.
-function toSecondsText(timeMs: number | null): string {
-  return timeMs === null ? '' : String(timeMs / 1000);
-}
-
-interface RoundEditorProps {
-  card: Card;
-  roundNumber: number;
+interface RoundEditorViewProps extends RoundEditorData {
+  onStatusChange: (status: RoundStatus) => void;
+  onTimeTextChange: (text: string) => void;
+  onSaveTime: () => void;
+  onClearTime: () => void;
+  onReshootTextChange: (text: string) => void;
+  onSaveReshoot: () => void;
+  onClearReshoot: () => void;
+  onArm: () => void;
   onClose: () => void;
 }
 
-export const RoundEditor = ({ card, roundNumber, onClose }: RoundEditorProps) => {
-  const dispatch = useAppDispatch();
-  const round = card.rounds.find(candidate => candidate.n === roundNumber);
-  const [timeText, setTimeText] = useState(toSecondsText(round?.timeMs ?? null));
-  const [reshootText, setReshootText] = useState(toSecondsText(round?.reshootTimeMs ?? null));
-  const [error, setError] = useState<string | null>(null);
-
-  if (!round) {
-    return null;
-  }
-
-  const ref = { cardId: card.id, round: round.n };
-
-  function handleSaveTime() {
-    const timeMs = parseTimeInput(timeText);
-    if (timeMs === null) {
-      setError('Enter a time in seconds, e.g. 12.34');
-
-      return;
-    }
-    setError(null);
-    dispatch(setRoundTime({ ...ref, timeMs }));
-  }
-
-  function handleSaveReshoot() {
-    const reshootTimeMs = parseTimeInput(reshootText);
-    if (reshootTimeMs === null) {
-      setError('Enter a time in seconds, e.g. 12.34');
-
-      return;
-    }
-    setError(null);
-    dispatch(setReshootTime({ ...ref, reshootTimeMs }));
-  }
-
-  function handleSetStatus(status: RoundStatus) {
-    if (status === 'rs') {
-      dispatch(flagRs(ref));
-
-      return;
-    }
-    if (status === 'dnf') {
-      dispatch(flagDnf(ref));
-
-      return;
-    }
-    dispatch(setRoundStatus({ ...ref, status }));
-  }
+export const RoundEditorView = ({
+  round,
+  shooterName,
+  status,
+  timeText,
+  reshootText,
+  error,
+  onStatusChange,
+  onTimeTextChange,
+  onSaveTime,
+  onClearTime,
+  onReshootTextChange,
+  onSaveReshoot,
+  onClearReshoot,
+  onArm,
+  onClose
+}: RoundEditorViewProps) => {
+  const timeInputId = useId();
+  const reshootInputId = useId();
 
   return (
     <div className="tk-round-editor">
-      <div className="tk-round-editor__title">
-        {card.shooterName}
-        {' '}
-        · round
-        {' '}
-        {round.n}
-      </div>
+      <div className="tk-round-editor__title">{`${shooterName} · round ${round}`}</div>
 
       <div className="tk-round-editor__group">
-        {STATUS_BUTTONS.map(({ status, label }) => (
+        {STATUS_BUTTONS.map(button => (
           <button
-            key={status}
+            key={button.status}
             type="button"
-            className={`tk-button tk-button--small${round.status === status ? ' tk-button--primary' : ''}`}
-            onClick={() => handleSetStatus(status)}
+            className={`tk-button tk-button--small${status === button.status ? ' tk-button--primary' : ''}`}
+            onClick={() => onStatusChange(button.status)}
           >
-            {label}
+            {button.label}
           </button>
         ))}
       </div>
 
       <div className="tk-round-editor__group">
-        <label className="tk-round-editor__label" htmlFor={`time-${card.id}-${round.n}`}>Time (s)</label>
+        <label className="tk-round-editor__label" htmlFor={timeInputId}>Time (s)</label>
         <input
-          id={`time-${card.id}-${round.n}`}
+          id={timeInputId}
           type="text"
           inputMode="decimal"
           className="tk-input tk-input--time"
           value={timeText}
-          onChange={event => setTimeText(event.target.value)}
+          onChange={event => onTimeTextChange(event.target.value)}
         />
-        <button type="button" className="tk-button tk-button--small" onClick={handleSaveTime}>Save time</button>
-        <button
-          type="button"
-          className="tk-button tk-button--small"
-          onClick={() => {
-            setTimeText('');
-            dispatch(setRoundTime({ ...ref, timeMs: null }));
-          }}
-        >
-          Clear time
-        </button>
+        <button type="button" className="tk-button tk-button--small" onClick={onSaveTime}>Save time</button>
+        <button type="button" className="tk-button tk-button--small" onClick={onClearTime}>Clear time</button>
       </div>
 
-      {round.status === 'rs' && (
+      {status === 'rs' && (
         <div className="tk-round-editor__group">
-          <label className="tk-round-editor__label" htmlFor={`reshoot-${card.id}-${round.n}`}>Reshoot (s)</label>
+          <label className="tk-round-editor__label" htmlFor={reshootInputId}>Reshoot (s)</label>
           <input
-            id={`reshoot-${card.id}-${round.n}`}
+            id={reshootInputId}
             type="text"
             inputMode="decimal"
             className="tk-input tk-input--time"
             value={reshootText}
-            onChange={event => setReshootText(event.target.value)}
+            onChange={event => onReshootTextChange(event.target.value)}
           />
-          <button type="button" className="tk-button tk-button--small" onClick={handleSaveReshoot}>Save reshoot</button>
-          <button
-            type="button"
-            className="tk-button tk-button--small"
-            onClick={() => {
-              setReshootText('');
-              dispatch(setReshootTime({ ...ref, reshootTimeMs: null }));
-            }}
-          >
-            Clear reshoot
-          </button>
+          <button type="button" className="tk-button tk-button--small" onClick={onSaveReshoot}>Save reshoot</button>
+          <button type="button" className="tk-button tk-button--small" onClick={onClearReshoot}>Clear reshoot</button>
         </div>
       )}
 
       {error && <div className="tk-error">{error}</div>}
 
       <div className="tk-round-editor__group">
-        <button type="button" className="tk-button tk-button--small tk-button--primary" onClick={() => dispatch(armTurn(ref))}>
+        <button type="button" className="tk-button tk-button--small tk-button--primary" onClick={onArm}>
           Arm this round
         </button>
-        <button type="button" className="tk-button tk-button--small" onClick={onClose}>
-          Close
-        </button>
+        <button type="button" className="tk-button tk-button--small" onClick={onClose}>Close</button>
       </div>
     </div>
+  );
+};
+
+/** The round editor for this card, if the open editor is on it. */
+export const RoundEditor = ({ cardId }: { cardId: string }) => {
+  const dispatch = useAppDispatch();
+  const editor = useAppSelector(selectEditor);
+  const editedRound = editor?.cardId === cardId ? editor.round : null;
+  const view = useAppSelector(state => (editedRound === null ? null : selectRoundEditorView(state, cardId, editedRound)));
+
+  if (!view) {
+    return null;
+  }
+
+  return (
+    <RoundEditorView
+      {...view}
+      onStatusChange={status => dispatch(setEditorRoundStatus(status))}
+      onTimeTextChange={text => dispatch(editorTimeTextChanged(text))}
+      onSaveTime={() => dispatch(saveEditorTime())}
+      onClearTime={() => dispatch(clearEditorTime())}
+      onReshootTextChange={text => dispatch(editorReshootTextChanged(text))}
+      onSaveReshoot={() => dispatch(saveEditorReshoot())}
+      onClearReshoot={() => dispatch(clearEditorReshoot())}
+      onArm={() => dispatch(armEditorRound())}
+      onClose={() => dispatch(roundEditorClosed())}
+    />
   );
 };

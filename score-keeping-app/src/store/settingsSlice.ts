@@ -77,6 +77,13 @@ export const settingsSlice = createSlice({
       storage.set(SETTINGS_STORAGE_KEY, mqttSettings);
     },
 
+    /** For pages that fetch the server's broker config after the store exists (the client-only timekeeper). */
+    serverConfigLoaded(state, action: PayloadAction<MqttServerConfig>) {
+      const { brightness } = state;
+
+      return { ...buildInitialSettings(action.payload), brightness };
+    },
+
     resetBrokerSettings(state) {
       storage.remove(SETTINGS_STORAGE_KEY);
       state.broker = state.defaults.broker;
@@ -116,6 +123,7 @@ export const selectMqttConnectionSettings = (state: RootState) => ({
 
 export const {
   updateSettings,
+  serverConfigLoaded,
   resetBrokerSettings,
   setBrightness,
   increaseBrightness,

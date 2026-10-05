@@ -1,0 +1,401 @@
+import { createSelector } from '@reduxjs/toolkit';
+import {
+  deriveCurrentRound,
+  deriveOutstanding,
+  deriveUpcomingShooters,
+  findCurrentSquadId,
+  findNextRoundToShoot,
+  formatRoundTimeMs,
+  formatScore,
+  getCardWarnings,
+  getSquadCards,
+  isReadyForSignOff
+} from '@/lib/match/derive';
+import { cardScore, isShooterDisqualified } from '@/lib/match/score';
+import { DisplayState } from '@/lib/mqtt/types';
+import type { CardWarning } from '@/lib/match/derive';
+import type { Card, Round, RoundStatus } from '@/lib/match/types';
+import { selectDisplayState, selectIsConnected, selectKnownDevices, selectShots } from './mqttSlice';
+import type { RootState } from './store';
+
+// Reselect 5's default memoizer caches per argument set, so the
+// parameterized selectors below keep one cached result per card / round.
+
+const EMPTY_CARDS: Card[] = [];
+
+const selectCardIdArgument = (_state: RootState, cardId: string) => cardId;
+const selectRoundArgument = (_state: RootState, _cardId: string, round: number) => round;
+
+// --- Raw slices ---------------------------------------------------------
+
+export const selectMatch = (state: RootState) => state.match.current;
+export const selectSyncStatus = (state: RootState) => state.match.syncStatus;
+export const selectTimekeeper = (state: RootState) => state.timekeeper;
+export const selectLoadStatus = (state: RootState) => state.timekeeper.loadStatus;
+export const selectLoadError = (state: RootState) => state.timekeeper.loadError;
+export const selectUserEmail = (state: RootState) => state.timekeeper.userEmail;
+export const selectMatchLabel = (state: RootState) => state.timekeeper.matchLabel;
+export const selectScanCode = (state: RootState) => state.timekeeper.scanCode;
+export const selectMessage = (state: RootState) => state.timekeeper.message;
+export const selectEditor = (state: RootState) => state.timekeeper.editor;
+export const selectDqDialog = (state: RootState) => state.timekeeper.dqDialog;
+export const selectLateShooterDraft = (state: RootState) => state.timekeeper.lateShooter;
+const selectShooters = (state: RootState) => state.timekeeper.shooters;
+const selectUnassignedDrafts = (state: RootState) => state.timekeeper.unassignedDrafts;
+const selectPickedSquadId = (state: RootState) => state.timekeeper.selectedSquadId;
+
+export const selectActiveTurn = (state: RootState) => state.match.current?.activeTurn ?? null;
+
+// --- Squad --------------------------------------------------------------
+
+/** The picked tab, else the squad in play, else the first squad. */
+export const selectSelectedSquadId = createSelector(
+  [selectMatch, selectPickedSquadId],
+  (match, pickedSquadId) => {
+    if (!match) {
+      return null;
+    }
+
+    return pickedSquadId ?? findCurrentSquadId(match) ?? match.squads[0]?.id ?? null;
+  }
+);
+
+export const selectSquads = createSelector([selectMatch], match => match?.squads ?? []);
+
+export const selectSelectedSquad = createSelector(
+  [selectSquads, selectSelectedSquadId],
+  (squads, squadId) => squads.find(squad => squad.id === squadId) ?? null
+);
+
+export const selectSquadCards = createSelector(
+  [selectMatch, selectSelectedSquadId],
+  (match, squadId) => (match && squadId ? getSquadCards(match, squadId) : EMPTY_CARDS)
+);
+
+export const selectPresentCards = createSelector([selectSquadCards], cards => cards.filter(card => card.presence === 'present'));
+export const selectAbsentCards = createSelector([selectSquadCards], cards => cards.filter(card => card.presence === 'absent'));
+export const selectPresentCardIds = createSelector([selectPresentCards], cards => cards.map(card => card.id));
+export const selectAbsentCardIds = createSelector([selectAbsentCards], cards => cards.map(card => card.id));
+
+export const selectCurrentRound = createSelector([selectSquadCards], cards => deriveCurrentRound(cards));
+
+export const selectActiveCard = createSelector(
+  [selectMatch, selectActiveTurn],
+  (match, activeTurn) => match?.cards.find(card => card.id === activeTurn?.cardId) ?? null
+);
+
+export const selectSquadStatusView = createSelector(
+  [selectSelectedSquad, selectCurrentRound, selectActiveTurn, selectActiveCard],
+  (squad, currentRound, activeTurn, activeCard) => {
+    if (!squad) {
+      return null;
+    }
+
+    return {
+      squadId: squad.id,
+      squadStatus: squad.status,
+      roundLabel: currentRound !== null ? `Round ${currentRound} of 5` : 'Reshoot / catch-up phase',
+      turn: activeTurn && activeCard
+        ? { verb: activeTurn.phase === 'running' ? 'Shooting' : 'Armed', shooterName: activeCard.shooterName, round: activeTurn.round }
+        : null
+    };
+  }
+);
+
+export const selectRoster = createSelector(
+  [selectSquadCards, selectCurrentRound, selectActiveTurn],
+  (cards, currentRound, activeTurn) => {
+    const { next, onDeck } = deriveUpcomingShooters(cards, currentRound, activeTurn?.cardId ?? null);
+
+    return { nextName: next?.shooterName ?? null, onDeckName: onDeck?.shooterName ?? null };
+  }
+);
+
+export const selectOutstanding = createSelector(
+  [selectSquadCards, selectCurrentRound],
+  (cards, currentRound) =>
+    currentRound === null
+      ? deriveOutstanding(cards).map(item => ({
+          cardId: item.card.id,
+          shooterName: item.card.shooterName,
+          round: item.round,
+          kindLabel: item.kind === 'rs' ? 'reshoot' : 'catch-up'
+        }))
+      : []
+);
+
+export const selectAbsentRows = createSelector(
+  [selectAbsentCards],
+  cards => cards.map(card => ({ cardId: card.id, shooterName: card.shooterName }))
+);
+
+// --- Status line --------------------------------------------------------
+
+export const selectStatusLine = createSelector(
+  [selectSyncStatus, selectMatch, selectKnownDevices, selectIsConnected],
+  (syncStatus, match, knownDevices, isBrokerConnected) => {
+    const deviceId = match?.deviceId ?? null;
+    const timer = knownDevices.find(device => device.deviceId === deviceId);
+
+    return { syncStatus, deviceId, isTimerOnline: timer?.presence === 'online', isBrokerConnected };
+  }
+);
+
+// --- Live timer ---------------------------------------------------------
+
+export const selectLiveTimeMs = createSelector(
+  [selectActiveTurn, selectDisplayState, selectShots],
+  (activeTurn, displayState, shots) => {
+    const hasLiveShots = activeTurn?.phase === 'running' && displayState !== DisplayState.SESSION_ENDED && shots.length > 0;
+
+    return hasLiveShots ? shots[shots.length - 1].absoluteTimeMs : null;
+  }
+);
+
+export const selectSplitsView = createSelector(
+  [selectShots, selectDisplayState],
+  (shots, displayState) => ({ shots, highlightExtremes: displayState === DisplayState.SESSION_ENDED })
+);
+
+// --- Card rows ----------------------------------------------------------
+
+const WARNING_LABELS: Record<CardWarning, string> = {
+  'multiple-rs': 'more than one RS',
+  'signed-with-open-rounds': 'signed with open rounds'
+};
+
+export interface RoundCellView {
+  n: number;
+  label: string;
+  modifier: RoundStatus | 'live';
+  isArmed: boolean;
+  isEditing: boolean;
+}
+
+function describeRound(round: Round, liveTimeMs: number | null): Pick<RoundCellView, 'label' | 'modifier'> {
+  if (liveTimeMs !== null) {
+    return { label: formatRoundTimeMs(liveTimeMs), modifier: 'live' };
+  }
+
+  switch (round.status) {
+    case 'timed':
+      return { label: round.timeMs !== null ? formatRoundTimeMs(round.timeMs) : '—', modifier: 'timed' };
+    case 'rs':
+      return { label: round.reshootTimeMs !== null ? `RS ${formatRoundTimeMs(round.reshootTimeMs)}` : 'RS', modifier: 'rs' };
+    case 'dnf':
+      return { label: '--:--', modifier: 'dnf' };
+    case 'skipped':
+      return { label: '—', modifier: 'skipped' };
+    case 'pending':
+      return { label: '—', modifier: 'pending' };
+  }
+}
+
+export const selectCardById = createSelector(
+  [selectMatch, selectCardIdArgument],
+  (match, cardId) => match?.cards.find(card => card.id === cardId) ?? null
+);
+
+// Primitive per-card inputs: a change elsewhere in the match leaves them equal, so the row view stays cached.
+const selectIsCardActive = (state: RootState, cardId: string) => state.match.current?.activeTurn?.cardId === cardId;
+const selectArmedRoundForCard = (state: RootState, cardId: string) =>
+  selectIsCardActive(state, cardId) ? state.match.current?.activeTurn?.round ?? null : null;
+const selectLiveRoundForCard = (state: RootState, cardId: string) => {
+  const activeTurn = state.match.current?.activeTurn;
+
+  return activeTurn?.cardId === cardId && activeTurn.phase === 'running' ? activeTurn.round : null;
+};
+const selectLiveTimeMsForCard = (state: RootState, cardId: string) =>
+  selectLiveRoundForCard(state, cardId) === null ? null : selectLiveTimeMs(state);
+const selectEditedRoundForCard = (state: RootState, cardId: string) =>
+  state.timekeeper.editor?.cardId === cardId ? state.timekeeper.editor.round : null;
+const selectIsCardDisqualified = (state: RootState, cardId: string) => {
+  const match = state.match.current;
+  const card = selectCardById(state, cardId);
+
+  return match !== null && card !== null && isShooterDisqualified(match, card.shooterId);
+};
+const selectCardScoreText = (state: RootState, cardId: string) => {
+  const match = state.match.current;
+  const card = selectCardById(state, cardId);
+
+  return match && card ? formatScore(cardScore(match, card)) : '—';
+};
+
+export interface CardRowView {
+  cardId: string;
+  shooterId: string;
+  shooterName: string;
+  discipline: string | null;
+  nextRound: number | null;
+  isActive: boolean;
+  isDisqualified: boolean;
+  isSignedOff: boolean;
+  isReadyForSignOff: boolean;
+  scoreText: string;
+  warnings: string[];
+  rounds: RoundCellView[];
+}
+
+export const selectCardRowView = createSelector(
+  [
+    selectCardById,
+    selectIsCardActive,
+    selectArmedRoundForCard,
+    selectLiveRoundForCard,
+    selectLiveTimeMsForCard,
+    selectEditedRoundForCard,
+    selectIsCardDisqualified,
+    selectCardScoreText
+  ],
+  (card, isActive, armedRound, liveRound, liveTimeMs, editedRound, isDisqualified, scoreText): CardRowView | null => {
+    if (!card) {
+      return null;
+    }
+
+    return {
+      cardId: card.id,
+      shooterId: card.shooterId,
+      shooterName: card.shooterName,
+      // Absent on cards saved before discipline moved from squad to member.
+      discipline: card.discipline ?? null,
+      nextRound: findNextRoundToShoot(card),
+      isActive,
+      isDisqualified,
+      isSignedOff: card.signedOffAt !== null,
+      isReadyForSignOff: isReadyForSignOff(card),
+      scoreText,
+      warnings: getCardWarnings(card).map(warning => WARNING_LABELS[warning]),
+      rounds: card.rounds.map(round => ({
+        n: round.n,
+        ...describeRound(round, liveRound === round.n ? liveTimeMs : null),
+        isArmed: armedRound === round.n,
+        isEditing: editedRound === round.n
+      }))
+    };
+  }
+);
+
+export const selectIsEditorOpenForCard = (state: RootState, cardId: string) => selectEditedRoundForCard(state, cardId) !== null;
+
+export const selectDqDialogForCard = createSelector(
+  [selectDqDialog, selectCardById, selectCardIdArgument],
+  (dqDialog, card, cardId) =>
+    dqDialog?.cardId === cardId && card ? { shooterName: card.shooterName, reason: dqDialog.reason } : null
+);
+
+// --- Round editor -------------------------------------------------------
+
+// Seconds with full ms precision, so saving an untouched value never changes it.
+export function toSecondsText(timeMs: number | null): string {
+  return timeMs === null ? '' : String(timeMs / 1000);
+}
+
+export const selectRound = createSelector(
+  [selectCardById, selectRoundArgument],
+  (card, round) => card?.rounds.find(candidate => candidate.n === round) ?? null
+);
+
+/** What the time input shows for this round: the draft while typing, else the stored time. */
+export const selectRoundTimeText = createSelector(
+  [selectRound, selectEditor, selectCardIdArgument, selectRoundArgument],
+  (round, editor, cardId, roundNumber) => {
+    const isEditingThisRound = editor?.cardId === cardId && editor.round === roundNumber;
+    if (isEditingThisRound && editor.timeText !== null) {
+      return editor.timeText;
+    }
+
+    return toSecondsText(round?.timeMs ?? null);
+  }
+);
+
+/** Same for the reshoot input. */
+export const selectRoundReshootText = createSelector(
+  [selectRound, selectEditor, selectCardIdArgument, selectRoundArgument],
+  (round, editor, cardId, roundNumber) => {
+    const isEditingThisRound = editor?.cardId === cardId && editor.round === roundNumber;
+    if (isEditingThisRound && editor.reshootText !== null) {
+      return editor.reshootText;
+    }
+
+    return toSecondsText(round?.reshootTimeMs ?? null);
+  }
+);
+
+export interface RoundEditorView {
+  cardId: string;
+  round: number;
+  shooterName: string;
+  status: RoundStatus;
+  timeText: string;
+  reshootText: string;
+  error: string | null;
+}
+
+export const selectRoundEditorView = createSelector(
+  [
+    selectCardById,
+    selectRound,
+    selectRoundTimeText,
+    selectRoundReshootText,
+    selectEditor,
+    selectCardIdArgument,
+    selectRoundArgument
+  ],
+  (card, round, timeText, reshootText, editor, cardId, roundNumber): RoundEditorView | null => {
+    if (!card || !round) {
+      return null;
+    }
+
+    return {
+      cardId,
+      round: roundNumber,
+      shooterName: card.shooterName,
+      status: round.status,
+      timeText,
+      reshootText,
+      error: editor?.cardId === cardId && editor.round === roundNumber ? editor.error : null
+    };
+  }
+);
+
+// --- Late shooters ------------------------------------------------------
+
+export const selectLateShooterView = createSelector(
+  [selectShooters, selectSquadCards, selectLateShooterDraft, selectSelectedSquadId],
+  (shooters, squadCards, draft, squadId) => {
+    // A shooter can be in one squad once per discipline.
+    const available = shooters.filter(shooter =>
+      !squadCards.some(card => card.shooterId === shooter.id && card.discipline === draft.discipline));
+
+    return {
+      squadId,
+      shooters: available,
+      shooterId: available.some(shooter => shooter.id === draft.shooterId) ? draft.shooterId : '',
+      discipline: draft.discipline
+    };
+  }
+);
+
+// --- Unassigned results -------------------------------------------------
+
+export const selectUnassignedView = createSelector(
+  [selectMatch, selectUnassignedDrafts, selectPresentCards],
+  (match, drafts, presentCards) => {
+    const shooterOptions = presentCards.map(card => ({ cardId: card.id, shooterName: card.shooterName }));
+    const results = (match?.unassignedResults ?? []).map((result) => {
+      const draft = drafts[result.id] ?? {};
+      const cardId = draft.cardId && presentCards.some(card => card.id === draft.cardId) ? draft.cardId : shooterOptions[0]?.cardId ?? '';
+
+      return {
+        resultId: result.id,
+        timeText: formatRoundTimeMs(result.timeMs),
+        at: result.at,
+        cardId,
+        round: draft.round ?? 1
+      };
+    });
+
+    return { results, shooterOptions };
+  }
+);
