@@ -6,7 +6,7 @@ import { selectSplitsView } from '@/store/timekeeperSelectors';
 import { AbsentList, LateShooterForm, OutstandingList, UnassignedResults } from './ListSections';
 import { Queue } from './Queue';
 import { ScanCapture } from './ScanCapture';
-import { Message, Roster, ScanForm, SquadStatusCard, SquadTabs, StatusLine } from './StatusSections';
+import { Message, Roster, SquadStatusCard, SquadTabs, StatusLine } from './StatusSections';
 
 const SplitsPane = () => {
   const { shots, highlightExtremes } = useAppSelector(selectSplitsView);
@@ -28,7 +28,6 @@ export const TimekeeperBoard = () => (
       <SquadStatusCard />
       <Roster />
       <Message />
-      <ScanForm />
       <UnassignedResults />
       <Queue />
       <OutstandingList />

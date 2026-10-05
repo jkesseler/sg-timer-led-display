@@ -20,6 +20,12 @@ async function publishTimerSession(lastShotTimeMs: number): Promise<void> {
   await client.endAsync()
 }
 
+/** A barcode scanner types the digits ~10 ms apart and ends with Enter; no input needs focus. */
+async function scanCard(page: Page, knsaNumber: string): Promise<void> {
+  await page.keyboard.type(knsaNumber, { delay: 10 })
+  await page.keyboard.press('Enter')
+}
+
 async function logIn(page: Page): Promise<void> {
   await page.goto(`${baseURL}/timekeeper/login`)
   await page.fill('#email', 'admin@timer.tsd')
@@ -32,8 +38,7 @@ test('a scanned shooter\'s timer result lands on the card and survives a reload 
   await logIn(page)
   await expect(page.getByText('MQTT connected')).toBeVisible({ timeout: 15000 })
 
-  await page.fill('.tk-scan-input', '111111')
-  await page.click('button:has-text("Arm")')
+  await scanCard(page, '111111')
   await expect(page.locator('.tk-status-badge')).toContainText('Alex Rivera')
 
   await publishTimerSession(4321)
@@ -68,8 +73,7 @@ test('a timer result with nobody armed is kept as unassigned and can be assigned
 test('/display shows the shooter armed on the timekeeper board', async ({ page, browser }) => {
   await logIn(page)
   await expect(page.getByText('MQTT connected')).toBeVisible({ timeout: 15000 })
-  await page.fill('.tk-scan-input', '222222')
-  await page.click('button:has-text("Arm")')
+  await scanCard(page, '222222')
   await expect(page.locator('.tk-pill').first()).toHaveText('Saved')
 
   const client = await mqtt.connectAsync(brokerURL)

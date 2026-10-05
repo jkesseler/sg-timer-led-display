@@ -10,8 +10,8 @@ import {
   selectRoundTimeText,
   selectSelectedSquadId
 } from '@/store/timekeeperSelectors';
-import { editorTimeTextChanged, lateShooterChanged, loaded, roundEditorToggled, scanCodeChanged } from '@/store/timekeeperSlice';
-import { handleScannedCard, moveQueueCard, saveEditorTime, submitScan } from '@/store/timekeeperThunks';
+import { editorTimeTextChanged, lateShooterChanged, loaded, roundEditorToggled } from '@/store/timekeeperSlice';
+import { handleScannedCard, moveQueueCard, saveEditorTime } from '@/store/timekeeperThunks';
 import { buildCard, buildState } from './matchFixtures';
 import type { MatchState } from '@/lib/match/types';
 
@@ -109,15 +109,13 @@ describe('card row view', () => {
 });
 
 describe('scan', () => {
-  it('arms the next round of the scanned shooter and clears the input', () => {
+  it('arms the next round of the scanned shooter', () => {
     const store = buildStore(buildTwoCardMatch());
 
-    store.dispatch(scanCodeChanged(' 111 '));
-    store.dispatch(submitScan());
+    store.dispatch(handleScannedCard(' 111 '));
 
     const state = store.getState();
     expect(state.match.current?.activeTurn).toMatchObject({ cardId: 'a', round: 2 });
-    expect(state.timekeeper.scanCode).toBe('');
     expect(state.timekeeper.message).toBeNull();
     expect(selectSelectedSquadId(state)).toBe('squad-a');
   });
@@ -125,8 +123,7 @@ describe('scan', () => {
   it('reports an unknown KNSA number', () => {
     const store = buildStore(buildTwoCardMatch());
 
-    store.dispatch(scanCodeChanged('999'));
-    store.dispatch(submitScan());
+    store.dispatch(handleScannedCard('999'));
 
     expect(store.getState().timekeeper.message).toBe('No shooter with KNSA number 999 in this match.');
     expect(store.getState().match.current?.activeTurn).toBeNull();
@@ -138,11 +135,9 @@ describe('barcode scanner', () => {
     const store = buildStore(buildTwoCardMatch());
     expect(selectIsScannerListening(store.getState())).toBe(true);
 
-    store.dispatch(scanCodeChanged('222'));
     store.dispatch(handleScannedCard('222'));
 
     expect(store.getState().match.current?.activeTurn).toMatchObject({ cardId: 'b', round: 1 });
-    expect(store.getState().timekeeper.scanCode).toBe('');
     expect(selectIsScannerListening(store.getState())).toBe(false);
   });
 

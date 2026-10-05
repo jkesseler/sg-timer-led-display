@@ -43,7 +43,6 @@ export interface TimekeeperState {
   shooters: ShooterOption[];
   /** The tab the timekeeper picked; null follows the squad in play. */
   selectedSquadId: string | null;
-  scanCode: string;
   message: string | null;
   editor: RoundEditorState | null;
   dqDialog: DqDialogState | null;
@@ -58,7 +57,6 @@ const initialState: TimekeeperState = {
   matchLabel: null,
   shooters: [],
   selectedSquadId: null,
-  scanCode: '',
   message: null,
   editor: null,
   dqDialog: null,
@@ -92,9 +90,6 @@ export const timekeeperSlice = createSlice({
       state.selectedSquadId = action.payload;
     },
 
-    scanCodeChanged(state, action: PayloadAction<string>) {
-      state.scanCode = action.payload;
-    },
     messageShown(state, action: PayloadAction<string | null>) {
       state.message = action.payload;
     },
@@ -182,7 +177,6 @@ export const {
   loaded,
   loadFailed,
   squadSelected,
-  scanCodeChanged,
   messageShown,
   roundEditorToggled,
   roundEditorClosed,

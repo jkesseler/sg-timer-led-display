@@ -6,17 +6,14 @@ import {
   selectIsScannerListening,
   selectMessage,
   selectRoster,
-  selectScanCode,
   selectSelectedSquadId,
   selectSquadStatusView,
   selectSquads,
   selectStatusLine
 } from '@/store/timekeeperSelectors';
-import { scanCodeChanged, squadSelected } from '@/store/timekeeperSlice';
-import { submitScan } from '@/store/timekeeperThunks';
+import { squadSelected } from '@/store/timekeeperSlice';
 import type { MatchSquad, SquadStatus } from '@/lib/match/types';
 import type { SyncStatus } from '@/store/matchSlice';
-import type { FormEvent } from 'react';
 
 const SYNC_LABELS: Record<SyncStatus, string> = {
   synced: 'Saved',
@@ -33,9 +30,11 @@ interface StatusLineViewProps {
   deviceId: string | null;
   isTimerOnline: boolean;
   isBrokerConnected: boolean;
+  /** The barcode scanner arms shooters only while nobody is armed. */
+  isScannerListening: boolean;
 }
 
-export const StatusLineView = ({ syncStatus, deviceId, isTimerOnline, isBrokerConnected }: StatusLineViewProps) => (
+export const StatusLineView = ({ syncStatus, deviceId, isTimerOnline, isBrokerConnected, isScannerListening }: StatusLineViewProps) => (
   <div className="tk-status-line">
     <span className={`tk-pill tk-pill--${syncStatus}`}>{SYNC_LABELS[syncStatus]}</span>
     <span className={`tk-pill${isTimerOnline ? ' tk-pill--synced' : ' tk-pill--error'}`}>
@@ -44,10 +43,15 @@ export const StatusLineView = ({ syncStatus, deviceId, isTimerOnline, isBrokerCo
     <span className={`tk-pill${isBrokerConnected ? ' tk-pill--synced' : ' tk-pill--error'}`}>
       {`MQTT ${isBrokerConnected ? 'connected' : 'disconnected'}`}
     </span>
+    <span className={`tk-pill${isScannerListening ? ' tk-pill--synced' : ''}`}>
+      {isScannerListening ? 'Scanner ready' : 'Scanner paused: shooter armed'}
+    </span>
   </div>
 );
 
-export const StatusLine = () => <StatusLineView {...useAppSelector(selectStatusLine)} />;
+export const StatusLine = () => (
+  <StatusLineView {...useAppSelector(selectStatusLine)} isScannerListening={useAppSelector(selectIsScannerListening)} />
+);
 
 // --- Squad tabs ---------------------------------------------------------
 
@@ -177,53 +181,3 @@ export const MessageView = ({ message }: { message: string | null }) =>
   message ? <div className="tk-error">{message}</div> : null;
 
 export const Message = () => <MessageView message={useAppSelector(selectMessage)} />;
-
-// --- Scan ---------------------------------------------------------------
-
-interface ScanFormViewProps {
-  code: string;
-  /** False while a shooter is armed: neither the scanner nor the form may replace the active turn. */
-  isListening: boolean;
-  onCodeChange: (code: string) => void;
-  onSubmit: () => void;
-}
-
-export const ScanFormView = ({ code, isListening, onCodeChange, onSubmit }: ScanFormViewProps) => {
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    onSubmit();
-  }
-
-  return (
-    <section className="tk-card">
-      <div className="tk-section-title">Scan or enter KNSA number</div>
-      <form onSubmit={handleSubmit} className="tk-scan-form">
-        <input
-          type="text"
-          className="tk-scan-input"
-          value={code}
-          onChange={event => onCodeChange(event.target.value)}
-          placeholder={isListening ? 'scan card or type KNSA number' : 'finish or cancel the current turn first'}
-          aria-label="KNSA number"
-          disabled={!isListening}
-          autoFocus
-        />
-        <button type="submit" className="tk-button tk-button--primary" disabled={!isListening}>Arm</button>
-      </form>
-      <p className="tk-muted">{isListening ? 'Scanner ready' : 'Scanner paused while a shooter is armed'}</p>
-    </section>
-  );
-};
-
-export const ScanForm = () => {
-  const dispatch = useAppDispatch();
-
-  return (
-    <ScanFormView
-      code={useAppSelector(selectScanCode)}
-      isListening={useAppSelector(selectIsScannerListening)}
-      onCodeChange={code => dispatch(scanCodeChanged(code))}
-      onSubmit={() => dispatch(submitScan())}
-    />
-  );
-};

@@ -35,7 +35,6 @@ export const selectLoadStatus = (state: RootState) => state.timekeeper.loadStatu
 export const selectLoadError = (state: RootState) => state.timekeeper.loadError;
 export const selectUserEmail = (state: RootState) => state.timekeeper.userEmail;
 export const selectMatchLabel = (state: RootState) => state.timekeeper.matchLabel;
-export const selectScanCode = (state: RootState) => state.timekeeper.scanCode;
 export const selectMessage = (state: RootState) => state.timekeeper.message;
 export const selectEditor = (state: RootState) => state.timekeeper.editor;
 export const selectDqDialog = (state: RootState) => state.timekeeper.dqDialog;
