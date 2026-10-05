@@ -2,7 +2,7 @@ import { createSlice } from '@reduxjs/toolkit';
 import { DISCIPLINES } from '@/lib/domain/disciplines';
 import type { ShooterOption } from '@/lib/match/bootstrap';
 import type { Discipline } from '@/lib/domain/disciplines';
-import { addCard, assignResult, discardUnassignedResult, disqualify, setReshootTime, setRoundTime } from './matchSlice';
+import { addCard, assignResult, discardUnassignedResult, disqualify, setReshootTime, setRoundTime, signOff } from './matchSlice';
 import type { PayloadAction } from '@reduxjs/toolkit';
 
 export type TimekeeperLoadStatus = 'loading' | 'ready' | 'no-match' | 'error';
@@ -35,6 +35,15 @@ export interface LateShooterDraft {
   discipline: Discipline;
 }
 
+/**
+ * A score sheet waiting to be printed. `requestNumber` grows with every
+ * request, so reprinting the same card is a new request too.
+ */
+export interface PrintRequest {
+  cardId: string;
+  requestNumber: number;
+}
+
 export interface TimekeeperState {
   loadStatus: TimekeeperLoadStatus;
   loadError: string | null;
@@ -48,6 +57,8 @@ export interface TimekeeperState {
   dqDialog: DqDialogState | null;
   lateShooter: LateShooterDraft;
   unassignedDrafts: Record<string, UnassignedDraft>;
+  printRequest: PrintRequest | null;
+  printRequestCount: number;
 }
 
 const initialState: TimekeeperState = {
@@ -61,8 +72,15 @@ const initialState: TimekeeperState = {
   editor: null,
   dqDialog: null,
   lateShooter: { shooterId: '', discipline: DISCIPLINES[0] },
-  unassignedDrafts: {}
+  unassignedDrafts: {},
+  printRequest: null,
+  printRequestCount: 0
 };
+
+function requestPrint(state: TimekeeperState, cardId: string) {
+  state.printRequestCount += 1;
+  state.printRequest = { cardId, requestNumber: state.printRequestCount };
+}
 
 interface LoadedPayload {
   userEmail: string;
@@ -140,6 +158,17 @@ export const timekeeperSlice = createSlice({
       state.unassignedDrafts[resultId] = { ...state.unassignedDrafts[resultId], ...draft };
     },
 
+    /** Reprint of a signed card's score sheet. */
+    scoreSheetPrintRequested(state, action: PayloadAction<string>) {
+      requestPrint(state, action.payload);
+    },
+    /** The browser has printed (or the print was cancelled). */
+    scoreSheetPrinted(state, action: PayloadAction<number>) {
+      if (state.printRequest?.requestNumber === action.payload) {
+        state.printRequest = null;
+      }
+    },
+
     /** Called on page unmount; a fresh visit starts with no leftover UI state. */
     timekeeperReset: () => initialState
   },
@@ -157,6 +186,10 @@ export const timekeeperSlice = createSlice({
           state.editor.reshootText = null;
           state.editor.error = null;
         }
+      })
+      // Signing off prints the shooter's score sheet.
+      .addCase(signOff, (state, action) => {
+        requestPrint(state, action.payload.cardId);
       })
       .addCase(disqualify, (state) => {
         state.dqDialog = null;
@@ -188,5 +221,7 @@ export const {
   dqDialogClosed,
   lateShooterChanged,
   unassignedDraftChanged,
+  scoreSheetPrintRequested,
+  scoreSheetPrinted,
   timekeeperReset
 } = timekeeperSlice.actions;

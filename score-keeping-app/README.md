@@ -123,6 +123,29 @@ All document IDs are UUIDs.
   `Next:`/`On deck:` names come from the saved match state (polled every 3 s).
 - **`/admin`**: Payload admin for setup data.
 
+## Printing score sheets
+
+Signing off a card prints its score sheet (A6: match, squad, shooter, KNSA
+number, discipline, the five rounds with the three counted ones marked, the
+score, a DQ notice and signature lines). Signed cards have a **Reprint**
+button. The page calls the browser's print, so any printer with a driver works;
+the sheet is meant for a 4x6" / A6 direct-thermal label printer.
+
+To print without a dialog in Firefox, use a separate profile for the
+timekeeper (`about:profiles`, or `firefox -P timekeeper`), because the setting
+applies to everything printed from that profile:
+
+1. Make the label printer the default printer, print one sheet by hand with
+   the label paper size and scale 100%, and under "More settings" untick
+   "Print headers and footers" (otherwise Firefox prints the URL and page
+   title on the sheet). Firefox keeps these settings per printer.
+2. In `about:config`, set `print.always_print_silent` to `true` (and
+   optionally `print.show_print_progress` to `false`).
+
+In Chrome or Edge, start the browser with `--kiosk-printing` instead. The page
+size is set in `src/app/timekeeper/timekeeper.css` (`@page`, 105 x 148 mm);
+change it if the labels are another size, e.g. 101.6 x 152.4 mm for 4x6".
+
 ## Scripts
 
 - `npm run dev`: Next.js dev server.

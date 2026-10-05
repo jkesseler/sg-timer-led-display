@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { addCard, armTurn, cancelTurn, hydrate, setRoundTime } from '@/store/matchSlice';
+import { addCard, armTurn, cancelTurn, disqualify, hydrate, setRoundTime, signOff } from '@/store/matchSlice';
 import { makeStore } from '@/store/store';
 import {
   selectCardRowView,
@@ -8,9 +8,17 @@ import {
   selectPresentCardIds,
   selectRoundEditorView,
   selectRoundTimeText,
+  selectScoreSheet,
   selectSelectedSquadId
 } from '@/store/timekeeperSelectors';
-import { editorTimeTextChanged, lateShooterChanged, loaded, roundEditorToggled } from '@/store/timekeeperSlice';
+import {
+  editorTimeTextChanged,
+  lateShooterChanged,
+  loaded,
+  roundEditorToggled,
+  scoreSheetPrinted,
+  scoreSheetPrintRequested
+} from '@/store/timekeeperSlice';
 import { handleScannedCard, moveQueueCard, saveEditorTime } from '@/store/timekeeperThunks';
 import { buildCard, buildState } from './matchFixtures';
 import type { MatchState } from '@/lib/match/types';
@@ -193,5 +201,90 @@ describe('late shooter form', () => {
     store.dispatch(addCard({ squadId: 'squad-a', shooterId: 'piet', shooterName: 'Piet', knsaNumber: null, discipline: 'OKP' }));
 
     expect(store.getState().timekeeper.lateShooter.shooterId).toBe('');
+  });
+});
+
+describe('score sheet printing', () => {
+  function buildFinishedMatch() {
+    return buildState([
+      buildCard({
+        id: 'a',
+        knsaNumber: '111',
+        discipline: 'SKP',
+        rounds: [
+          { status: 'timed', timeMs: 5000 },
+          { status: 'rs', timeMs: 3000, reshootTimeMs: 4000 },
+          { status: 'timed', timeMs: 6000 },
+          { status: 'dnf' },
+          { status: 'timed', timeMs: 7000 }
+        ]
+      }),
+      buildCard({ id: 'b', shooterId: 'shooter-a' })
+    ]);
+  }
+
+  it('requests a print when a card is signed off', () => {
+    const store = buildStore(buildFinishedMatch());
+
+    store.dispatch(signOff({ cardId: 'a' }));
+
+    expect(store.getState().timekeeper.printRequest).toEqual({ cardId: 'a', requestNumber: 1 });
+  });
+
+  it('makes a reprint of the same card a new request', () => {
+    const store = buildStore(buildFinishedMatch());
+    store.dispatch(signOff({ cardId: 'a' }));
+    store.dispatch(scoreSheetPrinted(1));
+
+    store.dispatch(scoreSheetPrintRequested('a'));
+
+    expect(store.getState().timekeeper.printRequest).toEqual({ cardId: 'a', requestNumber: 2 });
+  });
+
+  it('keeps a newer request when an older print finishes', () => {
+    const store = buildStore(buildFinishedMatch());
+    store.dispatch(signOff({ cardId: 'a' }));
+    store.dispatch(scoreSheetPrintRequested('b'));
+
+    store.dispatch(scoreSheetPrinted(1));
+
+    expect(store.getState().timekeeper.printRequest).toEqual({ cardId: 'b', requestNumber: 2 });
+  });
+
+  it('shows the rounds, the three counted rounds and the score', () => {
+    const store = buildStore(buildFinishedMatch());
+    store.dispatch(loaded({ userEmail: 'tk@example.com', matchLabel: 'Twente Shoot', shooters: [] }));
+    store.dispatch(signOff({ cardId: 'a' }));
+
+    const sheet = selectScoreSheet(store.getState(), 'a');
+
+    expect(sheet).toMatchObject({
+      matchLabel: 'Twente Shoot',
+      squadLabel: 'A',
+      squadTimes: '08:00 - 09:00',
+      knsaNumber: '111',
+      discipline: 'SKP',
+      scoreText: '05.00',
+      dqReason: null
+    });
+    expect(sheet?.rounds.map(round => [round.label, round.isCounted])).toEqual([
+      ['05.00', true],
+      ['RS 04.00', true],
+      ['06.00', true],
+      ['DNF', false],
+      ['07.00', false]
+    ]);
+    expect(sheet?.signedOffText).not.toBeNull();
+  });
+
+  it('marks a sheet voided by a DQ on another card of the shooter', () => {
+    const store = buildStore(buildFinishedMatch());
+
+    store.dispatch(disqualify({ cardId: 'b', reason: 'unsafe gun handling' }));
+
+    const sheet = selectScoreSheet(store.getState(), 'a');
+    expect(sheet?.scoreText).toBe('DQ');
+    expect(sheet?.dqReason).toBe('unsafe gun handling');
+    expect(sheet?.rounds.some(round => round.isCounted)).toBe(false);
   });
 });

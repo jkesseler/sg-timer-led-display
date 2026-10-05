@@ -5,7 +5,7 @@ import { CSS } from '@dnd-kit/utilities';
 import { armTurn, markAbsent, reinstate, signOff, unsign } from '@/store/matchSlice';
 import { useAppDispatch, useAppSelector } from '@/store/store';
 import { selectCardRowView } from '@/store/timekeeperSelectors';
-import { dqDialogOpened, roundEditorToggled } from '@/store/timekeeperSlice';
+import { dqDialogOpened, roundEditorToggled, scoreSheetPrintRequested } from '@/store/timekeeperSlice';
 import type { CardRowView as CardRowData } from '@/store/timekeeperSelectors';
 import { DqDialog } from './DqDialog';
 import { RoundEditor } from './RoundEditor';
@@ -35,6 +35,7 @@ interface CardRowViewProps {
   onReinstate: () => void;
   onSignOff: () => void;
   onUnsign: () => void;
+  onReprint: () => void;
   /** The DQ dialog and round editor, rendered below the row. */
   children?: ReactNode;
 }
@@ -50,6 +51,7 @@ export const CardRowView = ({
   onReinstate,
   onSignOff,
   onUnsign,
+  onReprint,
   children
 }: CardRowViewProps) => (
   <div ref={sortable.setNodeRef} style={sortable.style} className="tk-card-row">
@@ -99,7 +101,12 @@ export const CardRowView = ({
           ? <button type="button" className="tk-button tk-button--small" onClick={onReinstate}>Undo DQ</button>
           : <button type="button" className="tk-button tk-button--small tk-button--danger" onClick={onDisqualify}>DQ</button>}
         {card.isSignedOff
-          ? <button type="button" className="tk-button tk-button--small" onClick={onUnsign}>Unsign</button>
+          ? (
+              <>
+                <button type="button" className="tk-button tk-button--small" onClick={onReprint}>Reprint</button>
+                <button type="button" className="tk-button tk-button--small" onClick={onUnsign}>Unsign</button>
+              </>
+            )
           : (
               <button
                 type="button"
@@ -144,6 +151,7 @@ export const CardRow = ({ cardId, position }: { cardId: string; position: number
       onReinstate={() => dispatch(reinstate({ shooterId: card.shooterId }))}
       onSignOff={() => dispatch(signOff({ cardId }))}
       onUnsign={() => dispatch(unsign({ cardId }))}
+      onReprint={() => dispatch(scoreSheetPrintRequested(cardId))}
     >
       <DqDialog cardId={cardId} />
       <RoundEditor cardId={cardId} />

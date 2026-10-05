@@ -11,9 +11,10 @@ import {
   getSquadCards,
   isReadyForSignOff
 } from '@/lib/match/derive';
-import { cardScore, isShooterDisqualified } from '@/lib/match/score';
+import { cardScore, countableTimeMs, isShooterDisqualified } from '@/lib/match/score';
 import { DisplayState } from '@/lib/mqtt/types';
 import type { CardWarning } from '@/lib/match/derive';
+import type { CardScore } from '@/lib/match/score';
 import type { Card, Round, RoundStatus } from '@/lib/match/types';
 import { selectDisplayState, selectIsConnected, selectKnownDevices, selectShots } from './mqttSlice';
 import type { RootState } from './store';
@@ -399,5 +400,94 @@ export const selectUnassignedView = createSelector(
     });
 
     return { results, shooterOptions };
+  }
+);
+
+// --- Score sheet --------------------------------------------------------
+
+export const selectPrintRequest = (state: RootState) => state.timekeeper.printRequest;
+
+export interface ScoreSheetRound {
+  n: number;
+  label: string;
+  /** One of the three fastest rounds that make up the score. */
+  isCounted: boolean;
+}
+
+export interface ScoreSheetView {
+  matchLabel: string;
+  squadLabel: string;
+  squadTimes: string;
+  shooterName: string;
+  knsaNumber: string | null;
+  discipline: string | null;
+  rounds: ScoreSheetRound[];
+  scoreText: string;
+  dqReason: string | null;
+  warnings: string[];
+  signedOffText: string | null;
+}
+
+function describeSheetRound(round: Round): string {
+  switch (round.status) {
+    case 'timed':
+      return round.timeMs !== null ? formatRoundTimeMs(round.timeMs) : '—';
+    case 'rs':
+      return round.reshootTimeMs !== null ? `RS ${formatRoundTimeMs(round.reshootTimeMs)}` : 'RS';
+    case 'dnf':
+      return 'DNF';
+    case 'skipped':
+      return 'skipped';
+    case 'pending':
+      return '—';
+  }
+}
+
+/** The round numbers of the three fastest countable rounds; empty unless the card has a score (not pending, not DQ). */
+function findCountedRounds(card: Card, score: CardScore): Set<number> {
+  const countedRounds = new Set<number>();
+  if (score.status !== 'scored') {
+    return countedRounds;
+  }
+
+  const countable = card.rounds
+    .map(round => ({ n: round.n, timeMs: countableTimeMs(round) }))
+    .filter((round): round is { n: number; timeMs: number } => round.timeMs !== null)
+    .sort((a, b) => a.timeMs - b.timeMs);
+  for (const round of countable.slice(0, 3)) {
+    countedRounds.add(round.n);
+  }
+
+  return countedRounds;
+}
+
+const SIGNED_OFF_FORMAT = new Intl.DateTimeFormat('en-GB', { dateStyle: 'medium', timeStyle: 'short' });
+
+export const selectScoreSheet = createSelector(
+  [selectMatch, selectCardById, selectMatchLabel],
+  (match, card, matchLabel): ScoreSheetView | null => {
+    if (!match || !card) {
+      return null;
+    }
+
+    const squad = match.squads.find(candidate => candidate.id === card.squadId);
+    const dqCard = match.cards.find(candidate => candidate.shooterId === card.shooterId && candidate.dq !== null);
+    const score = cardScore(match, card);
+    const countedRounds = findCountedRounds(card, score);
+
+    return {
+      matchLabel: matchLabel ?? 'Match',
+      squadLabel: squad?.label ?? '',
+      // A squad without its own label already uses its times as the label.
+      squadTimes: squad && squad.label !== `${squad.start} - ${squad.end}` ? `${squad.start} - ${squad.end}` : '',
+      shooterName: card.shooterName,
+      knsaNumber: card.knsaNumber,
+      discipline: card.discipline ?? null,
+      rounds: card.rounds.map(round => ({ n: round.n, label: describeSheetRound(round), isCounted: countedRounds.has(round.n) })),
+      scoreText: formatScore(score),
+      dqReason: dqCard ? dqCard.dq?.reason || 'no reason given' : null,
+      warnings: getCardWarnings(card).map(warning => WARNING_LABELS[warning]),
+      signedOffText: card.signedOffAt ? SIGNED_OFF_FORMAT.format(new Date(card.signedOffAt)) : null
+    };
   }
 );

@@ -677,3 +677,166 @@
 .tk-card--warning {
   border-color: var(--signal-live-dim);
 }
+
+/* ---- Score sheet (print only) ----
+   Rendered at the end of <body> by ScoreSheetPrinter. A6 matches a 4x6"
+   (102x152 mm) label; black on white, no fills, for direct-thermal paper. */
+
+.tk-print-root {
+  display: none;
+}
+
+/* A6 as an explicit size: "A6" is not one of the standard named page sizes,
+   and Chromium ignores it. Set this to the label stock if it differs, e.g.
+   101.6mm 152.4mm for 4x6" labels; the printer driver's paper size must match. */
+/* No page margin: browsers print their headers and footers (URL, title,
+   date) in the margin, so Chromium leaves them out. The 5 mm spacing is
+   padding on .tk-print-root instead. Firefox follows its own print setting:
+   untick "Print headers and footers" once (see README). */
+@page {
+  size: 105mm 148mm;
+  margin: 0;
+}
+
+@media print {
+  /* The screen layout's min-height: 100vh is a whole page in print; in
+     Firefox that pushed the body onto a second, empty page. */
+  html,
+  body {
+    min-height: 0 !important;
+    height: auto !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    background: #fff !important;
+    color: #000 !important;
+  }
+
+  body > :not(.tk-print-root) {
+    display: none !important;
+  }
+
+  .tk-print-root {
+    display: block;
+    padding: 5mm;
+    break-after: avoid;
+  }
+}
+
+.tk-sheet {
+  display: flex;
+  flex-direction: column;
+  gap: 2.5mm;
+  /* Fixed, a little under the 138 mm inside the 5 mm padding, so the sheet
+     is always exactly one page and the signature lines sit at the bottom. */
+  height: 135mm;
+  overflow: hidden;
+  color: #000;
+  font-family: var(--font-ui), system-ui, sans-serif;
+  font-size: 10pt;
+  line-height: 1.25;
+  break-inside: avoid;
+}
+
+.tk-sheet__header {
+  border-bottom: 0.4mm solid #000;
+  padding-bottom: 1.5mm;
+}
+
+.tk-sheet__match {
+  font-size: 12pt;
+  font-weight: 700;
+}
+
+.tk-sheet__squad,
+.tk-sheet__meta,
+.tk-sheet__note,
+.tk-sheet__signed {
+  font-size: 9pt;
+}
+
+.tk-sheet__name {
+  font-size: 15pt;
+  font-weight: 700;
+}
+
+.tk-sheet__meta {
+  display: flex;
+  gap: 3mm;
+}
+
+.tk-sheet__discipline {
+  border: 0.3mm solid #000;
+  padding: 0 1.5mm;
+  font-family: var(--font-mono), monospace;
+}
+
+.tk-sheet__rounds {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: var(--font-mono), monospace;
+  font-size: 11pt;
+}
+
+.tk-sheet__rounds th,
+.tk-sheet__rounds td {
+  border-bottom: 0.2mm solid #000;
+  padding: 1mm 0;
+  text-align: left;
+}
+
+.tk-sheet__rounds th {
+  font-family: var(--font-ui), system-ui, sans-serif;
+  font-weight: 400;
+  font-size: 10pt;
+}
+
+.tk-sheet__round--counted td {
+  font-weight: 700;
+}
+
+.tk-sheet__counted-mark {
+  width: 6mm;
+  text-align: right !important;
+}
+
+.tk-sheet__score {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  border: 0.5mm solid #000;
+  padding: 1.5mm 2mm;
+  font-size: 12pt;
+}
+
+.tk-sheet__score strong {
+  font-family: var(--font-mono), monospace;
+  font-size: 18pt;
+}
+
+.tk-sheet__dq {
+  border: 0.5mm solid #000;
+  padding: 1mm 2mm;
+  font-weight: 700;
+}
+
+.tk-sheet__warning {
+  font-size: 9pt;
+  font-style: italic;
+}
+
+.tk-sheet__footer {
+  margin-top: auto;
+}
+
+.tk-sheet__signatures {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4mm;
+  margin-top: 10mm;
+}
+
+.tk-sheet__signature {
+  border-top: 0.3mm solid #000;
+  padding-top: 0.8mm;
+  font-size: 8pt;
+}
