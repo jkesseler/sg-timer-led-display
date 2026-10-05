@@ -167,7 +167,15 @@ const WARNING_LABELS: Record<CardWarning, string> = {
   'signed-with-open-rounds': 'signed with open rounds'
 };
 
+/**
+ * One cell in a card row: R1-R5, then one "RS" cell per reshoot. The round
+ * where a reshoot was requested shows only "RS"; its reshoot time goes in the
+ * extra cell after R5.
+ */
 export interface RoundCellView {
+  key: string;
+  heading: string;
+  /** The round the cell edits; a reshoot cell edits the round it was requested in. */
   n: number;
   label: string;
   modifier: RoundStatus | 'live';
@@ -184,7 +192,7 @@ function describeRound(round: Round, liveTimeMs: number | null): Pick<RoundCellV
     case 'timed':
       return { label: round.timeMs !== null ? formatRoundTimeMs(round.timeMs) : '—', modifier: 'timed' };
     case 'rs':
-      return { label: round.reshootTimeMs !== null ? `RS ${formatRoundTimeMs(round.reshootTimeMs)}` : 'RS', modifier: 'rs' };
+      return { label: 'RS', modifier: 'rs' };
     case 'dnf':
       return { label: '--:--', modifier: 'dnf' };
     case 'skipped':
@@ -192,6 +200,52 @@ function describeRound(round: Round, liveTimeMs: number | null): Pick<RoundCellV
     case 'pending':
       return { label: '—', modifier: 'pending' };
   }
+}
+
+function describeReshoot(round: Round, liveTimeMs: number | null): Pick<RoundCellView, 'label' | 'modifier'> {
+  if (liveTimeMs !== null) {
+    return { label: formatRoundTimeMs(liveTimeMs), modifier: 'live' };
+  }
+
+  return round.reshootTimeMs !== null
+    ? { label: formatRoundTimeMs(round.reshootTimeMs), modifier: 'timed' }
+    : { label: '—', modifier: 'pending' };
+}
+
+interface CellState {
+  armedRound: number | null;
+  liveRound: number | null;
+  liveTimeMs: number | null;
+  editedRound: number | null;
+}
+
+/** Arming or shooting an RS round means shooting its reshoot, so that shows on the reshoot cell. */
+function buildRoundCells(rounds: Round[], { armedRound, liveRound, liveTimeMs, editedRound }: CellState): RoundCellView[] {
+  const roundCells = rounds.map((round) => {
+    const isReshootRound = round.status === 'rs';
+    const isLive = liveRound === round.n && !isReshootRound;
+
+    return {
+      key: `R${round.n}`,
+      heading: `R${round.n}`,
+      n: round.n,
+      ...describeRound(round, isLive ? liveTimeMs : null),
+      isArmed: armedRound === round.n && !isReshootRound,
+      isEditing: editedRound === round.n
+    };
+  });
+  const reshootCells = rounds
+    .filter(round => round.status === 'rs')
+    .map(round => ({
+      key: `RS${round.n}`,
+      heading: 'RS',
+      n: round.n,
+      ...describeReshoot(round, liveRound === round.n ? liveTimeMs : null),
+      isArmed: armedRound === round.n,
+      isEditing: editedRound === round.n
+    }));
+
+  return [...roundCells, ...reshootCells];
 }
 
 export const selectCardById = createSelector(
@@ -269,12 +323,7 @@ export const selectCardRowView = createSelector(
       isReadyForSignOff: isReadyForSignOff(card),
       scoreText,
       warnings: getCardWarnings(card).map(warning => WARNING_LABELS[warning]),
-      rounds: card.rounds.map(round => ({
-        n: round.n,
-        ...describeRound(round, liveRound === round.n ? liveTimeMs : null),
-        isArmed: armedRound === round.n,
-        isEditing: editedRound === round.n
-      }))
+      rounds: buildRoundCells(card.rounds, { armedRound, liveRound, liveTimeMs, editedRound })
     };
   }
 );
@@ -407,8 +456,10 @@ export const selectUnassignedView = createSelector(
 
 export const selectPrintRequest = (state: RootState) => state.timekeeper.printRequest;
 
+/** A sheet row: Round 1-5, then one "RS" row per reshoot (as in the card row). */
 export interface ScoreSheetRound {
-  n: number;
+  key: string;
+  heading: string;
   label: string;
   /** One of the three fastest rounds that make up the score. */
   isCounted: boolean;
@@ -433,7 +484,7 @@ function describeSheetRound(round: Round): string {
     case 'timed':
       return round.timeMs !== null ? formatRoundTimeMs(round.timeMs) : '—';
     case 'rs':
-      return round.reshootTimeMs !== null ? `RS ${formatRoundTimeMs(round.reshootTimeMs)}` : 'RS';
+      return 'RS';
     case 'dnf':
       return 'DNF';
     case 'skipped':
@@ -461,6 +512,26 @@ function findCountedRounds(card: Card, score: CardScore): Set<number> {
   return countedRounds;
 }
 
+/** A reshoot's time counts, not the round it replaces, so the counted mark goes on the RS row. */
+function buildSheetRounds(rounds: Round[], countedRounds: Set<number>): ScoreSheetRound[] {
+  const roundRows = rounds.map(round => ({
+    key: `R${round.n}`,
+    heading: `Round ${round.n}`,
+    label: describeSheetRound(round),
+    isCounted: round.status !== 'rs' && countedRounds.has(round.n)
+  }));
+  const reshootRows = rounds
+    .filter(round => round.status === 'rs')
+    .map(round => ({
+      key: `RS${round.n}`,
+      heading: 'RS',
+      label: round.reshootTimeMs !== null ? formatRoundTimeMs(round.reshootTimeMs) : '—',
+      isCounted: countedRounds.has(round.n)
+    }));
+
+  return [...roundRows, ...reshootRows];
+}
+
 const SIGNED_OFF_FORMAT = new Intl.DateTimeFormat('en-GB', { dateStyle: 'medium', timeStyle: 'short' });
 
 export const selectScoreSheet = createSelector(
@@ -483,7 +554,7 @@ export const selectScoreSheet = createSelector(
       shooterName: card.shooterName,
       knsaNumber: card.knsaNumber,
       discipline: card.discipline ?? null,
-      rounds: card.rounds.map(round => ({ n: round.n, label: describeSheetRound(round), isCounted: countedRounds.has(round.n) })),
+      rounds: buildSheetRounds(card.rounds, countedRounds),
       scoreText: formatScore(score),
       dqReason: dqCard ? dqCard.dq?.reason || 'no reason given' : null,
       warnings: getCardWarnings(card).map(warning => WARNING_LABELS[warning]),

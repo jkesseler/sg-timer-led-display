@@ -38,10 +38,10 @@ export const ScoreSheetView = ({
     <table className="tk-sheet__rounds">
       <tbody>
         {rounds.map(round => (
-          <tr key={round.n} className={round.isCounted ? 'tk-sheet__round--counted' : undefined}>
-            <th scope="row">{`Round ${round.n}`}</th>
+          <tr key={round.key} className={round.isCounted ? 'tk-sheet__round--counted' : undefined}>
+            <th scope="row">{round.heading}</th>
             <td>{round.label}</td>
-            <td className="tk-sheet__counted-mark">{round.isCounted ? '✓' : ''}</td>
+            <td className="tk-sheet__counted-mark">{round.isCounted ? '★' : ''}</td>
           </tr>
         ))}
       </tbody>
@@ -51,7 +51,7 @@ export const ScoreSheetView = ({
       <span>Score</span>
       <strong>{scoreText}</strong>
     </section>
-    <p className="tk-sheet__note">Mean of the 3 fastest rounds (✓)</p>
+    <p className="tk-sheet__note">Score: mean of the 3 fastest rounds (★)</p>
 
     {dqReason && <p className="tk-sheet__dq">{`DISQUALIFIED: ${dqReason}`}</p>}
     {warnings.map(warning => <p key={warning} className="tk-sheet__warning">{`Note: ${warning}`}</p>)}

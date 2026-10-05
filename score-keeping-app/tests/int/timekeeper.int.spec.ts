@@ -106,6 +106,43 @@ describe('card row view', () => {
     expect(selectCardRowView(store.getState(), 'b')?.rounds[0]).toMatchObject({ label: '05.00', modifier: 'timed' });
   });
 
+  it('shows a reshoot as RS in its round and its time in an extra RS cell', () => {
+    const store = buildStore(buildState([buildCard({
+      id: 'a',
+      rounds: [
+        { status: 'timed', timeMs: 10110 },
+        { status: 'rs', timeMs: 9500, reshootTimeMs: 8990 },
+        { status: 'timed', timeMs: 10000 },
+        { status: 'timed', timeMs: 9860 },
+        { status: 'timed', timeMs: 9800 }
+      ]
+    })]));
+
+    const cells = selectCardRowView(store.getState(), 'a')?.rounds;
+
+    expect(cells?.map(cell => `${cell.heading} ${cell.label}`)).toEqual(['R1 10.11', 'R2 RS', 'R3 10.00', 'R4 09.86', 'R5 09.80', 'RS 08.99']);
+    expect(cells?.[5].n).toBe(2);
+  });
+
+  it('shows an armed reshoot on the RS cell, not on the round it replaces', () => {
+    const store = buildStore(buildState([buildCard({
+      id: 'a',
+      rounds: [{ status: 'timed', timeMs: 10110 }, { status: 'rs', timeMs: 9500 }, { status: 'pending' }, { status: 'pending' }, { status: 'pending' }]
+    })]));
+
+    store.dispatch(armTurn({ cardId: 'a', round: 2 }));
+
+    const cells = selectCardRowView(store.getState(), 'a')?.rounds;
+    expect(cells?.map(cell => [cell.heading, cell.label, cell.isArmed])).toEqual([
+      ['R1', '10.11', false],
+      ['R2', 'RS', false],
+      ['R3', '—', false],
+      ['R4', '—', false],
+      ['R5', '—', false],
+      ['RS', '—', true]
+    ]);
+  });
+
   it('marks the round being edited', () => {
     const store = buildStore(buildTwoCardMatch());
 
@@ -267,12 +304,13 @@ describe('score sheet printing', () => {
       scoreText: '05.00',
       dqReason: null
     });
-    expect(sheet?.rounds.map(round => [round.label, round.isCounted])).toEqual([
-      ['05.00', true],
-      ['RS 04.00', true],
-      ['06.00', true],
-      ['DNF', false],
-      ['07.00', false]
+    expect(sheet?.rounds.map(round => [round.heading, round.label, round.isCounted])).toEqual([
+      ['Round 1', '05.00', true],
+      ['Round 2', 'RS', false],
+      ['Round 3', '06.00', true],
+      ['Round 4', 'DNF', false],
+      ['Round 5', '07.00', false],
+      ['RS', '04.00', true]
     ]);
     expect(sheet?.signedOffText).not.toBeNull();
   });

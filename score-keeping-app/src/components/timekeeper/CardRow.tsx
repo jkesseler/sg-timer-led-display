@@ -74,7 +74,7 @@ export const CardRowView = ({
       <div className="tk-queue-row__rounds">
         {card.rounds.map(round => (
           <button
-            key={round.n}
+            key={round.key}
             type="button"
             className={joinClassNames(
               'tk-round-cell',
@@ -82,11 +82,11 @@ export const CardRowView = ({
               round.isArmed && 'tk-round-cell--armed',
               round.isEditing && 'tk-round-cell--editing'
             )}
-            title={`Round ${round.n}: edit`}
+            title={round.heading === 'RS' ? `Reshoot of round ${round.n}: edit` : `Round ${round.n}: edit`}
             aria-expanded={round.isEditing}
             onClick={() => onToggleRound(round.n)}
           >
-            <span className="tk-round-cell__number">{`R${round.n}`}</span>
+            <span className="tk-round-cell__number">{round.heading}</span>
             {round.label}
           </button>
         ))}
