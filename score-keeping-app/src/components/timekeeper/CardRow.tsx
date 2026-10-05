@@ -67,7 +67,8 @@ export const CardRowView = ({
       >
         {card.shooterName}
       </button>
-      {card.discipline && <span className="tk-queue-row__discipline">{card.discipline}</span>}
+      {/* Always rendered so the grid columns after it stay in place. */}
+      <span className="tk-queue-row__discipline">{card.discipline}</span>
       <div className="tk-queue-row__rounds">
         {card.rounds.map(round => (
           <button
@@ -91,7 +92,6 @@ export const CardRowView = ({
       <span className={joinClassNames('tk-score', card.isDisqualified && 'tk-score--dq')} title="Mean of the 3 fastest rounds">
         {card.scoreText}
       </span>
-      <div className="tk-queue-row__spacer" />
       <div className="tk-queue-row__actions">
         {card.warnings.map(warning => <span key={warning} className="tk-warning">{warning}</span>)}
         <button type="button" className="tk-button tk-button--small" onClick={onMarkAbsent}>Absent</button>

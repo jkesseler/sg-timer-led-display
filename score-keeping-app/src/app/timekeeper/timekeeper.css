@@ -244,15 +244,20 @@
 }
 
 .tk-queue {
-  display: flex;
-  flex-direction: column;
-  gap: 0.6rem;
+  /* The queue owns the columns; every row takes them over via subgrid, so a
+     column is as wide as its widest entry in any row and they all line up:
+     handle, position, name, discipline, rounds, score, actions. */
+  display: grid;
+  grid-template-columns: auto auto minmax(8rem, 1fr) auto auto minmax(4.5rem, auto) auto;
+  column-gap: 1rem;
+  row-gap: 0.6rem;
 }
 
 .tk-queue-row {
-  display: flex;
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: subgrid;
   align-items: center;
-  gap: 1rem;
   background: var(--surface-1);
   border: 1px solid var(--line);
   border-radius: 0.7rem;
@@ -300,7 +305,7 @@
   cursor: pointer;
   padding: 0.2rem 0;
   text-align: left;
-  min-width: 9rem;
+  overflow-wrap: anywhere;
 }
 
 .tk-queue-row__name:hover:not(:disabled) {
@@ -319,7 +324,12 @@
   background: var(--surface-2);
   border-radius: 4px;
   padding: 0.2rem 0.5rem;
-  flex-shrink: 0;
+  justify-self: start;
+  white-space: nowrap;
+}
+
+.tk-queue-row__discipline:empty {
+  visibility: hidden;
 }
 
 .tk-queue-row__rounds {
@@ -380,14 +390,10 @@
   animation: tk-pulse 1.2s ease-in-out infinite;
 }
 
-.tk-queue-row__spacer {
-  flex: 1;
-}
-
 .tk-queue-row__actions {
   display: flex;
   gap: 0.5rem;
-  flex-shrink: 0;
+  justify-self: end;
 }
 
 .tk-signed-tag {
@@ -566,9 +572,15 @@
 /* ---- Cards, rounds and inline editing ---- */
 
 .tk-card-row {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: subgrid;
+  row-gap: 0.5rem;
+}
+
+/* The DQ dialog and round editor below a row span all columns. */
+.tk-card-row > :not(.tk-queue-row) {
+  grid-column: 1 / -1;
 }
 
 .tk-round-cell {
