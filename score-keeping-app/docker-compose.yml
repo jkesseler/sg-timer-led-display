@@ -16,17 +16,23 @@ services:
       - .env
 
   # Ensure your DATABASE_URL uses 'postgres' as the hostname,
-  # e.g. postgres://postgres:<password>@postgres:5432/score-keeping-app
-  postgres:
-    restart: always
-    image: postgres:latest
-    environment:
-      POSTGRES_PASSWORD: postgres
-    volumes:
-      - pgdata:/var/lib/postgresql/data
+  mongo:
+    image: mongo:8
+    restart: on-failure
+    command:
+      - --storageEngine=wiredTiger
     ports:
-      - '5432:5432'
+      - '27017:27017'
+    volumes:
+      - mongo-data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
 
 volumes:
-  pgdata:
+  mongo-data:
   node_modules:
+
