@@ -51,6 +51,13 @@ private:
   bool showingUpNext;
   unsigned long lastUpNextToggle;
   static const uint16_t UP_NEXT_TOGGLE_MS = 10000;
+  static const int16_t NEXT_LABEL_WIDTH = 46;     // "NEXT: " in helvB10
+  static const int16_t ON_DECK_LABEL_WIDTH = 74;  // "ON DECK: " in helvB10
+  int16_t upNextNameWidth;
+  int16_t onDeckNameWidth;
+  int16_t upNextScrollOffset;
+  int16_t onDeckScrollOffset;
+  unsigned long lastUpNextScroll;
 
   // Countdown tracking
   unsigned long countdownStartTime;
@@ -89,10 +96,13 @@ private:
   void renderShotData();
   void renderSessionEnd();
   void renderUpNext();
+  void renderUpNextLine(const __FlashStringHelper* label, int16_t labelWidth, const char* name,
+                        int16_t nameWidth, int16_t scrollOffset, int16_t baselineY);
   void clearDisplay();
   void clearConnectionDetailLine();
 
   // Helper methods
+  static int16_t estimateNameWidth(const char* text);
   static void formatTime(uint32_t timeMs, char* buffer, size_t bufferSize);
   static void formatSplitTime(uint32_t timeMs, char* buffer, size_t bufferSize);
   uint16_t color565(uint8_t r, uint8_t g, uint8_t b) const;

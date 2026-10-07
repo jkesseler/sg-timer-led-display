@@ -44,6 +44,11 @@ DisplayManager::DisplayManager()
     hasUpNext(false),
     showingUpNext(false),
     lastUpNextToggle(0),
+    upNextNameWidth(0),
+    onDeckNameWidth(0),
+    upNextScrollOffset(0),
+    onDeckScrollOffset(0),
+    lastUpNextScroll(0),
     countdownStartTime(0),
     countdownDurationSeconds(0.0f),
     displayDirty(true),
@@ -218,7 +223,27 @@ void DisplayManager::update() {
       if (hasUpNext && currentTime - lastUpNextToggle >= UP_NEXT_TOGGLE_MS) {
         showingUpNext = !showingUpNext;
         lastUpNextToggle = currentTime;
+        upNextScrollOffset = 0;
+        onDeckScrollOffset = 0;
+        lastUpNextScroll = currentTime;
         markDirty(true);
+      }
+
+      if (showingUpNext && currentTime - lastUpNextScroll >= SCROLL_SPEED_MS) {
+        const int16_t displayWidth = PANEL_WIDTH * PANEL_CHAIN;
+        bool scrolled = false;
+        if (upNextNameWidth > displayWidth - NEXT_LABEL_WIDTH) {
+          upNextScrollOffset = (upNextScrollOffset + 1) % (upNextNameWidth + MARQUEE_SCROLL_GAP_PIXELS);
+          scrolled = true;
+        }
+        if (onDeckNameWidth > displayWidth - ON_DECK_LABEL_WIDTH) {
+          onDeckScrollOffset = (onDeckScrollOffset + 1) % (onDeckNameWidth + MARQUEE_SCROLL_GAP_PIXELS);
+          scrolled = true;
+        }
+        lastUpNextScroll = currentTime;
+        if (scrolled) {
+          markDirty(false);  // renderUpNext() clears its own lines
+        }
       }
 
       if (displayDirty) {
@@ -357,11 +382,16 @@ void DisplayManager::showUpNext(uint32_t sessionId, const char* next, const char
   upNextName[sizeof(upNextName) - 1] = '\0';
   strncpy(onDeckName, onDeck, sizeof(onDeckName) - 1);
   onDeckName[sizeof(onDeckName) - 1] = '\0';
+  if (onDeckName[0] == '\0') {
+    strcpy(onDeckName, "-");
+  }
+  upNextNameWidth = estimateNameWidth(upNextName);
+  onDeckNameWidth = estimateNameWidth(onDeckName);
   hasUpNext = true;
   if (showingUpNext) {
     markDirty(true);
   }
-  LOG_DISPLAY("Up next: %s, on deck: %s", upNextName, onDeckName[0] ? onDeckName : "-");
+  LOG_DISPLAY("Up next: %s, on deck: %s", upNextName, onDeckName);
 }
 
 void DisplayManager::clearDisplay() {
@@ -626,28 +656,54 @@ void DisplayManager::renderSessionEnd() {
   u8g2_for_adafruit_gfx.print(timeBuffer);
 }
 
-// Names longer than the panel are clipped at its right edge.
 void DisplayManager::renderUpNext() {
   if (!display) return;
 
   u8g2_for_adafruit_gfx.setFontMode(1);
   u8g2_for_adafruit_gfx.setFontDirection(0);
 
-  u8g2_for_adafruit_gfx.setFont(u8g2_font_helvB10_tf);
-  u8g2_for_adafruit_gfx.setForegroundColor(DisplayColors::YELLOW);
-  u8g2_for_adafruit_gfx.setCursor(0, 12);
-  u8g2_for_adafruit_gfx.print(F("NEXT: "));
-  u8g2_for_adafruit_gfx.setFont(u8g2_font_helvR10_tf);
-  u8g2_for_adafruit_gfx.setForegroundColor(DisplayColors::WHITE);
-  u8g2_for_adafruit_gfx.print(upNextName);
+  renderUpNextLine(F("NEXT: "), NEXT_LABEL_WIDTH, upNextName, upNextNameWidth, upNextScrollOffset, 12);
+  renderUpNextLine(F("ON DECK: "), ON_DECK_LABEL_WIDTH, onDeckName, onDeckNameWidth, onDeckScrollOffset, 28);
+}
 
-  u8g2_for_adafruit_gfx.setFont(u8g2_font_helvB10_tf);
-  u8g2_for_adafruit_gfx.setForegroundColor(DisplayColors::YELLOW);
-  u8g2_for_adafruit_gfx.setCursor(0, 28);
-  u8g2_for_adafruit_gfx.print(F("ON DECK: "));
+void DisplayManager::renderUpNextLine(const __FlashStringHelper* label, int16_t labelWidth, const char* name,
+                                      int16_t nameWidth, int16_t scrollOffset, int16_t baselineY) {
+  const int16_t displayWidth = PANEL_WIDTH * PANEL_CHAIN;
+  const int16_t lineTop = baselineY - 12;
+  const int16_t lineHeight = 16;
+
+  display->fillRect(0, lineTop, displayWidth, lineHeight, 0);
+
   u8g2_for_adafruit_gfx.setFont(u8g2_font_helvR10_tf);
   u8g2_for_adafruit_gfx.setForegroundColor(DisplayColors::WHITE);
-  u8g2_for_adafruit_gfx.print(onDeckName[0] ? onDeckName : "-");
+  if (nameWidth <= displayWidth - labelWidth) {
+    u8g2_for_adafruit_gfx.setCursor(labelWidth, baselineY);
+    u8g2_for_adafruit_gfx.print(name);
+  } else {
+    const int16_t xPos = labelWidth - scrollOffset;
+    u8g2_for_adafruit_gfx.setCursor(xPos, baselineY);
+    u8g2_for_adafruit_gfx.print(name);
+    u8g2_for_adafruit_gfx.setCursor(xPos + nameWidth + MARQUEE_SCROLL_GAP_PIXELS, baselineY);
+    u8g2_for_adafruit_gfx.print(name);
+  }
+
+  // Drawn last so the scrolling name disappears behind the label instead of over it.
+  display->fillRect(0, lineTop, labelWidth, lineHeight, 0);
+  u8g2_for_adafruit_gfx.setFont(u8g2_font_helvB10_tf);
+  u8g2_for_adafruit_gfx.setForegroundColor(DisplayColors::YELLOW);
+  u8g2_for_adafruit_gfx.setCursor(0, baselineY);
+  u8g2_for_adafruit_gfx.print(label);
+}
+
+// ~8 px per character in helvR10; UTF-8 continuation bytes are not counted.
+int16_t DisplayManager::estimateNameWidth(const char* text) {
+  int16_t characters = 0;
+  for (const char* c = text; *c; ++c) {
+    if ((*c & 0xC0) != 0x80) {
+      characters++;
+    }
+  }
+  return characters * 8;
 }
 
 void DisplayManager::formatTime(uint32_t timeMs, char* buffer, size_t bufferSize) {

@@ -116,7 +116,7 @@ When a `session/up-next` message arrives for this session, the screen alternates
 └────────────────────────────────┘
 ```
 
-Labels are yellow and names are white. Without an on-deck shooter, the second line shows `ON DECK: -`. Names longer than the panel are clipped at the right edge.
+Labels are yellow and names are white. Without an on-deck shooter, the second line shows `ON DECK: -`. A name that does not fit scrolls behind its label. Each line scrolls on its own, and the scroll restarts each time the screen comes back.
 
 ---
 
