@@ -58,6 +58,9 @@ bool TimerApplication::initialize() {
     LOG_ERROR("SYSTEM", "Failed to initialize display manager");
     return false;
   }
+  WiFiConfig::onFirmwareUpdate([this](int percent) {
+    displayManager->drawFirmwareUpdate(percent);
+  });
 
   // Initialize MQTT manager in BLE mode.
   // Runtime MQTT enable/disable is controlled by WiFiConfig::getMqttServer().

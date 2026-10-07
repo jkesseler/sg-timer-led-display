@@ -54,6 +54,10 @@ private:
   static const int16_t NEXT_LABEL_WIDTH = 46;     // "NEXT: " in helvB10
   static const int16_t ON_DECK_LABEL_WIDTH = 74;  // "ON DECK: " in helvB10
   int16_t upNextNameWidth;
+
+  // -2 = no update screen drawn. A successful update restarts the board, so
+  // reaching update() with the screen drawn means the update failed.
+  int firmwareUpdatePercent;
   int16_t onDeckNameWidth;
   int16_t upNextScrollOffset;
   int16_t onDeckScrollOffset;
@@ -124,6 +128,9 @@ public:
   // Ignored unless sessionId is the session currently shown as ended.
   // onDeck may be empty.
   void showUpNext(uint32_t sessionId, const char* next, const char* onDeck);
+  // Draws immediately: the update blocks the main loop, so update() never runs.
+  // percent < 0 shows the label without a progress bar.
+  void drawFirmwareUpdate(int percent);
 
   // Getters
   DisplayState getCurrentState() const { return currentState; }

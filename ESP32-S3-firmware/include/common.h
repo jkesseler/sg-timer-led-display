@@ -74,6 +74,17 @@
 #define MQTT_PASSWORD ""
 
 // =============================================================================
+// Firmware update (OTA)
+// =============================================================================
+
+// Empty = anyone on the network can flash the board. Set with
+// -DOTA_PASSWORD=\"...\" in build_flags, and pass the same value as
+// --auth=... in upload_flags.
+#ifndef OTA_PASSWORD
+#define OTA_PASSWORD ""
+#endif
+
+// =============================================================================
 // Protocol Constants
 // =============================================================================
 

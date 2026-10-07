@@ -1,5 +1,7 @@
 #include "WiFiConfig.h"
 #include "Logger.h"
+#include "DeviceId.h"
+#include <ArduinoOTA.h>
 #include <Preferences.h>
 #include <WiFi.h>
 #include "common.h"
@@ -59,6 +61,9 @@ WiFiManagerParameter* WiFiConfig::customStartupText = nullptr;
 // Global WiFiManager instance (persistent across WiFiConfig function calls)
 static WiFiManager wifiManager;
 static bool wifiManagerInitialized = false;
+
+bool WiFiConfig::otaStarted = false;
+FirmwareUpdateCallback WiFiConfig::firmwareUpdateCallback = nullptr;
 
 bool WiFiConfig::isInitialized() {
   return wifiManagerInitialized;
@@ -133,6 +138,12 @@ void WiFiConfig::initialize() {
   wifiManager.addParameter(customTimerType);
   wifiManager.addParameter(customStartupText);
 
+  // The portal's "Update" page reports no progress, only the start.
+  wifiManager.setPreOtaUpdateCallback([]() {
+    LOG_SYSTEM("Firmware update started from the WiFi portal");
+    if (firmwareUpdateCallback) firmwareUpdateCallback(-1);
+  });
+
   // Set save params callback — fires when the user clicks Save on the custom params form
   wifiManager.setSaveParamsCallback([]() {
     LOG_SYSTEM("WiFiManager params saved — persisting to NVS");
@@ -172,6 +183,7 @@ void WiFiConfig::initialize() {
   if (wifiConnected) {
     LOG_SYSTEM("WiFi already connected. IP: %s", WiFi.localIP().toString().c_str());
     WiFi.setTxPower((wifi_power_t)WIFI_TX_POWER);
+    onWiFiConnected();
 
     // Log network diagnostics for debugging MQTT connection issues
     LOG_SYSTEM("WiFi Network Info:");
@@ -193,6 +205,10 @@ void WiFiConfig::update() {
   // This is required for non-blocking mode to work properly
   wifiManager.process();
 
+  if (otaStarted) {
+    ArduinoOTA.handle();
+  }
+
   unsigned long now = millis();
 
   // Check connection status periodically
@@ -210,6 +226,7 @@ void WiFiConfig::update() {
     LOG_SYSTEM("WiFi connected. IP: %s", WiFi.localIP().toString().c_str());
     WiFi.setTxPower((wifi_power_t)WIFI_TX_POWER);
     LOG_SYSTEM("WiFi TX power set to minimize BLE interference");
+    onWiFiConnected();
 
     // Log network diagnostics for debugging MQTT connection issues
     LOG_SYSTEM("WiFi Network Info:");
@@ -267,6 +284,46 @@ void WiFiConfig::startConfigPortal() {
   wifiManager.startConfigPortal(AP_SSID);
 
   LOG_SYSTEM("Configuration portal closed");
+}
+
+void WiFiConfig::onWiFiConnected() {
+  if (!otaStarted) {
+    startOta();
+  }
+}
+
+void WiFiConfig::startOta() {
+  // Same name as the MQTT client ID, reachable as pewpew-<deviceId>.local
+  static char hostname[32];
+  snprintf(hostname, sizeof(hostname), "pewpew-%s", deviceId.get().c_str());
+  ArduinoOTA.setHostname(hostname);
+  if (OTA_PASSWORD[0] != '\0') {
+    ArduinoOTA.setPassword(OTA_PASSWORD);
+  }
+
+  ArduinoOTA.onStart([]() {
+    LOG_SYSTEM("Firmware update started over the network");
+    if (firmwareUpdateCallback) firmwareUpdateCallback(0);
+  });
+  ArduinoOTA.onProgress([](unsigned int written, unsigned int total) {
+    if (firmwareUpdateCallback && total > 0) {
+      firmwareUpdateCallback((int)((uint64_t)written * 100 / total));
+    }
+  });
+  ArduinoOTA.onEnd([]() {
+    LOG_SYSTEM("Firmware update complete - restarting");
+  });
+  ArduinoOTA.onError([](ota_error_t error) {
+    LOG_ERROR("SYSTEM", "Firmware update failed (error %u)", (unsigned)error);
+  });
+
+  ArduinoOTA.begin();
+  otaStarted = true;
+  LOG_SYSTEM("OTA updates enabled: %s.local%s", hostname, OTA_PASSWORD[0] ? " (password set)" : " (no password)");
+}
+
+void WiFiConfig::onFirmwareUpdate(FirmwareUpdateCallback callback) {
+  firmwareUpdateCallback = callback;
 }
 
 void WiFiConfig::resetWiFiSettings() {

@@ -45,6 +45,7 @@ DisplayManager::DisplayManager()
     showingUpNext(false),
     lastUpNextToggle(0),
     upNextNameWidth(0),
+    firmwareUpdatePercent(-2),
     onDeckNameWidth(0),
     upNextScrollOffset(0),
     onDeckScrollOffset(0),
@@ -121,6 +122,11 @@ void DisplayManager::markDirty(bool clearFirst) {
 void DisplayManager::update() {
   // Update display based on current state
   unsigned long currentTime = millis();
+
+  if (firmwareUpdatePercent != -2) {
+    firmwareUpdatePercent = -2;
+    markDirty(true);
+  }
 
   switch (currentState) {
     case DisplayState::STARTUP:
@@ -654,6 +660,30 @@ void DisplayManager::renderSessionEnd() {
   u8g2_for_adafruit_gfx.setForegroundColor(DisplayColors::RED);
   u8g2_for_adafruit_gfx.setCursor(65, 25);
   u8g2_for_adafruit_gfx.print(timeBuffer);
+}
+
+void DisplayManager::drawFirmwareUpdate(int percent) {
+  if (!display || percent == firmwareUpdatePercent) return;
+
+  const int16_t displayWidth = PANEL_WIDTH * PANEL_CHAIN;
+  if (firmwareUpdatePercent < -1 || (percent >= 0) != (firmwareUpdatePercent >= 0)) {
+    clearDisplay();
+    u8g2_for_adafruit_gfx.setFontMode(1);
+    u8g2_for_adafruit_gfx.setFontDirection(0);
+    u8g2_for_adafruit_gfx.setFont(u8g2_font_helvB10_tf);
+    u8g2_for_adafruit_gfx.setForegroundColor(DisplayColors::YELLOW);
+    u8g2_for_adafruit_gfx.setCursor(0, 12);
+    u8g2_for_adafruit_gfx.print(F("UPDATING..."));
+    if (percent >= 0) {
+      display->drawRect(0, 18, displayWidth, 12, DisplayColors::WHITE);
+    }
+  }
+  firmwareUpdatePercent = percent;
+
+  if (percent >= 0) {
+    const int16_t barWidth = (int16_t)((displayWidth - 4) * percent / 100);
+    display->fillRect(2, 20, barWidth, 8, DisplayColors::GREEN);
+  }
 }
 
 void DisplayManager::renderUpNext() {

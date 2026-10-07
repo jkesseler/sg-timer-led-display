@@ -1,6 +1,10 @@
 #pragma once
 
 #include <WiFiManager.h>
+#include <functional>
+
+// percent is 0-100, or -1 when the update path reports no progress.
+using FirmwareUpdateCallback = std::function<void(int percent)>;
 
 /**
  * @brief Manages Wi-Fi configuration using WiFiManager
@@ -50,6 +54,11 @@ private:
   static void loadConfiguration();
   static void saveConfiguration();
 
+  static bool otaStarted;
+  static FirmwareUpdateCallback firmwareUpdateCallback;
+  static void startOta();
+  static void onWiFiConnected();
+
 public:
   /**
    * @brief Initialize WiFi with WiFiManager
@@ -89,6 +98,12 @@ public:
    * @brief Reset stored WiFi credentials and restart
    */
   static void resetWiFiSettings();
+
+  /**
+   * @brief Called while a firmware update is written, from the main loop.
+   * The update blocks the loop, so the callback must draw directly.
+   */
+  static void onFirmwareUpdate(FirmwareUpdateCallback callback);
 
   /**
    * @brief Get MQTT configuration values

@@ -38,6 +38,24 @@ pio run -e main-firmware -t upload
 pio run -e main-firmware -t upload --upload-port COM5
 ```
 
+## Flash over the network (OTA)
+
+After the board connects to WiFi, it accepts firmware updates over the network. There are two ways.
+
+**From PlatformIO.** Use the device ID that the board shows in its MQTT topics:
+
+```bash
+pio run -e main-firmware-ota -t upload --upload-port pewpew-<deviceId>.local
+```
+
+If `.local` names do not resolve on your network, use the board's IP address. The serial log shows the hostname and the IP address after the WiFi connects.
+
+**From the WiFi portal.** When the setup portal is open, select **Update** on its main page and upload `.pio/build/main-firmware/firmware.bin`.
+
+During an update, the LED panel shows `UPDATING...`. An update from PlatformIO also shows a progress bar. After a successful update, the board restarts. If the update fails, the board shows the previous screen again and continues to run the old firmware.
+
+> **Security:** by default, any device on the network can flash the board. To require a password, add `-DOTA_PASSWORD=\"<password>\"` to `build_flags` and `upload_flags = --auth=<password>` to `[env:main-firmware-ota]`. The portal's Update page has no password. It is only available while the setup access point is open.
+
 ## Serial monitor
 
 ```bash
@@ -73,6 +91,7 @@ Test files live in `ESP32-S3-firmware/test/`. See [testing.md](testing.md) for f
 | Environment | Description |
 |---|---|
 | `main-firmware` | Full production firmware; builds all of `ESP32-S3-firmware/src/`; excludes test tools |
+| `main-firmware-ota` | Same firmware as `main-firmware`, uploaded over WiFi (`espota`) |
 
 ### Native tests (host)
 
