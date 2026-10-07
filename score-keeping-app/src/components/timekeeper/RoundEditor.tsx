@@ -12,28 +12,15 @@ import {
   saveEditorTime,
   setEditorRoundStatus
 } from '@/store/timekeeperThunks';
-import type { RoundStatus } from '@/lib/match/types';
-import type { RoundEditorView as RoundEditorData } from '@/store/timekeeperSelectors';
+import type { RoundEditorProps, RoundEditorViewProps, StatusButton } from './types';
 
-const STATUS_BUTTONS: { status: RoundStatus; label: string }[] = [
+const STATUS_BUTTONS: StatusButton[] = [
   { status: 'pending', label: 'Pending' },
   { status: 'timed', label: 'Timed' },
   { status: 'rs', label: 'RS' },
   { status: 'dnf', label: 'DNF' },
   { status: 'skipped', label: 'Skipped' }
 ];
-
-interface RoundEditorViewProps extends RoundEditorData {
-  onStatusChange: (status: RoundStatus) => void;
-  onTimeTextChange: (text: string) => void;
-  onSaveTime: () => void;
-  onClearTime: () => void;
-  onReshootTextChange: (text: string) => void;
-  onSaveReshoot: () => void;
-  onClearReshoot: () => void;
-  onArm: () => void;
-  onClose: () => void;
-}
 
 export const RoundEditorView = ({
   round,
@@ -115,7 +102,7 @@ export const RoundEditorView = ({
 };
 
 /** The round editor for this card, if the open editor is on it. */
-export const RoundEditor = ({ cardId }: { cardId: string }) => {
+export const RoundEditor = ({ cardId }: RoundEditorProps) => {
   const dispatch = useAppDispatch();
   const editor = useAppSelector(selectEditor);
   const editedRound = editor?.cardId === cardId ? editor.round : null;

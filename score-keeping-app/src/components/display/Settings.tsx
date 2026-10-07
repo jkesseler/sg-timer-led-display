@@ -2,16 +2,8 @@ import { useState } from 'react';
 import { useSelector } from 'react-redux';
 import { selectSettings } from '@/store/settingsSlice';
 import { selectIsConnected } from '@/store/mqttSlice';
-import type { MqttSettings } from '@/lib/mqtt/types';
+import type { SettingsProps } from './types';
 import './Settings.css';
-
-interface SettingsProps {
-  onSave: (settings: MqttSettings) => void;
-  onClose: () => void;
-  onConnect: () => void;
-  onDisconnect: () => void;
-  onResetBroker: () => void;
-}
 
 const Settings = ({ onSave, onClose, onConnect, onDisconnect, onResetBroker }: SettingsProps) => {
   const settings = useSelector(selectSettings);

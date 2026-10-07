@@ -1,9 +1,7 @@
 import { Inter, JetBrains_Mono } from 'next/font/google';
-import type { ReactNode } from 'react';
 import './styles.css';
 
-// Same fonts as /display (src/app/display/layout.tsx), self-hosted via
-// next/font instead of an external Google Fonts request.
+// Keep in sync with the fonts in src/app/display/layout.tsx.
 const interFont = Inter({
   subsets: ['latin'],
   weight: ['400', '500', '600', '700'],
@@ -18,12 +16,9 @@ const jetBrainsMonoFont = JetBrains_Mono({
   display: 'swap'
 });
 
-// Root layout for the /timekeeper segment — this repo has no shared root
-// layout.tsx, so each top-level route group/segment provides its own
-// <html>/<body> (matching the pattern in (frontend)/layout.tsx and
-// (payload)/layout.tsx). The auth-gated chrome lives one level down, in
-// (protected)/layout.tsx, so /timekeeper/login stays outside it.
-export default function TimekeeperRootLayout({ children }: { children: ReactNode }) {
+// No shared root layout: each top-level segment provides its own <html>/<body>.
+// Auth-gated chrome lives in (protected)/ so /timekeeper/login stays outside it.
+export default function TimekeeperRootLayout({ children }: LayoutProps<'/timekeeper'>) {
   return (
     <html lang="en" className={`${interFont.variable} ${jetBrainsMonoFont.variable}`}>
       <body>{children}</body>

@@ -4,15 +4,8 @@ import { useAppDispatch, useAppSelector } from '@/store/store';
 import { selectDqDialogForCard } from '@/store/timekeeperSelectors';
 import { dqDialogClosed, dqReasonChanged } from '@/store/timekeeperSlice';
 import { confirmDisqualification } from '@/store/timekeeperThunks';
+import type { DqDialogProps, DqDialogViewProps } from './types';
 import type { FormEvent, KeyboardEvent } from 'react';
-
-interface DqDialogViewProps {
-  shooterName: string;
-  reason: string;
-  onReasonChange: (reason: string) => void;
-  onConfirm: () => void;
-  onCancel: () => void;
-}
 
 export const DqDialogView = ({ shooterName, reason, onReasonChange, onConfirm, onCancel }: DqDialogViewProps) => {
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -50,7 +43,7 @@ export const DqDialogView = ({ shooterName, reason, onReasonChange, onConfirm, o
 };
 
 /** The DQ confirmation for this card, if it is the one being disqualified. */
-export const DqDialog = ({ cardId }: { cardId: string }) => {
+export const DqDialog = ({ cardId }: DqDialogProps) => {
   const dispatch = useAppDispatch();
   const dialog = useAppSelector(state => selectDqDialogForCard(state, cardId));
 

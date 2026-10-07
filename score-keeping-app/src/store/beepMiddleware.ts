@@ -1,10 +1,6 @@
 import { createListenerMiddleware } from '@reduxjs/toolkit';
 import { countdownComplete } from './mqttSlice';
 
-// ---------------------------------------------------------------------------
-// Audio helpers – Web Audio API beep without any external files
-// ---------------------------------------------------------------------------
-
 let audioCtx: AudioContext | null = null;
 
 function ensureAudioContext(): AudioContext | null {
@@ -22,17 +18,13 @@ function ensureAudioContext(): AudioContext | null {
   }
 }
 
-/**
- * Play short beep (~200ms, 880 Hz) using the Web Audio API.
- * No external audio files needed.
- */
 function playBeep() {
   const ctx = ensureAudioContext();
   if (!ctx) {
     return;
   }
 
-  // Resume context if it was suspended (autoplay policy)
+  // Browsers suspend audio created before a user gesture (autoplay policy).
   if (ctx.state === 'suspended') {
     ctx.resume().catch(() => {});
   }
@@ -53,10 +45,6 @@ function playBeep() {
   oscillator.stop(ctx.currentTime + 0.2);
 }
 
-// ---------------------------------------------------------------------------
-// Listener middleware – plays beep when countdown completes
-// ---------------------------------------------------------------------------
-
 export const beepMiddleware = createListenerMiddleware();
 
 beepMiddleware.startListening({
@@ -64,7 +52,7 @@ beepMiddleware.startListening({
   effect: async (_action, _listenerApi) => {
     try {
       playBeep();
-      console.log('Countdown complete – beep played');
+      console.log('Countdown complete - beep played');
     } catch (error) {
       console.error('Failed to play countdown beep:', error);
     }

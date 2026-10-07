@@ -6,11 +6,7 @@ import { useAppDispatch, useAppSelector } from '@/store/store';
 import { selectIsScannerListening } from '@/store/timekeeperSelectors';
 import { handleScannedCard } from '@/store/timekeeperThunks';
 
-/**
- * Listens for the barcode scanner's keystroke burst anywhere on the page.
- * Detached while a shooter is armed or shooting, so a stray scan cannot
- * replace the active turn. Renders nothing.
- */
+/** Detached while a shooter is armed or shooting, so a stray scan cannot replace the active turn. */
 export const ScanCapture = () => {
   const dispatch = useAppDispatch();
   const isListening = useAppSelector(selectIsScannerListening);

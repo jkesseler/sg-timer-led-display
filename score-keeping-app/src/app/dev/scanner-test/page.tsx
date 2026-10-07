@@ -1,19 +1,15 @@
 'use client';
 
-import { useState, type KeyboardEvent } from 'react';
+import { useState } from 'react';
+import type { ScanRecord } from './types';
+import type { KeyboardEvent } from 'react';
 
-// Temporary hardware verification harness (Phase 1).
-// Not part of the planned route structure — safe to delete once the
-// timekeeper screen's own scan handling is built and tested in Phase 2.
+// Raw key log for trying a new scanner; the timekeeper itself uses src/lib/scanner/scanCapture.ts.
 export default function ScannerTestPage() {
-  const [scans, setScans] = useState<{ code: string; at: string }[]>([]);
+  const [scans, setScans] = useState<ScanRecord[]>([]);
   const [value, setValue] = useState('');
   const [keyLog, setKeyLog] = useState<string[]>([]);
 
-  // The timekeeper screen uses src/lib/scanner/scanCapture.ts instead. Its
-  // dropped-Enter bug was the burst reset on modifier keys (Shift, NumLock)
-  // the scanner sends around the digits; fixed and verified on hardware.
-  // This page stays useful for its raw key log when trying a new scanner.
   function handleKeyDown(event: KeyboardEvent<HTMLInputElement>) {
     setKeyLog(prev =>
       [`key=${JSON.stringify(event.key)} code=${event.code} keyCode=${event.keyCode}`, ...prev].slice(0, 40)

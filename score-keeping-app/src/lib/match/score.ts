@@ -1,17 +1,6 @@
-import type { Card, MatchState, Round } from './types';
+import type { Card, CardScore, MatchState, Round } from './types';
 
 const COUNTED_ROUNDS = 3;
-
-interface ScoredCard {
-  status: 'scored';
-  scoreMs: number;
-}
-
-interface UnscoredCard {
-  status: 'pending' | 'uncountable' | 'dq';
-}
-
-export type CardScore = ScoredCard | UnscoredCard;
 
 /** The time a round contributes to the score, or null when it does not count (pending, DNF, skipped, RS without reshoot). */
 export function countableTimeMs(round: Round): number | null {
@@ -34,9 +23,8 @@ function isRoundResolved(round: Round): boolean {
 }
 
 /**
- * Mean of the three fastest countable rounds, unrounded, in ms. Ignores DQ —
- * use cardScore for the match-wide DQ rule. Only final once every round is
- * resolved: an outstanding round could still be one of the fastest three.
+ * Mean of the three fastest countable rounds, in ms, ignoring DQ (see cardScore).
+ * Pending until every round is resolved: an open round could still be among the fastest.
  */
 export function finalScoreMs(card: Card): CardScore {
   if (!card.rounds.every(isRoundResolved)) {

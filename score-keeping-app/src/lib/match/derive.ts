@@ -1,14 +1,8 @@
-import type { CardScore } from './score';
-import type { Card, MatchState } from './types';
+import type { Card, CardScore, CardWarning, MatchState, OutstandingItem, RosterInfo } from './types';
 
 export const NO_SCORE = '--:--';
 
-/**
- * SS.CC, zero-padded, truncated (not rounded) — the safe direction to be
- * wrong in a competitive context: rounding up could make a slower recorded
- * time display as faster than a genuinely quicker one. Full millisecond
- * precision stays in storage; only the display is lossy.
- */
+/** SS.CC, truncated rather than rounded, so a slower time can never display as faster. */
 export function formatRoundTimeMs(timeMs: number): string {
   const centiseconds = Math.floor(timeMs / 10);
 
@@ -43,11 +37,7 @@ export function getSquadCards(state: MatchState, squadId: string): Card[] {
     .sort((a, b) => a.queuePosition - b.queuePosition);
 }
 
-/**
- * The lowest round number (1-5) that still has a pending result among
- * present cards. Null once none remain — the squad has moved into the
- * reshoot/catch-up phase.
- */
+/** The lowest pending round among present cards; null once only reshoots and catch-ups remain. */
 export function deriveCurrentRound(cards: Card[]): number | null {
   let lowest: number | null = null;
 
@@ -65,12 +55,7 @@ export function deriveCurrentRound(cards: Card[]): number | null {
   return lowest;
 }
 
-/**
- * Next / on-deck shooters for the current round, derived live from the
- * mutable queue — never computed once from starting order. The active card
- * is excluded. Both are null once nothing remains for the current round;
- * the reshoot/catch-up phase has its own queue in deriveOutstanding.
- */
+/** From the live queue, never the starting order. Null once the round is done; deriveOutstanding takes over. */
 export function deriveUpcomingShooters(cards: Card[], currentRound: number | null, activeCardId: string | null) {
   if (currentRound === null) {
     return { next: null, onDeck: null };
@@ -84,18 +69,7 @@ export function deriveUpcomingShooters(cards: Card[], currentRound: number | nul
   return { next: waiting[0] ?? null, onDeck: waiting[1] ?? null };
 }
 
-export interface OutstandingItem {
-  card: Card;
-  kind: 'rs' | 'skipped';
-  round: number;
-}
-
-/**
- * Reshoots (RS rounds with no reshoot time yet) and catch-up rounds
- * (skipped, e.g. a late arrival) — the queue after the main 5-round
- * rotation. FIFO by round number as a deterministic default; the
- * timekeeper can offer them in any order.
- */
+/** Open reshoots and skipped (catch-up) rounds by round number; the timekeeper may take them in any order. */
 export function deriveOutstanding(cards: Card[]): OutstandingItem[] {
   const items: OutstandingItem[] = [];
 
@@ -121,8 +95,6 @@ export function isReadyForSignOff(card: Card): boolean {
 
   return isAllShot && !hasUnresolvedRs;
 }
-
-export type CardWarning = 'multiple-rs' | 'signed-with-open-rounds';
 
 /** Rule breaches are shown, never enforced — Range Office may override any of them. */
 export function getCardWarnings(card: Card): CardWarning[] {
@@ -161,12 +133,6 @@ export function findCurrentSquadId(state: MatchState): string | null {
   }
 
   return state.squads.find(squad => squad.status === 'active')?.id ?? null;
-}
-
-export interface RosterInfo {
-  current: string | null;
-  next: string | null;
-  onDeck: string | null;
 }
 
 export function deriveRoster(state: MatchState): RosterInfo {

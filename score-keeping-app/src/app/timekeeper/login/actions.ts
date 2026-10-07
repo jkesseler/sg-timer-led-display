@@ -5,8 +5,7 @@ import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 import config from '@/payload.config';
 
-// Payload's default auth cookie: `${cookiePrefix}-token`, cookiePrefix
-// defaults to 'payload' and isn't overridden in payload.config.ts.
+// Payload's default `${cookiePrefix}-token`; keep in sync if payload.config.ts sets a cookiePrefix.
 const AUTH_COOKIE_NAME = 'payload-token';
 const AUTH_COOKIE_MAX_AGE_SECONDS = 7200;
 

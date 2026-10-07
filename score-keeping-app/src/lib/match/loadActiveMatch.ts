@@ -1,12 +1,11 @@
 import type { Match, Shooter } from '@/payload-types';
 import { buildMatchState } from './buildMatchState';
 import type { Payload } from 'payload';
-import type { MatchSetup } from './buildMatchState';
-import type { MatchState } from './types';
+import type { MatchSetup, MatchState, RelatedDocument } from './types';
 
 // Server-only: pulls in the `payload` package via the Payload instance.
 
-function relationId(value: string | { id: string }): string {
+function relationId(value: string | RelatedDocument): string {
   return typeof value === 'object' ? value.id : value;
 }
 

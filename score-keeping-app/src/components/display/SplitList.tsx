@@ -1,18 +1,8 @@
 import { useMemo } from 'react';
 import { formatTimeValue } from '@/lib/display/utils';
 import type { ShotData } from '@/lib/mqtt/types';
+import type { Extremes, SplitListProps } from './types';
 import './SplitList.css';
-
-interface SplitListProps {
-  shots: ShotData[];
-  /** Tag the fastest/slowest split — only meaningful once a run is complete. */
-  highlightExtremes?: boolean;
-}
-
-interface Extremes {
-  fastestShotNumber: number | null;
-  slowestShotNumber: number | null;
-}
 
 function findExtremes(shots: ShotData[]): Extremes {
   const timedShots = shots.filter(shot => !shot.isFirstShot);

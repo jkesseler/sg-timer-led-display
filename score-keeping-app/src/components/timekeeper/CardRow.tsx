@@ -2,43 +2,14 @@
 
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
+import objstr from 'obj-str';
 import { armTurn, markAbsent, reinstate, signOff, unsign } from '@/store/matchSlice';
 import { useAppDispatch, useAppSelector } from '@/store/store';
 import { selectCardRowView } from '@/store/timekeeperSelectors';
 import { dqDialogOpened, roundEditorToggled, scoreSheetPrintRequested } from '@/store/timekeeperSlice';
-import type { CardRowView as CardRowData } from '@/store/timekeeperSelectors';
 import { DqDialog } from './DqDialog';
 import { RoundEditor } from './RoundEditor';
-import type { DraggableAttributes, DraggableSyntheticListeners } from '@dnd-kit/core';
-import type { CSSProperties, ReactNode } from 'react';
-
-function joinClassNames(...classNames: (string | false)[]): string {
-  return classNames.filter(Boolean).join(' ');
-}
-
-export interface SortableProps {
-  setNodeRef: (element: HTMLElement | null) => void;
-  style: CSSProperties;
-  attributes: DraggableAttributes;
-  listeners: DraggableSyntheticListeners;
-  isDragging: boolean;
-}
-
-interface CardRowViewProps {
-  card: CardRowData;
-  position: number;
-  sortable: SortableProps;
-  onArmNextRound: () => void;
-  onToggleRound: (round: number) => void;
-  onMarkAbsent: () => void;
-  onDisqualify: () => void;
-  onReinstate: () => void;
-  onSignOff: () => void;
-  onUnsign: () => void;
-  onReprint: () => void;
-  /** The DQ dialog and round editor, rendered below the row. */
-  children?: ReactNode;
-}
+import type { CardRowProps, CardRowViewProps, SortableProps } from './types';
 
 export const CardRowView = ({
   card,
@@ -55,7 +26,12 @@ export const CardRowView = ({
   children
 }: CardRowViewProps) => (
   <div ref={sortable.setNodeRef} style={sortable.style} className="tk-card-row">
-    <div className={joinClassNames('tk-queue-row', card.isActive && 'tk-queue-row--active', sortable.isDragging && 'tk-queue-row--dragging')}>
+    <div className={objstr({
+      'tk-queue-row': true,
+      'tk-queue-row--active': card.isActive,
+      'tk-queue-row--dragging': sortable.isDragging
+    })}
+    >
       <span className="tk-queue-row__handle" aria-label="Drag to reorder" {...sortable.attributes} {...sortable.listeners}>
         ⠿
       </span>
@@ -76,12 +52,12 @@ export const CardRowView = ({
           <button
             key={round.key}
             type="button"
-            className={joinClassNames(
-              'tk-round-cell',
-              `tk-round-cell--${round.modifier}`,
-              round.isArmed && 'tk-round-cell--armed',
-              round.isEditing && 'tk-round-cell--editing'
-            )}
+            className={objstr({
+              'tk-round-cell': true,
+              [`tk-round-cell--${round.modifier}`]: true,
+              'tk-round-cell--armed': round.isArmed,
+              'tk-round-cell--editing': round.isEditing
+            })}
             title={round.heading === 'RS' ? `Reshoot of round ${round.n}: edit` : `Round ${round.n}: edit`}
             aria-expanded={round.isEditing}
             onClick={() => onToggleRound(round.n)}
@@ -91,7 +67,7 @@ export const CardRowView = ({
           </button>
         ))}
       </div>
-      <span className={joinClassNames('tk-score', card.isDisqualified && 'tk-score--dq')} title="Mean of the 3 fastest rounds">
+      <span className={objstr({ 'tk-score': true, 'tk-score--dq': card.isDisqualified })} title="Mean of the 3 fastest rounds">
         {card.scoreText}
       </span>
       <div className="tk-queue-row__actions">
@@ -110,7 +86,7 @@ export const CardRowView = ({
           : (
               <button
                 type="button"
-                className={joinClassNames('tk-button tk-button--small', card.isReadyForSignOff && 'tk-button--primary')}
+                className={objstr({ 'tk-button tk-button--small': true, 'tk-button--primary': card.isReadyForSignOff })}
                 onClick={onSignOff}
               >
                 Signed
@@ -122,7 +98,7 @@ export const CardRowView = ({
   </div>
 );
 
-export const CardRow = ({ cardId, position }: { cardId: string; position: number }) => {
+export const CardRow = ({ cardId, position }: CardRowProps) => {
   const dispatch = useAppDispatch();
   const card = useAppSelector(state => selectCardRowView(state, cardId));
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: cardId });

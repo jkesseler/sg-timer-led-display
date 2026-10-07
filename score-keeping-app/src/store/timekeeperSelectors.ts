@@ -13,11 +13,18 @@ import {
 } from '@/lib/match/derive';
 import { cardScore, countableTimeMs, isShooterDisqualified } from '@/lib/match/score';
 import { DisplayState } from '@/lib/mqtt/types';
-import type { CardWarning } from '@/lib/match/derive';
-import type { CardScore } from '@/lib/match/score';
-import type { Card, Round, RoundStatus } from '@/lib/match/types';
+import type { Card, CardScore, CardWarning, Round } from '@/lib/match/types';
 import { selectDisplayState, selectIsConnected, selectKnownDevices, selectShots } from './mqttSlice';
 import type { RootState } from './store';
+import type {
+  CardRowView,
+  CellState,
+  CountableRound,
+  RoundCellView,
+  RoundEditorView,
+  ScoreSheetRound,
+  ScoreSheetView
+} from './types';
 
 // Reselect 5's default memoizer caches per argument set, so the
 // parameterized selectors below keep one cached result per card / round.
@@ -26,8 +33,6 @@ const EMPTY_CARDS: Card[] = [];
 
 const selectCardIdArgument = (_state: RootState, cardId: string) => cardId;
 const selectRoundArgument = (_state: RootState, _cardId: string, round: number) => round;
-
-// --- Raw slices ---------------------------------------------------------
 
 export const selectMatch = (state: RootState) => state.match.current;
 export const selectSyncStatus = (state: RootState) => state.match.syncStatus;
@@ -48,8 +53,6 @@ export const selectActiveTurn = (state: RootState) => state.match.current?.activ
 
 /** The barcode scanner arms shooters only while nobody is armed or shooting. */
 export const selectIsScannerListening = (state: RootState) => state.match.current !== null && selectActiveTurn(state) === null;
-
-// --- Squad --------------------------------------------------------------
 
 /** The picked tab, else the squad in play, else the first squad. */
 export const selectSelectedSquadId = createSelector(
@@ -132,8 +135,6 @@ export const selectAbsentRows = createSelector(
   cards => cards.map(card => ({ cardId: card.id, shooterName: card.shooterName }))
 );
 
-// --- Status line --------------------------------------------------------
-
 export const selectStatusLine = createSelector(
   [selectSyncStatus, selectMatch, selectKnownDevices, selectIsConnected],
   (syncStatus, match, knownDevices, isBrokerConnected) => {
@@ -143,8 +144,6 @@ export const selectStatusLine = createSelector(
     return { syncStatus, deviceId, isTimerOnline: timer?.presence === 'online', isBrokerConnected };
   }
 );
-
-// --- Live timer ---------------------------------------------------------
 
 export const selectLiveTimeMs = createSelector(
   [selectActiveTurn, selectDisplayState, selectShots],
@@ -160,28 +159,10 @@ export const selectSplitsView = createSelector(
   (shots, displayState) => ({ shots, highlightExtremes: displayState === DisplayState.SESSION_ENDED })
 );
 
-// --- Card rows ----------------------------------------------------------
-
 const WARNING_LABELS: Record<CardWarning, string> = {
   'multiple-rs': 'more than one RS',
   'signed-with-open-rounds': 'signed with open rounds'
 };
-
-/**
- * One cell in a card row: R1-R5, then one "RS" cell per reshoot. The round
- * where a reshoot was requested shows only "RS"; its reshoot time goes in the
- * extra cell after R5.
- */
-export interface RoundCellView {
-  key: string;
-  heading: string;
-  /** The round the cell edits; a reshoot cell edits the round it was requested in. */
-  n: number;
-  label: string;
-  modifier: RoundStatus | 'live';
-  isArmed: boolean;
-  isEditing: boolean;
-}
 
 function describeRound(round: Round, liveTimeMs: number | null): Pick<RoundCellView, 'label' | 'modifier'> {
   if (liveTimeMs !== null) {
@@ -210,13 +191,6 @@ function describeReshoot(round: Round, liveTimeMs: number | null): Pick<RoundCel
   return round.reshootTimeMs !== null
     ? { label: formatRoundTimeMs(round.reshootTimeMs), modifier: 'timed' }
     : { label: '—', modifier: 'pending' };
-}
-
-interface CellState {
-  armedRound: number | null;
-  liveRound: number | null;
-  liveTimeMs: number | null;
-  editedRound: number | null;
 }
 
 /** Arming or shooting an RS round means shooting its reshoot, so that shows on the reshoot cell. */
@@ -279,21 +253,6 @@ const selectCardScoreText = (state: RootState, cardId: string) => {
   return match && card ? formatScore(cardScore(match, card)) : '—';
 };
 
-export interface CardRowView {
-  cardId: string;
-  shooterId: string;
-  shooterName: string;
-  discipline: string | null;
-  nextRound: number | null;
-  isActive: boolean;
-  isDisqualified: boolean;
-  isSignedOff: boolean;
-  isReadyForSignOff: boolean;
-  scoreText: string;
-  warnings: string[];
-  rounds: RoundCellView[];
-}
-
 export const selectCardRowView = createSelector(
   [
     selectCardById,
@@ -336,8 +295,6 @@ export const selectDqDialogForCard = createSelector(
     dqDialog?.cardId === cardId && card ? { shooterName: card.shooterName, reason: dqDialog.reason } : null
 );
 
-// --- Round editor -------------------------------------------------------
-
 // Seconds with full ms precision, so saving an untouched value never changes it.
 export function toSecondsText(timeMs: number | null): string {
   return timeMs === null ? '' : String(timeMs / 1000);
@@ -374,16 +331,6 @@ export const selectRoundReshootText = createSelector(
   }
 );
 
-export interface RoundEditorView {
-  cardId: string;
-  round: number;
-  shooterName: string;
-  status: RoundStatus;
-  timeText: string;
-  reshootText: string;
-  error: string | null;
-}
-
 export const selectRoundEditorView = createSelector(
   [
     selectCardById,
@@ -411,8 +358,6 @@ export const selectRoundEditorView = createSelector(
   }
 );
 
-// --- Late shooters ------------------------------------------------------
-
 export const selectLateShooterView = createSelector(
   [selectShooters, selectSquadCards, selectLateShooterDraft, selectSelectedSquadId],
   (shooters, squadCards, draft, squadId) => {
@@ -428,8 +373,6 @@ export const selectLateShooterView = createSelector(
     };
   }
 );
-
-// --- Unassigned results -------------------------------------------------
 
 export const selectUnassignedView = createSelector(
   [selectMatch, selectUnassignedDrafts, selectPresentCards],
@@ -452,32 +395,7 @@ export const selectUnassignedView = createSelector(
   }
 );
 
-// --- Score sheet --------------------------------------------------------
-
 export const selectPrintRequest = (state: RootState) => state.timekeeper.printRequest;
-
-/** A sheet row: Round 1-5, then one "RS" row per reshoot (as in the card row). */
-export interface ScoreSheetRound {
-  key: string;
-  heading: string;
-  label: string;
-  /** One of the three fastest rounds that make up the score. */
-  isCounted: boolean;
-}
-
-export interface ScoreSheetView {
-  matchLabel: string;
-  squadLabel: string;
-  squadTimes: string;
-  shooterName: string;
-  knsaNumber: string | null;
-  discipline: string | null;
-  rounds: ScoreSheetRound[];
-  scoreText: string;
-  dqReason: string | null;
-  warnings: string[];
-  signedOffText: string | null;
-}
 
 function describeSheetRound(round: Round): string {
   switch (round.status) {
@@ -503,7 +421,7 @@ function findCountedRounds(card: Card, score: CardScore): Set<number> {
 
   const countable = card.rounds
     .map(round => ({ n: round.n, timeMs: countableTimeMs(round) }))
-    .filter((round): round is { n: number; timeMs: number } => round.timeMs !== null)
+    .filter((round): round is CountableRound => round.timeMs !== null)
     .sort((a, b) => a.timeMs - b.timeMs);
   for (const round of countable.slice(0, 3)) {
     countedRounds.add(round.n);

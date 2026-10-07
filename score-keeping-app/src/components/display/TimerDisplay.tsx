@@ -10,9 +10,18 @@ import {
   selectDeviceName,
   selectCountdownRemainingMs
 } from '@/store/mqttSlice';
-import type { ShotData, SessionData } from '@/lib/mqtt/types';
-import type { RosterInfo } from '@/lib/match/derive';
 import { SplitList } from './SplitList';
+import type {
+  BeaconProps,
+  CountdownHeroProps,
+  IdleCardContent,
+  SessionEndedHeroProps,
+  ShooterHeaderProps,
+  ShooterQueueProps,
+  ShotHeroProps,
+  TimerDisplayProps,
+  WaitingHeroProps
+} from './types';
 import './TimerDisplay.css';
 
 const SESSION_DISPLAY_STATES: DisplayState[] = [
@@ -21,15 +30,6 @@ const SESSION_DISPLAY_STATES: DisplayState[] = [
   DisplayState.SHOWING_SHOT,
   DisplayState.SESSION_ENDED
 ];
-
-type BeaconTone = 'neutral' | 'searching' | 'ready';
-
-interface IdleCardContent {
-  tone: BeaconTone;
-  eyebrow: string;
-  title: string;
-  detail?: string;
-}
 
 function resolveIdleContent(displayState: DisplayState, deviceName: string | null): IdleCardContent {
   switch (displayState) {
@@ -45,7 +45,7 @@ function resolveIdleContent(displayState: DisplayState, deviceName: string | nul
   }
 }
 
-const Beacon = ({ tone }: { tone: BeaconTone }) => (
+const Beacon = ({ tone }: BeaconProps) => (
   <div className={`beacon beacon--${tone}`} aria-hidden="true">
     <span className="beacon__ring beacon__ring--outer" />
     <span className="beacon__ring beacon__ring--inner" />
@@ -69,7 +69,7 @@ const IdleCard = ({ tone, eyebrow, title, detail }: IdleCardContent) => (
   </div>
 );
 
-const CountdownHero = ({ countdownRemainingMs }: { countdownRemainingMs: number }) => {
+const CountdownHero = ({ countdownRemainingMs }: CountdownHeroProps) => {
   const remainingSeconds = countdownRemainingMs / 1000;
   const tone = remainingSeconds > 3 ? 'ready' : remainingSeconds > 1 ? 'live' : 'stop';
 
@@ -84,7 +84,7 @@ const CountdownHero = ({ countdownRemainingMs }: { countdownRemainingMs: number 
   );
 };
 
-const WaitingHero = ({ sessionData }: { sessionData: SessionData | null }) => (
+const WaitingHero = ({ sessionData }: WaitingHeroProps) => (
   <div className="hero hero-waiting">
     <div className="listening-bars" aria-hidden="true">
       <span />
@@ -103,7 +103,7 @@ const WaitingHero = ({ sessionData }: { sessionData: SessionData | null }) => (
   </div>
 );
 
-const ShotHero = ({ shotData }: { shotData: ShotData }) => {
+const ShotHero = ({ shotData }: ShotHeroProps) => {
   const isDraw = shotData.isFirstShot;
 
   return (
@@ -118,14 +118,14 @@ const ShotHero = ({ shotData }: { shotData: ShotData }) => {
   );
 };
 
-const ShooterHeader = ({ name }: { name: string }) => (
+const ShooterHeader = ({ name }: ShooterHeaderProps) => (
   <div className="shooter-header">
     <span className="shooter-header__label">Current shooter</span>
     <span className="shooter-header__name">{name}</span>
   </div>
 );
 
-const ShooterQueue = ({ next, onDeck }: { next: string; onDeck: string }) => (
+const ShooterQueue = ({ next, onDeck }: ShooterQueueProps) => (
   <div className="shooter-queue">
     <div className="shooter-queue__item">
       <span className="shooter-queue__label">Next</span>
@@ -138,15 +138,7 @@ const ShooterQueue = ({ next, onDeck }: { next: string; onDeck: string }) => (
   </div>
 );
 
-const SessionEndedHero = ({
-  shotData,
-  sessionData,
-  shots
-}: {
-  shotData: ShotData | null;
-  sessionData: SessionData | null;
-  shots: ShotData[];
-}) => {
+const SessionEndedHero = ({ shotData, sessionData, shots }: SessionEndedHeroProps) => {
   const finalTimeMs = shotData?.absoluteTimeMs ?? 0;
   const totalShots = sessionData?.totalShots || shotData?.shotNumber || shots.length;
 
@@ -180,7 +172,7 @@ const SessionEndedHero = ({
   );
 };
 
-export const TimerDisplay = ({ roster }: { roster: RosterInfo | null }) => {
+export const TimerDisplay = ({ roster }: TimerDisplayProps) => {
   const displayState = useSelector(selectDisplayState);
   const shotData = useSelector(selectShotData);
   const sessionData = useSelector(selectSessionData);

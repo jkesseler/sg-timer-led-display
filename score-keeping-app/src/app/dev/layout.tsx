@@ -1,8 +1,5 @@
-import type { ReactNode } from 'react';
-
-// Root layout for the /dev segment — see src/app/timekeeper/layout.tsx for
-// why this is needed (no shared root layout.tsx in this template).
-export default function DevRootLayout({ children }: { children: ReactNode }) {
+// No shared root layout: each top-level segment provides its own <html>/<body>.
+export default function DevRootLayout({ children }: LayoutProps<'/dev'>) {
   return (
     <html lang="en">
       <body>{children}</body>

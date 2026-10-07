@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createScanCapture } from '@/lib/scanner/scanCapture';
-import type { ScanEvent } from '@/lib/scanner/scanCapture';
+import type { ScanEvent } from '@/lib/scanner/types';
 
 const SCANNER_GAP_MS = 10;
 const HUMAN_GAP_MS = 150;

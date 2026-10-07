@@ -1,6 +1,5 @@
 import { configureStore, combineReducers } from '@reduxjs/toolkit';
 import { useDispatch, useSelector } from 'react-redux';
-import type { MqttServerConfig } from '@/lib/mqtt/config';
 import { beepMiddleware } from './beepMiddleware';
 import { matchListeners } from './matchListeners';
 import { matchSlice } from './matchSlice';
@@ -9,7 +8,7 @@ import { mqttSlice } from './mqttSlice';
 import { buildInitialSettings, settingsSlice } from './settingsSlice';
 import { createSyncMiddleware } from './syncMiddleware';
 import { timekeeperSlice } from './timekeeperSlice';
-import type { SyncTransport } from './syncMiddleware';
+import type { StoreOptions } from './types';
 import type { Action, ThunkAction } from '@reduxjs/toolkit';
 import type { TypedUseSelectorHook } from 'react-redux';
 
@@ -21,12 +20,6 @@ const rootReducer = combineReducers({
 });
 
 export type RootState = ReturnType<typeof rootReducer>;
-
-interface StoreOptions {
-  /** Only the timekeeper persists match changes; /display never writes. */
-  sync?: SyncTransport;
-  mqttConfig?: MqttServerConfig;
-}
 
 /**
  * One store per mounted provider — a module-level store would be shared

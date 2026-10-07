@@ -1,34 +1,8 @@
 import { storage } from '@/lib/display/utils';
 import type { MatchState } from '@/lib/match/types';
 import { hydrate, isMatchChange, isResultAction, syncStatusChanged } from './matchSlice';
+import type { AuditEntry, MatchRootState, MaybeMetaAction, MetaAction, SyncOptions, SyncStatus, SyncStorage } from './types';
 import type { Middleware } from '@reduxjs/toolkit';
-import type { MatchSliceState } from './matchSlice';
-
-export interface AuditEntry {
-  actionId: string;
-  matchId: string;
-  at: string;
-  type: string;
-  payload: Record<string, unknown> | null;
-}
-
-/** The server side of the sync. Both calls must be idempotent: a retry after a lost response resends the same data. */
-export interface SyncTransport {
-  saveMatchState: (state: MatchState) => Promise<void>;
-  appendAudit: (entries: AuditEntry[]) => Promise<void>;
-}
-
-export interface SyncStorage {
-  get: <T>(key: string, defaultValue: T) => T;
-  set: <T>(key: string, value: T) => boolean;
-}
-
-interface SyncOptions {
-  transport: SyncTransport;
-  localStore?: SyncStorage;
-  debounceMs?: number;
-  maxRetryDelayMs?: number;
-}
 
 export const LOCAL_STATE_KEY = 'matchState';
 export const LOCAL_AUDIT_QUEUE_KEY = 'matchAuditQueue';
@@ -37,22 +11,16 @@ const DEFAULT_DEBOUNCE_MS = 500;
 const DEFAULT_MAX_RETRY_DELAY_MS = 30000;
 const FIRST_RETRY_DELAY_MS = 1000;
 
-interface SyncRootState {
-  match: MatchSliceState;
-}
-
 /**
- * Persists every match change: synchronously to localStorage (so a reload
- * never loses work), then to the server — results immediately, everything
- * else debounced. The browser is leading, so the snapshot always overwrites
- * the server copy. Failed pushes retry with backoff until they succeed.
+ * Persists every match change to localStorage synchronously, so a reload never loses work,
+ * then to the server: results immediately, the rest debounced, retrying with backoff.
  */
 export function createSyncMiddleware({
   transport,
   localStore = storage,
   debounceMs = DEFAULT_DEBOUNCE_MS,
   maxRetryDelayMs = DEFAULT_MAX_RETRY_DELAY_MS
-}: SyncOptions): Middleware<object, SyncRootState> {
+}: SyncOptions): Middleware<object, MatchRootState> {
   return (api) => {
     let debounceTimer: ReturnType<typeof setTimeout> | undefined;
     let retryTimer: ReturnType<typeof setTimeout> | undefined;
@@ -61,7 +29,7 @@ export function createSyncMiddleware({
     let isFlushRequested = false;
     let isSnapshotDirty = false;
 
-    function setStatus(status: MatchSliceState['syncStatus']) {
+    function setStatus(status: SyncStatus) {
       if (api.getState().match.syncStatus !== status) {
         api.dispatch(syncStatusChanged(status));
       }
@@ -144,7 +112,7 @@ export function createSyncMiddleware({
       const result = next(action);
 
       const isHydrate = hydrate.match(action);
-      const isChange = isMatchChange(action as { type: string });
+      const isChange = isMatchChange(action as MaybeMetaAction);
       if (!isHydrate && !isChange) {
         return result;
       }
@@ -158,7 +126,7 @@ export function createSyncMiddleware({
       isSnapshotDirty = true;
 
       if (isChange) {
-        const changeAction = action as { type: string; payload: Record<string, unknown> | null; meta: { id: string; at: string } };
+        const changeAction = action as MetaAction<AuditEntry['payload']>;
         enqueueAudit({
           actionId: changeAction.meta.id,
           matchId: state.matchId,

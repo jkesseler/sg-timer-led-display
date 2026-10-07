@@ -12,8 +12,15 @@ import {
   selectStatusLine
 } from '@/store/timekeeperSelectors';
 import { squadSelected } from '@/store/timekeeperSlice';
-import type { MatchSquad, SquadStatus } from '@/lib/match/types';
-import type { SyncStatus } from '@/store/matchSlice';
+import type { SquadStatus } from '@/lib/match/types';
+import type { SyncStatus } from '@/store/types';
+import type {
+  MessageViewProps,
+  RosterViewProps,
+  SquadStatusCardViewProps,
+  SquadTabsViewProps,
+  StatusLineViewProps
+} from './types';
 
 const SYNC_LABELS: Record<SyncStatus, string> = {
   synced: 'Saved',
@@ -22,17 +29,6 @@ const SYNC_LABELS: Record<SyncStatus, string> = {
 };
 
 const SQUAD_STATUSES: SquadStatus[] = ['scheduled', 'active', 'completed'];
-
-// --- Status line --------------------------------------------------------
-
-interface StatusLineViewProps {
-  syncStatus: SyncStatus;
-  deviceId: string | null;
-  isTimerOnline: boolean;
-  isBrokerConnected: boolean;
-  /** The barcode scanner arms shooters only while nobody is armed. */
-  isScannerListening: boolean;
-}
 
 export const StatusLineView = ({ syncStatus, deviceId, isTimerOnline, isBrokerConnected, isScannerListening }: StatusLineViewProps) => (
   <div className="tk-status-line">
@@ -52,14 +48,6 @@ export const StatusLineView = ({ syncStatus, deviceId, isTimerOnline, isBrokerCo
 export const StatusLine = () => (
   <StatusLineView {...useAppSelector(selectStatusLine)} isScannerListening={useAppSelector(selectIsScannerListening)} />
 );
-
-// --- Squad tabs ---------------------------------------------------------
-
-interface SquadTabsViewProps {
-  squads: MatchSquad[];
-  selectedSquadId: string | null;
-  onSelect: (squadId: string) => void;
-}
 
 export const SquadTabsView = ({ squads, selectedSquadId, onSelect }: SquadTabsViewProps) => (
   <nav className="tk-tabs" aria-label="Squads">
@@ -88,16 +76,6 @@ export const SquadTabs = () => {
     />
   );
 };
-
-// --- Squad status -------------------------------------------------------
-
-interface SquadStatusCardViewProps {
-  roundLabel: string;
-  squadStatus: SquadStatus;
-  turn: { verb: string; shooterName: string; round: number } | null;
-  onSquadStatusChange: (status: SquadStatus) => void;
-  onCancelTurn: () => void;
-}
 
 export const SquadStatusCardView = ({ roundLabel, squadStatus, turn, onSquadStatusChange, onCancelTurn }: SquadStatusCardViewProps) => (
   <section className="tk-card tk-status-card">
@@ -153,13 +131,6 @@ export const SquadStatusCard = () => {
   );
 };
 
-// --- Roster -------------------------------------------------------------
-
-interface RosterViewProps {
-  nextName: string | null;
-  onDeckName: string | null;
-}
-
 export const RosterView = ({ nextName, onDeckName }: RosterViewProps) => (
   <section className="tk-roster">
     <div className="tk-roster__item">
@@ -175,9 +146,7 @@ export const RosterView = ({ nextName, onDeckName }: RosterViewProps) => (
 
 export const Roster = () => <RosterView {...useAppSelector(selectRoster)} />;
 
-// --- Message ------------------------------------------------------------
-
-export const MessageView = ({ message }: { message: string | null }) =>
+export const MessageView = ({ message }: MessageViewProps) =>
   message ? <div className="tk-error">{message}</div> : null;
 
 export const Message = () => <MessageView message={useAppSelector(selectMessage)} />;

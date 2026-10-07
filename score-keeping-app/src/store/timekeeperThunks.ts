@@ -1,8 +1,6 @@
 import { arrayMove } from '@dnd-kit/sortable';
-import { TIMEKEEPER_BOOTSTRAP_URL } from '@/lib/match/bootstrap';
 import { findCardByKnsa, findNextRoundToShoot, parseTimeInput } from '@/lib/match/derive';
-import type { TimekeeperBootstrap } from '@/lib/match/bootstrap';
-import type { RoundStatus } from '@/lib/match/types';
+import type { RoundStatus, TimekeeperBootstrap } from '@/lib/match/types';
 import { addCard, armTurn, assignResult, disqualify, flagDnf, flagRs, hydrate, reorderQueue, setReshootTime, setRoundStatus, setRoundTime } from './matchSlice';
 import { selectDevice, startConnecting } from './mqttSlice';
 import { serverConfigLoaded } from './settingsSlice';
@@ -23,6 +21,7 @@ import {
 import { editorErrorShown, editorReshootTextChanged, editorTimeTextChanged, loaded, loadFailed, messageShown, squadSelected } from './timekeeperSlice';
 import type { AppThunk } from './store';
 
+const BOOTSTRAP_URL = '/timekeeper/bootstrap';
 const LOGIN_URL = '/timekeeper/login';
 const TIME_INPUT_ERROR = 'Enter a time in seconds, e.g. 12.34';
 
@@ -30,7 +29,7 @@ const TIME_INPUT_ERROR = 'Enter a time in seconds, e.g. 12.34';
 export const loadTimekeeper = (): AppThunk<Promise<void>> => async (dispatch) => {
   let bootstrap: TimekeeperBootstrap;
   try {
-    const response = await fetch(TIMEKEEPER_BOOTSTRAP_URL, { cache: 'no-store' });
+    const response = await fetch(BOOTSTRAP_URL, { cache: 'no-store' });
     if (response.status === 401) {
       window.location.assign(LOGIN_URL);
 
@@ -63,11 +62,7 @@ export const loadTimekeeper = (): AppThunk<Promise<void>> => async (dispatch) =>
   }
 };
 
-/**
- * A card read by the barcode scanner: arms that shooter's next round,
- * preferring their card in the selected squad. The capture is switched off
- * while a shooter is armed; the guard covers a scan that lands in the same tick.
- */
+/** Prefers the shooter's card in the selected squad. The active-turn guard covers a scan landing in the tick the capture switches off. */
 export const handleScannedCard = (knsaNumber: string): AppThunk => (dispatch, getState) => {
   const state = getState();
   const code = knsaNumber.trim();

@@ -22,24 +22,19 @@ import {
   increaseBrightness,
   decreaseBrightness
 } from '@/store/settingsSlice';
-import type { RosterInfo } from '@/lib/match/derive';
-import type { MqttSettings, KnownDevice } from '@/lib/mqtt/types';
+import type { RosterInfo } from '@/lib/match/types';
+import type { MqttSettings } from '@/lib/mqtt/types';
 import { getRosterForDevice } from '@/app/display/actions';
 import Settings from './Settings';
 import { TimerDisplay } from './TimerDisplay';
 import './DisplayApp.css';
 
-// How often to re-poll the Next:/On deck: roster for the active device.
-// This is a lightweight read, not a live push channel (the plan's fuller
-// app/queue/<squadId> MQTT-based sync is a follow-up refinement) — shot
-// events themselves still update instantly via the direct MQTT subscription
-// below; only the roster names are on this polling cadence.
+// Only the roster names poll; shot events arrive instantly over MQTT.
 const ROSTER_POLL_INTERVAL_MS = 3000;
 
 function DisplayApp() {
   const dispatch = useDispatch();
 
-  // Redux state
   const isConnected = useSelector(selectIsConnected);
   const connectionError = useSelector(selectConnectionError);
   const knownDevices = useSelector(selectKnownDevices);
@@ -48,17 +43,14 @@ function DisplayApp() {
   const currentDeviceId = useSelector(selectCurrentDeviceId);
   const settings = useSelector(selectSettings);
 
-  // Local UI state — status bar starts hidden so a freshly booted kiosk
-  // shows a clean display; press "I" to check connection details.
+  // Status bar starts hidden so a freshly booted kiosk shows a clean display.
   const [showSettings, setShowSettings] = useState(false);
   const [showStatus, setShowStatus] = useState(false);
   const [roster, setRoster] = useState<RosterInfo | null>(null);
 
-  // Track whether this is the initial mount so the reconnect effect
-  // doesn't fire on first render (the startup effect handles that).
+  // The startup effect connects on first render, so the reconnect effect skips it.
   const isInitialMount = useRef(true);
 
-  // Startup: auto-connect and schedule startup-complete
   useEffect(() => {
     if (settings.broker) {
       dispatch(startConnecting());
@@ -68,14 +60,12 @@ function DisplayApp() {
       dispatch(startupComplete());
     }, STARTUP_DISPLAY_MS);
 
-    // Teardown on unmount
     return () => {
       clearTimeout(timer);
       disconnectMqttClient();
     };
   }, []);
 
-  // Reconnect whenever connection-relevant settings change
   useEffect(() => {
     if (isInitialMount.current) {
       isInitialMount.current = false;
@@ -89,7 +79,6 @@ function DisplayApp() {
     return () => clearTimeout(timer);
   }, [settings.broker, settings.username, settings.password, dispatch]);
 
-  // Poll the shooter roster for whichever device is currently active.
   useEffect(() => {
     if (!currentDeviceId) {
       setRoster(null);
@@ -117,7 +106,6 @@ function DisplayApp() {
     };
   }, [currentDeviceId]);
 
-  // Handle settings save
   const handleSaveSettings = (newSettings: MqttSettings) => {
     dispatch(
       updateSettings({
@@ -131,7 +119,6 @@ function DisplayApp() {
     setShowSettings(false);
   };
 
-  // Keyboard shortcuts
   useEffect(() => {
     const handleKeyPress = (e: KeyboardEvent) => {
       if (e.key === 's' || e.key === 'S') {
@@ -152,7 +139,6 @@ function DisplayApp() {
 
   return (
     <div className="app" style={{ filter: brightnessFilter }}>
-      {/* Status Bar */}
       {showStatus && (
         <div className="status-bar">
           <div className="status-item">
@@ -166,7 +152,6 @@ function DisplayApp() {
             </div>
           )}
           <div className="status-item">{settings.broker}</div>
-          {/* Device selector – shown when more than one device is online */}
           {knownDevices.length > 1 && (
             <div className="status-item">
               <label htmlFor="device-select">Display: </label>
@@ -177,10 +162,10 @@ function DisplayApp() {
               >
                 <option value="">
                   Auto (
-                  {knownDevices.find((device: KnownDevice) => device.presence === 'online')?.deviceId ?? 'none'}
+                  {knownDevices.find(device => device.presence === 'online')?.deviceId ?? 'none'}
                   )
                 </option>
-                {knownDevices.map((device: KnownDevice) => (
+                {knownDevices.map(device => (
                   <option key={device.deviceId} value={device.deviceId}>
                     {device.deviceName ?? device.deviceId}
                     {' '}
@@ -214,7 +199,6 @@ function DisplayApp() {
             )}
       </div>
 
-      {/* Controls */}
       <div className="controls">
         <button className="control-button" onClick={() => setShowSettings(true)} title="Open settings (S)">
           Settings
@@ -244,7 +228,6 @@ function DisplayApp() {
         </div>
       </div>
 
-      {/* Settings Modal */}
       {showSettings && (
         <Settings
           onSave={handleSaveSettings}

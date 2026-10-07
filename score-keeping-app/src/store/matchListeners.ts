@@ -1,11 +1,7 @@
 import { createListenerMiddleware } from '@reduxjs/toolkit';
 import { addUnassignedResult, turnStarted, turnStopped } from './matchSlice';
 import { sessionStarted, sessionStopped } from './mqttSlice';
-import type { MatchSliceState } from './matchSlice';
-
-interface ListenerRootState {
-  match: MatchSliceState;
-}
+import type { MatchRootState } from './types';
 
 /** Binds timer sessions to the armed turn. A result with nothing armed is kept as unassigned rather than dropped. */
 export const matchListeners = createListenerMiddleware();
@@ -13,7 +9,8 @@ export const matchListeners = createListenerMiddleware();
 matchListeners.startListening({
   actionCreator: sessionStarted,
   effect: (_action, api) => {
-    const match = (api.getState() as ListenerRootState).match.current;
+    const state = api.getState() as MatchRootState;
+    const match = state.match.current;
     if (match?.activeTurn) {
       api.dispatch(turnStarted());
     }
@@ -23,7 +20,8 @@ matchListeners.startListening({
 matchListeners.startListening({
   actionCreator: sessionStopped,
   effect: (action, api) => {
-    const match = (api.getState() as ListenerRootState).match.current;
+    const state = api.getState() as MatchRootState;
+    const match = state.match.current;
     if (!match) {
       return;
     }

@@ -1,10 +1,5 @@
 import { connection } from 'next/server';
-
-export interface MqttServerConfig {
-  wsUrl: string | null;
-  username: string;
-  password: string;
-}
+import type { MqttServerConfig } from './types';
 
 /** Read per request, not at build time, so one build works against any broker. */
 export async function getMqttConfig(): Promise<MqttServerConfig> {

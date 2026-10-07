@@ -1,4 +1,5 @@
 import { uuidIdField } from '../fields/uuidId';
+import type { SquadTimeFields, SquadTitleFields } from './types';
 import type { CollectionConfig } from 'payload';
 
 export const Squads: CollectionConfig = {
@@ -18,11 +19,7 @@ export const Squads: CollectionConfig = {
       hooks: {
         beforeChange: [
           ({ siblingData }) => {
-            const { label, startTime, endTime } = siblingData as {
-              label?: string;
-              startTime?: string;
-              endTime?: string;
-            };
+            const { label, startTime, endTime } = siblingData as SquadTitleFields;
 
             return label || `${startTime} - ${endTime}`;
           }
@@ -41,7 +38,7 @@ export const Squads: CollectionConfig = {
             if (value) {
               return value;
             }
-            const { startTime, endTime } = siblingData as { startTime?: string; endTime?: string };
+            const { startTime, endTime } = siblingData as SquadTimeFields;
 
             return startTime && endTime ? `${startTime} - ${endTime}` : value;
           }

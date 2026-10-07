@@ -4,7 +4,7 @@ import { sessionStarted, sessionStopped } from '@/store/mqttSlice';
 import { makeStore } from '@/store/store';
 import { LOCAL_AUDIT_QUEUE_KEY, LOCAL_STATE_KEY, resolveInitialMatch } from '@/store/syncMiddleware';
 import { buildCard, buildState } from './matchFixtures';
-import type { AuditEntry, SyncTransport } from '@/store/syncMiddleware';
+import type { AuditEntry, SyncTransport } from '@/store/types';
 import type { MatchState } from '@/lib/match/types';
 
 function createFakeTransport() {

@@ -2,7 +2,7 @@ import { getPayload } from 'payload';
 import { buildFreshMatchState, findActiveMatch, findMatchState } from '@/lib/match/loadActiveMatch';
 import { getMqttConfig } from '@/lib/mqtt/config';
 import config from '@/payload.config';
-import type { TimekeeperBootstrap } from '@/lib/match/bootstrap';
+import type { TimekeeperBootstrap } from '@/lib/match/types';
 
 /** Everything the client-only timekeeper needs on load; it renders nothing on the server. */
 export async function GET(request: Request) {

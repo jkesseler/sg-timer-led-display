@@ -5,7 +5,7 @@ import { createPortal } from 'react-dom';
 import { useAppDispatch, useAppSelector } from '@/store/store';
 import { selectPrintRequest, selectScoreSheet } from '@/store/timekeeperSelectors';
 import { scoreSheetPrinted } from '@/store/timekeeperSlice';
-import type { ScoreSheetView as ScoreSheetData } from '@/store/timekeeperSelectors';
+import type { ScoreSheetView as ScoreSheetData } from '@/store/types';
 
 /** One A6 score sheet; only visible when printing (see the print rules in timekeeper.css). */
 export const ScoreSheetView = ({
@@ -66,11 +66,7 @@ export const ScoreSheetView = ({
   </article>
 );
 
-/**
- * Prints the requested score sheet: renders it into a print-only area at the
- * end of <body> and opens the browser's print. With silent printing enabled
- * in the browser it goes straight to the label printer.
- */
+/** With silent printing enabled in the browser, the sheet goes straight to the label printer. */
 export const ScoreSheetPrinter = () => {
   const dispatch = useAppDispatch();
   const printRequest = useAppSelector(selectPrintRequest);

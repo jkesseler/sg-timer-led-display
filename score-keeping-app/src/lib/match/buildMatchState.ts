@@ -1,36 +1,5 @@
-import type { Discipline } from '@/lib/domain/disciplines';
 import { ROUNDS_PER_CARD } from './types';
-import type { Card, MatchState, Round } from './types';
-
-export interface SetupSquad {
-  id: string;
-  label: string;
-  startTime: string;
-  endTime: string;
-}
-
-export interface SetupMember {
-  id: string;
-  squadId: string;
-  shooterId: string;
-  startingPosition: number;
-  discipline: Discipline;
-}
-
-export interface SetupShooter {
-  id: string;
-  firstName: string;
-  lastName: string;
-  knsaNumber: string | null;
-}
-
-export interface MatchSetup {
-  matchId: string;
-  deviceId: string | null;
-  squads: SetupSquad[];
-  members: SetupMember[];
-  shooters: SetupShooter[];
-}
+import type { Card, MatchSetup, MatchState, Round } from './types';
 
 export function buildPendingRounds(): Round[] {
   return Array.from({ length: ROUNDS_PER_CARD }, (_, index) => ({

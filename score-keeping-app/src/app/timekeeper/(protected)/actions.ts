@@ -4,7 +4,7 @@ import { headers as getHeaders } from 'next/headers';
 import { getPayload } from 'payload';
 import config from '@/payload.config';
 import type { MatchState } from '@/lib/match/types';
-import type { AuditEntry } from '@/store/syncMiddleware';
+import type { AuditEntry } from '@/store/types';
 
 async function getAuthenticatedPayload() {
   const payload = await getPayload({ config });

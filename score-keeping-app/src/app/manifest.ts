@@ -1,8 +1,6 @@
 import type { MetadataRoute } from 'next';
 
-// Replaces pwa-display-app's vite-plugin-pwa config. The only installable
-// route in this app is /display (a TV/tablet kiosk); /admin and /timekeeper
-// are staff tools, not meant to be "added to home screen".
+// Only /display is installable; /admin and /timekeeper are staff tools.
 export default function manifest(): MetadataRoute.Manifest {
   return {
     name: 'SG Timer LED Display',

@@ -1,40 +1,29 @@
 import { createSlice, isAnyOf } from '@reduxjs/toolkit';
 import { buildPendingRounds } from '@/lib/match/buildMatchState';
 import { deriveCurrentRound, getSquadCards } from '@/lib/match/derive';
-import type { Discipline } from '@/lib/domain/disciplines';
-import type { Card, MatchState, Round, RoundStatus, SquadStatus } from '@/lib/match/types';
+import type { Card, MatchState, Round } from '@/lib/match/types';
+import type {
+  AddCardPayload,
+  AssignResultPayload,
+  CardRef,
+  DisqualifyPayload,
+  MatchSliceState,
+  MaybeMetaAction,
+  MetaAction,
+  NewCard,
+  ReorderQueuePayload,
+  ReshootTimePayload,
+  ResultRef,
+  RoundRef,
+  RoundStatusPayload,
+  RoundTimePayload,
+  ShooterRef,
+  SquadStatusPayload,
+  SyncStatus,
+  TurnStoppedPayload,
+  UnassignedResultPayload
+} from './types';
 import type { PayloadAction } from '@reduxjs/toolkit';
-
-export interface MatchActionMeta {
-  id: string;
-  at: string;
-}
-
-type MetaAction<P> = PayloadAction<P, string, MatchActionMeta>;
-
-export type SyncStatus = 'synced' | 'dirty' | 'error';
-
-export interface MatchSliceState {
-  current: MatchState | null;
-  syncStatus: SyncStatus;
-}
-
-interface RoundRef {
-  cardId: string;
-  round: number;
-}
-
-interface CardRef {
-  cardId: string;
-}
-
-interface NewCard {
-  squadId: string;
-  shooterId: string;
-  shooterName: string;
-  knsaNumber: string | null;
-  discipline: Discipline;
-}
 
 const initialState: MatchSliceState = { current: null, syncStatus: 'synced' };
 
@@ -81,7 +70,7 @@ export const matchSlice = createSlice({
   name: 'match',
   initialState,
   reducers: {
-    hydrate(state, action: PayloadAction<MatchState | null>) {
+    hydrate(state, action) {
       state.current = action.payload;
     },
 
@@ -128,7 +117,7 @@ export const matchSlice = createSlice({
 
     /** No lastShotTimeMs means no shots were fired: the turn is discarded and the round stays as it was. */
     turnStopped: {
-      reducer(state, action: MetaAction<{ lastShotTimeMs: number | null }>) {
+      reducer(state, action: MetaAction<TurnStoppedPayload>) {
         const match = state.current;
         const activeTurn = match?.activeTurn;
         if (!match || !activeTurn) {
@@ -141,12 +130,12 @@ export const matchSlice = createSlice({
         }
         match.activeTurn = null;
       },
-      prepare: withMeta<{ lastShotTimeMs: number | null }>
+      prepare: withMeta<TurnStoppedPayload>
     },
 
     /** Typing a time onto a pending round times it; clearing a timed round's time makes it pending again. */
     setRoundTime: {
-      reducer(state, action: MetaAction<RoundRef & { timeMs: number | null }>) {
+      reducer(state, action: MetaAction<RoundTimePayload>) {
         const round = state.current ? findRound(state.current, action.payload) : undefined;
         if (!round) {
           return;
@@ -162,27 +151,27 @@ export const matchSlice = createSlice({
           round.status = 'pending';
         }
       },
-      prepare: withMeta<RoundRef & { timeMs: number | null }>
+      prepare: withMeta<RoundTimePayload>
     },
 
     setRoundStatus: {
-      reducer(state, action: MetaAction<RoundRef & { status: RoundStatus }>) {
+      reducer(state, action: MetaAction<RoundStatusPayload>) {
         const round = state.current ? findRound(state.current, action.payload) : undefined;
         if (round) {
           round.status = action.payload.status;
         }
       },
-      prepare: withMeta<RoundRef & { status: RoundStatus }>
+      prepare: withMeta<RoundStatusPayload>
     },
 
     setReshootTime: {
-      reducer(state, action: MetaAction<RoundRef & { reshootTimeMs: number | null }>) {
+      reducer(state, action: MetaAction<ReshootTimePayload>) {
         const round = state.current ? findRound(state.current, action.payload) : undefined;
         if (round) {
           round.reshootTimeMs = action.payload.reshootTimeMs;
         }
       },
-      prepare: withMeta<RoundRef & { reshootTimeMs: number | null }>
+      prepare: withMeta<ReshootTimePayload>
     },
 
     flagRs: {
@@ -206,25 +195,25 @@ export const matchSlice = createSlice({
     },
 
     disqualify: {
-      reducer(state, action: MetaAction<CardRef & { reason: string }>) {
+      reducer(state, action: MetaAction<DisqualifyPayload>) {
         const card = state.current ? findCard(state.current, action.payload.cardId) : undefined;
         if (card) {
           card.dq = { reason: action.payload.reason, at: action.meta.at };
         }
       },
-      prepare: withMeta<CardRef & { reason: string }>
+      prepare: withMeta<DisqualifyPayload>
     },
 
     /** Clears the DQ from every card of the shooter, since a DQ on one card voids them all. */
     reinstate: {
-      reducer(state, action: MetaAction<{ shooterId: string }>) {
+      reducer(state, action: MetaAction<ShooterRef>) {
         for (const card of state.current?.cards ?? []) {
           if (card.shooterId === action.payload.shooterId) {
             card.dq = null;
           }
         }
       },
-      prepare: withMeta<{ shooterId: string }>
+      prepare: withMeta<ShooterRef>
     },
 
     markAbsent: {
@@ -252,7 +241,7 @@ export const matchSlice = createSlice({
     },
 
     reorderQueue: {
-      reducer(state, action: MetaAction<{ cardIds: string[] }>) {
+      reducer(state, action: MetaAction<ReorderQueuePayload>) {
         const match = state.current;
         if (!match) {
           return;
@@ -265,12 +254,12 @@ export const matchSlice = createSlice({
           }
         });
       },
-      prepare: withMeta<{ cardIds: string[] }>
+      prepare: withMeta<ReorderQueuePayload>
     },
 
     /** A late shooter joins at the back of the queue; rounds the squad already shot become catch-up rounds. */
     addCard: {
-      reducer(state, action: MetaAction<NewCard & { cardId: string }>) {
+      reducer(state, action: MetaAction<AddCardPayload>) {
         const match = state.current;
         if (!match) {
           return;
@@ -318,24 +307,24 @@ export const matchSlice = createSlice({
     },
 
     setSquadStatus: {
-      reducer(state, action: MetaAction<{ squadId: string; status: SquadStatus }>) {
+      reducer(state, action: MetaAction<SquadStatusPayload>) {
         const squad = state.current?.squads.find(candidate => candidate.id === action.payload.squadId);
         if (squad) {
           squad.status = action.payload.status;
         }
       },
-      prepare: withMeta<{ squadId: string; status: SquadStatus }>
+      prepare: withMeta<SquadStatusPayload>
     },
 
     addUnassignedResult: {
-      reducer(state, action: MetaAction<{ timeMs: number }>) {
+      reducer(state, action: MetaAction<UnassignedResultPayload>) {
         state.current?.unassignedResults.push({ id: action.meta.id, timeMs: action.payload.timeMs, at: action.meta.at });
       },
-      prepare: withMeta<{ timeMs: number }>
+      prepare: withMeta<UnassignedResultPayload>
     },
 
     assignResult: {
-      reducer(state, action: MetaAction<RoundRef & { resultId: string }>) {
+      reducer(state, action: MetaAction<AssignResultPayload>) {
         const match = state.current;
         const result = match?.unassignedResults.find(candidate => candidate.id === action.payload.resultId);
         const round = match ? findRound(match, action.payload) : undefined;
@@ -346,17 +335,17 @@ export const matchSlice = createSlice({
         applyResult(round, result.timeMs);
         match.unassignedResults = match.unassignedResults.filter(candidate => candidate.id !== result.id);
       },
-      prepare: withMeta<RoundRef & { resultId: string }>
+      prepare: withMeta<AssignResultPayload>
     },
 
     discardUnassignedResult: {
-      reducer(state, action: MetaAction<{ resultId: string }>) {
+      reducer(state, action: MetaAction<ResultRef>) {
         const match = state.current;
         if (match) {
           match.unassignedResults = match.unassignedResults.filter(candidate => candidate.id !== action.payload.resultId);
         }
       },
-      prepare: withMeta<{ resultId: string }>
+      prepare: withMeta<ResultRef>
     }
   },
   extraReducers: (builder) => {
@@ -368,7 +357,7 @@ export const matchSlice = createSlice({
   }
 });
 
-export function isMatchChange(action: { type: string; meta?: MatchActionMeta }): action is MetaAction<object | null> {
+export function isMatchChange(action: MaybeMetaAction): action is MetaAction<object | null> {
   return action.type.startsWith(`${matchSlice.name}/`) && action.meta !== undefined;
 }
 

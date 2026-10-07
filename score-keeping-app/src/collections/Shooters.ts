@@ -1,4 +1,5 @@
 import { uuidIdField } from '../fields/uuidId';
+import type { ShooterNameFields } from './types';
 import type { CollectionConfig } from 'payload';
 
 export const Shooters: CollectionConfig = {
@@ -23,20 +24,13 @@ export const Shooters: CollectionConfig = {
     {
       name: 'displayName',
       type: 'text',
-      // Used as the relationship-select and title label ("Firstname Lastname - KNSA").
-      // Persisted via beforeChange (not computed on read) because the
-      // relationship-field option list fetches a narrowed `select` that omits
-      // firstName/lastName/knsaNumber — an afterRead-only computation would see
-      // no sibling data there and fall back to "Untitled".
+      // Persisted, not computed on read: the relationship picker fetches only
+      // the title field, so an afterRead fallback would see no names there.
       admin: { hidden: true },
       hooks: {
         beforeChange: [
           ({ siblingData }) => {
-            const { firstName, lastName, knsaNumber } = siblingData as {
-              firstName?: string;
-              lastName?: string;
-              knsaNumber?: string;
-            };
+            const { firstName, lastName, knsaNumber } = siblingData as ShooterNameFields;
             const name = [firstName, lastName].filter(Boolean).join(' ');
 
             return knsaNumber ? `${name} - ${knsaNumber}` : name;
@@ -47,14 +41,11 @@ export const Shooters: CollectionConfig = {
     {
       name: 'asnNumber',
       type: 'text'
-      // Some shooters have no ASN membership number on record.
     },
     {
       name: 'knsaNumber',
       type: 'text',
       unique: true,
-      // Optional: not every shooter has a barcode card to scan, in which
-      // case they can only be selected manually by the timekeeper.
       admin: {
         description: 'Barcode scan lookup key. Leave blank if the shooter has no card.'
       }

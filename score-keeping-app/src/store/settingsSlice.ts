@@ -1,27 +1,8 @@
 import { createSlice, PayloadAction } from '@reduxjs/toolkit';
 import { storage } from '@/lib/display/utils';
-import type { MqttServerConfig } from '@/lib/mqtt/config';
-import type { MqttSettings } from '@/lib/mqtt/types';
+import type { MqttServerConfig, MqttSettings } from '@/lib/mqtt/types';
 import type { RootState } from './store';
-
-// ---------------------------------------------------------------------------
-// State
-// ---------------------------------------------------------------------------
-
-export interface BrokerDefaults {
-  broker: string;
-  username: string;
-  password: string;
-}
-
-export interface SettingsState {
-  broker: string;
-  username: string;
-  password: string;
-  clientId: string;
-  brightness: number;
-  defaults: BrokerDefaults;
-}
+import type { BrokerDefaults, SettingsState } from './types';
 
 const SETTINGS_STORAGE_KEY = 'mqttSettings';
 
@@ -55,10 +36,6 @@ export function buildInitialSettings(serverConfig?: MqttServerConfig): SettingsS
 
 const initialState: SettingsState = buildInitialSettings();
 
-// ---------------------------------------------------------------------------
-// Slice
-// ---------------------------------------------------------------------------
-
 export const settingsSlice = createSlice({
   name: 'settings',
   initialState,
@@ -66,7 +43,6 @@ export const settingsSlice = createSlice({
     updateSettings(state, action: PayloadAction<Partial<SettingsState>>) {
       Object.assign(state, action.payload);
 
-      // Persist to localStorage
       const mqttSettings: MqttSettings = {
         broker: state.broker,
         username: state.username,
@@ -107,10 +83,6 @@ export const settingsSlice = createSlice({
     }
   }
 });
-
-// ---------------------------------------------------------------------------
-// Selectors
-// ---------------------------------------------------------------------------
 
 export const selectBrightness = (state: RootState) => state.settings.brightness;
 export const selectSettings = (state: RootState) => state.settings;

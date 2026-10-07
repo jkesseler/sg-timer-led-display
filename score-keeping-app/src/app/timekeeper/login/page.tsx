@@ -1,11 +1,7 @@
 import { loginAction } from './actions';
 import '../timekeeper.css';
 
-export default async function TimekeeperLoginPage({
-  searchParams
-}: {
-  searchParams: Promise<{ error?: string }>;
-}) {
+export default async function TimekeeperLoginPage({ searchParams }: PageProps<'/timekeeper/login'>) {
   const { error } = await searchParams;
 
   return (

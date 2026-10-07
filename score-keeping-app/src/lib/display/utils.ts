@@ -1,13 +1,4 @@
-/**
- * Utility functions for the /display route.
- * Time formatting utilities matching ESP32 firmware.
- */
-
-/**
- * Format a timer value (elapsed time or split time) to hundredths precision.
- * Under 60s: "S.CC" (e.g., "2.34"). At/over 60s: "M:SS.CC" (e.g., "1:23.40").
- * Shot timers conventionally report to the hundredth of a second.
- */
+/** "S.CC" under a minute, "M:SS.CC" from a minute up. */
 export function formatTimeValue(timeMs: number): string {
   const totalSeconds = timeMs / 1000;
 
@@ -21,17 +12,10 @@ export function formatTimeValue(timeMs: number): string {
   return `${minutes}:${seconds.toFixed(2).padStart(5, '0')}`;
 }
 
-/**
- * Format countdown display
- * Shows remaining seconds with one decimal place
- */
 export function formatCountdown(remainingSeconds: number): string {
   return remainingSeconds.toFixed(1);
 }
 
-/**
- * Parse MQTT message payload
- */
 export function parseMqttMessage<T = any>(topic: string, payload: Buffer): T | null {
   try {
     return JSON.parse(payload.toString()) as T;
@@ -42,9 +26,7 @@ export function parseMqttMessage<T = any>(topic: string, payload: Buffer): T | n
   }
 }
 
-/**
- * Local storage helpers with type safety
- */
+/** localStorage that never throws (private mode, quota, server render). */
 export const storage = {
   get<T>(key: string, defaultValue: T): T {
     try {

@@ -9,15 +9,11 @@ import { useAppDispatch, useAppSelector } from '@/store/store';
 import { selectLoadError, selectLoadStatus, selectMatchLabel, selectUserEmail } from '@/store/timekeeperSelectors';
 import { timekeeperReset } from '@/store/timekeeperSlice';
 import { loadTimekeeper } from '@/store/timekeeperThunks';
-import type { TimekeeperLoadStatus } from '@/store/timekeeperSlice';
-import type { SyncTransport } from '@/store/syncMiddleware';
+import type { SyncTransport } from '@/store/types';
 import { TimekeeperBoard } from './TimekeeperBoard';
+import type { HeaderViewProps, MainViewProps } from './types';
 
 const syncTransport: SyncTransport = { saveMatchState, appendAudit };
-
-interface HeaderViewProps {
-  userEmail: string | null;
-}
 
 export const HeaderView = ({ userEmail }: HeaderViewProps) => (
   <header className="tk-header">
@@ -28,12 +24,6 @@ export const HeaderView = ({ userEmail }: HeaderViewProps) => (
     </form>
   </header>
 );
-
-interface MainViewProps {
-  loadStatus: TimekeeperLoadStatus;
-  loadError: string | null;
-  matchLabel: string | null;
-}
 
 export const MainView = ({ loadStatus, loadError, matchLabel }: MainViewProps) => {
   switch (loadStatus) {
@@ -86,7 +76,6 @@ const TimekeeperShell = () => {
   );
 };
 
-/** Client-only: the page renders nothing on the server and fetches its data from /timekeeper/bootstrap. */
 export const TimekeeperApp = () => (
   <ReduxProvider sync={syncTransport}>
     <TimekeeperShell />

@@ -1,31 +1,16 @@
 import { createSlice, PayloadAction } from '@reduxjs/toolkit';
 import { DisplayState, ConnectionState } from '@/lib/mqtt/types';
 import type {
-  ShotData,
   SessionData,
   KnownDevice,
   ConnectionStateMessage,
   SessionStartedMessage,
   SessionStoppedMessage,
   ShotDetectedMessage,
-  CountdownCompleteMessage,
-  DeviceInfoMessage
+  CountdownCompleteMessage
 } from '@/lib/mqtt/types';
 import type { RootState } from './store';
-
-export interface MqttState {
-  isConnecting: boolean;
-  isConnected: boolean;
-  connectionError: string | null;
-  displayState: DisplayState;
-  shotData: ShotData | null;
-  sessionData: SessionData | null;
-  shots: ShotData[];
-  deviceName: string | null;
-  knownDevices: KnownDevice[];
-  selectedDeviceId: string | null;
-  countdownRemainingMs: number;
-}
+import type { DeviceInfoUpdate, DevicePresenceUpdate, MqttState } from './types';
 
 const initialState: MqttState = {
   isConnecting: false,
@@ -64,8 +49,6 @@ export const mqttSlice = createSlice({
   name: 'mqtt',
   initialState,
   reducers: {
-    // -----------  Connection lifecycle  -----------
-
     startConnecting(state) {
       state.isConnecting = true;
       state.connectionError = null;
@@ -88,16 +71,11 @@ export const mqttSlice = createSlice({
       state.isConnecting = false;
     },
 
-    // -----------  Device discovery  -----------
-
     selectDevice(state, action: PayloadAction<string | null>) {
       state.selectedDeviceId = action.payload;
     },
 
-    devicePresenceUpdated(
-      state,
-      action: PayloadAction<{ deviceId: string; presence: 'online' | 'offline' }>
-    ) {
+    devicePresenceUpdated(state, action: PayloadAction<DevicePresenceUpdate>) {
       const { deviceId, presence } = action.payload;
       const idx = state.knownDevices.findIndex(device => device.deviceId === deviceId);
       if (idx === -1) {
@@ -109,13 +87,7 @@ export const mqttSlice = createSlice({
       }
     },
 
-    deviceInfoUpdated(
-      state,
-      action: PayloadAction<{
-        deviceId: string;
-        info: DeviceInfoMessage;
-      }>
-    ) {
+    deviceInfoUpdated(state, action: PayloadAction<DeviceInfoUpdate>) {
       const { deviceId, info } = action.payload;
       const idx = state.knownDevices.findIndex(device => device.deviceId === deviceId);
       const patch = {
@@ -134,11 +106,8 @@ export const mqttSlice = createSlice({
         Object.assign(state.knownDevices[idx], patch);
       }
 
-      // Also set the device name for display
       state.deviceName = info.deviceName || info.deviceModel || null;
     },
-
-    // -----------  Timer connection state (from ESP32)  -----------
 
     timerConnectionStateChanged(state, action: PayloadAction<ConnectionStateMessage>) {
       const msg = action.payload;
@@ -168,8 +137,6 @@ export const mqttSlice = createSlice({
       }
     },
 
-    // -----------  Session events  -----------
-
     sessionStarted(state, action: PayloadAction<SessionStartedMessage>) {
       const msg = action.payload;
       const newSession: SessionData = {
@@ -192,13 +159,11 @@ export const mqttSlice = createSlice({
       }
     },
 
-    /** Called once per animation-frame tick while countdown is active */
     countdownTick(state, action: PayloadAction<number>) {
       state.countdownRemainingMs = Math.max(0, action.payload);
     },
 
-    countdownComplete(state, action: PayloadAction<CountdownCompleteMessage>) {
-      void action; // payload used by beepMiddleware side-effect
+    countdownComplete(state, _action: PayloadAction<CountdownCompleteMessage>) {
       state.displayState = DisplayState.WAITING_FOR_SHOTS;
       state.countdownRemainingMs = 0;
     },
@@ -210,7 +175,6 @@ export const mqttSlice = createSlice({
         state.sessionData.totalShots = msg.totalShots ?? state.sessionData.totalShots;
       }
 
-      // If session ended includes last shot time, show it
       if (msg.lastShotTimeMs !== undefined && msg.lastShotTimeMs > 0) {
         state.shotData = {
           sessionId: msg.sessionId,
@@ -226,8 +190,6 @@ export const mqttSlice = createSlice({
       state.displayState = DisplayState.SESSION_ENDED;
       state.countdownRemainingMs = 0;
     },
-
-    // -----------  Shot events  -----------
 
     shotDetected(state, action: PayloadAction<ShotDetectedMessage>) {
       const msg = action.payload;
@@ -251,8 +213,6 @@ export const mqttSlice = createSlice({
       }
     },
 
-    // -----------  Startup transition  -----------
-
     startupComplete(state) {
       if (state.displayState === DisplayState.STARTUP) {
         state.displayState = DisplayState.DISCONNECTED;
@@ -260,10 +220,6 @@ export const mqttSlice = createSlice({
     }
   }
 });
-
-// ---------------------------------------------------------------------------
-// Selectors
-// ---------------------------------------------------------------------------
 
 export const selectIsConnected = (state: RootState) => state.mqtt.isConnected;
 export const selectIsConnecting = (state: RootState) => state.mqtt.isConnecting;

@@ -8,28 +8,14 @@ import { selectAbsentRows, selectLateShooterView, selectOutstanding, selectUnass
 import { lateShooterChanged, unassignedDraftChanged } from '@/store/timekeeperSlice';
 import { addLateShooter, assignUnassignedResult } from '@/store/timekeeperThunks';
 import type { Discipline } from '@/lib/domain/disciplines';
-import type { ShooterOption } from '@/lib/match/bootstrap';
+import type {
+  AbsentListViewProps,
+  LateShooterFormViewProps,
+  OutstandingListViewProps,
+  UnassignedResultsViewProps
+} from './types';
 
 const ROUND_NUMBERS = Array.from({ length: ROUNDS_PER_CARD }, (_, index) => index + 1);
-
-// --- Unassigned results -------------------------------------------------
-
-interface UnassignedResultRow {
-  resultId: string;
-  timeText: string;
-  at: string;
-  cardId: string;
-  round: number;
-}
-
-interface UnassignedResultsViewProps {
-  results: UnassignedResultRow[];
-  shooterOptions: { cardId: string; shooterName: string }[];
-  onCardChange: (resultId: string, cardId: string) => void;
-  onRoundChange: (resultId: string, round: number) => void;
-  onAssign: (resultId: string) => void;
-  onDiscard: (resultId: string) => void;
-}
 
 /** Timer results that arrived with nobody armed; the timekeeper puts each on the right round. */
 export const UnassignedResultsView = ({ results, shooterOptions, onCardChange, onRoundChange, onAssign, onDiscard }: UnassignedResultsViewProps) => {
@@ -88,20 +74,6 @@ export const UnassignedResults = () => {
   );
 };
 
-// --- Outstanding --------------------------------------------------------
-
-interface OutstandingRow {
-  cardId: string;
-  shooterName: string;
-  round: number;
-  kindLabel: string;
-}
-
-interface OutstandingListViewProps {
-  items: OutstandingRow[];
-  onArm: (cardId: string, round: number) => void;
-}
-
 export const OutstandingListView = ({ items, onArm }: OutstandingListViewProps) => {
   if (items.length === 0) {
     return null;
@@ -137,13 +109,6 @@ export const OutstandingList = () => {
   );
 };
 
-// --- Absent -------------------------------------------------------------
-
-interface AbsentListViewProps {
-  rows: { cardId: string; shooterName: string }[];
-  onMarkPresent: (cardId: string) => void;
-}
-
 export const AbsentListView = ({ rows, onMarkPresent }: AbsentListViewProps) => {
   if (rows.length === 0) {
     return null;
@@ -176,17 +141,6 @@ export const AbsentList = () => {
     />
   );
 };
-
-// --- Late shooter -------------------------------------------------------
-
-interface LateShooterFormViewProps {
-  shooters: ShooterOption[];
-  shooterId: string;
-  discipline: Discipline;
-  onShooterChange: (shooterId: string) => void;
-  onDisciplineChange: (discipline: Discipline) => void;
-  onAdd: () => void;
-}
 
 export const LateShooterFormView = ({ shooters, shooterId, discipline, onShooterChange, onDisciplineChange, onAdd }: LateShooterFormViewProps) => (
   <section className="tk-card">

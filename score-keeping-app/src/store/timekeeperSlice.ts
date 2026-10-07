@@ -1,65 +1,8 @@
 import { createSlice } from '@reduxjs/toolkit';
 import { DISCIPLINES } from '@/lib/domain/disciplines';
-import type { ShooterOption } from '@/lib/match/bootstrap';
-import type { Discipline } from '@/lib/domain/disciplines';
 import { addCard, assignResult, discardUnassignedResult, disqualify, setReshootTime, setRoundTime, signOff } from './matchSlice';
+import type { LateShooterDraft, RoundRef, TimekeeperLoadedPayload, TimekeeperState, UnassignedDraftChange } from './types';
 import type { PayloadAction } from '@reduxjs/toolkit';
-
-export type TimekeeperLoadStatus = 'loading' | 'ready' | 'no-match' | 'error';
-
-/**
- * Text typed into the round editor. `null` means untouched: the input then
- * shows the stored round value, so it always follows the round being edited.
- */
-export interface RoundEditorState {
-  cardId: string;
-  round: number;
-  timeText: string | null;
-  reshootText: string | null;
-  error: string | null;
-}
-
-export interface DqDialogState {
-  cardId: string;
-  reason: string;
-}
-
-/** Choices for one unassigned result; absent fields fall back to defaults in the selectors. */
-export interface UnassignedDraft {
-  cardId?: string;
-  round?: number;
-}
-
-export interface LateShooterDraft {
-  shooterId: string;
-  discipline: Discipline;
-}
-
-/**
- * A score sheet waiting to be printed. `requestNumber` grows with every
- * request, so reprinting the same card is a new request too.
- */
-export interface PrintRequest {
-  cardId: string;
-  requestNumber: number;
-}
-
-export interface TimekeeperState {
-  loadStatus: TimekeeperLoadStatus;
-  loadError: string | null;
-  userEmail: string | null;
-  matchLabel: string | null;
-  shooters: ShooterOption[];
-  /** The tab the timekeeper picked; null follows the squad in play. */
-  selectedSquadId: string | null;
-  message: string | null;
-  editor: RoundEditorState | null;
-  dqDialog: DqDialogState | null;
-  lateShooter: LateShooterDraft;
-  unassignedDrafts: Record<string, UnassignedDraft>;
-  printRequest: PrintRequest | null;
-  printRequestCount: number;
-}
 
 const initialState: TimekeeperState = {
   loadStatus: 'loading',
@@ -82,17 +25,11 @@ function requestPrint(state: TimekeeperState, cardId: string) {
   state.printRequest = { cardId, requestNumber: state.printRequestCount };
 }
 
-interface LoadedPayload {
-  userEmail: string;
-  matchLabel: string | null;
-  shooters: ShooterOption[];
-}
-
 export const timekeeperSlice = createSlice({
   name: 'timekeeper',
   initialState,
   reducers: {
-    loaded(state, action: PayloadAction<LoadedPayload>) {
+    loaded(state, action: PayloadAction<TimekeeperLoadedPayload>) {
       state.userEmail = action.payload.userEmail;
       state.matchLabel = action.payload.matchLabel;
       state.shooters = action.payload.shooters;
@@ -112,8 +49,7 @@ export const timekeeperSlice = createSlice({
       state.message = action.payload;
     },
 
-    /** Clicking the round that is already open closes it. */
-    roundEditorToggled(state, action: PayloadAction<{ cardId: string; round: number }>) {
+    roundEditorToggled(state, action: PayloadAction<RoundRef>) {
       const { cardId, round } = action.payload;
       const isOpen = state.editor?.cardId === cardId && state.editor.round === round;
       state.editor = isOpen ? null : { cardId, round, timeText: null, reshootText: null, error: null };
@@ -153,7 +89,7 @@ export const timekeeperSlice = createSlice({
       Object.assign(state.lateShooter, action.payload);
     },
 
-    unassignedDraftChanged(state, action: PayloadAction<{ resultId: string } & UnassignedDraft>) {
+    unassignedDraftChanged(state, action: PayloadAction<UnassignedDraftChange>) {
       const { resultId, ...draft } = action.payload;
       state.unassignedDrafts[resultId] = { ...state.unassignedDrafts[resultId], ...draft };
     },
@@ -187,7 +123,6 @@ export const timekeeperSlice = createSlice({
           state.editor.error = null;
         }
       })
-      // Signing off prints the shooter's score sheet.
       .addCase(signOff, (state, action) => {
         requestPrint(state, action.payload.cardId);
       })

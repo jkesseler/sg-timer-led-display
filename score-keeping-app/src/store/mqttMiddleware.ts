@@ -7,24 +7,18 @@ import type {
   SessionStoppedMessage,
   ShotDetectedMessage,
   CountdownCompleteMessage,
-  DeviceInfoMessage
+  DeviceInfoMessage,
+  DevicePresence
 } from '@/lib/mqtt/types';
 import { mqttSlice } from './mqttSlice';
 import { selectMqttConnectionSettings } from './settingsSlice';
 import type { Middleware } from '@reduxjs/toolkit';
 import type { RootState } from './store';
 
-// ---------------------------------------------------------------------------
-// Internal state held outside Redux (the live WebSocket client)
-// ---------------------------------------------------------------------------
-
 let mqttClient: MqttClient | null = null;
 let countdownTimerId: ReturnType<typeof setInterval> | null = null;
 
-/**
- * Match a topic pattern (with '+' single-level wildcard) against a concrete topic.
- * '#' multi-level wildcard is supported only at the end.
- */
+/** '+' matches one level; '#' matches the rest, and only at the end. */
 function matchPattern(pattern: string, topic: string): boolean {
   const pp = pattern.split('/');
   const tp = topic.split('/');
@@ -42,10 +36,6 @@ function matchPattern(pattern: string, topic: string): boolean {
   return pp.every((seg, i) => seg === '+' || seg === tp[i]);
 }
 
-// ---------------------------------------------------------------------------
-// Countdown timer helpers
-// ---------------------------------------------------------------------------
-
 function startCountdownTimer(
   dispatch: (action: unknown) => void,
   getState: () => RootState
@@ -61,7 +51,7 @@ function startCountdownTimer(
     const elapsed = Date.now() - sessionData.countdownStartTime;
     const remaining = Math.max(0, sessionData.startDelaySeconds * 1000 - elapsed);
     dispatch(mqttSlice.actions.countdownTick(remaining));
-  }, 50); // ~20 fps for smooth countdown
+  }, 50);
 }
 
 function stopCountdownTimer() {
@@ -71,30 +61,20 @@ function stopCountdownTimer() {
   }
 }
 
-// ---------------------------------------------------------------------------
-// Resolve the active device ID from current state
-// ---------------------------------------------------------------------------
-
 function resolveActiveDeviceId(state: RootState): string | null {
   const { knownDevices, selectedDeviceId } = state.mqtt;
   if (selectedDeviceId) {
     return selectedDeviceId;
   }
 
-  return knownDevices.find((device: { presence: string }) => device.presence === 'online')?.deviceId ?? null;
+  return knownDevices.find(device => device.presence === 'online')?.deviceId ?? null;
 }
-
-// ---------------------------------------------------------------------------
-// Middleware
-// ---------------------------------------------------------------------------
 
 export const mqttMiddleware: Middleware = store => next => (action: any) => {
   const dispatch = store.dispatch;
   const getState = store.getState as () => RootState;
 
-  // ---- startConnecting: open a new MQTT connection ----
   if (mqttSlice.actions.startConnecting.match(action)) {
-    // Tear down any existing client first
     if (mqttClient) {
       mqttClient.end(true);
       mqttClient = null;
@@ -151,7 +131,6 @@ export const mqttMiddleware: Middleware = store => next => (action: any) => {
       console.log('MQTT reconnecting...');
     });
 
-    // ---- Central message router ----
     mqttClient.on('message', (topic: string, payload: Buffer) => {
       const parsed = parseDeviceTopic(topic);
       if (!parsed) {
@@ -160,15 +139,14 @@ export const mqttMiddleware: Middleware = store => next => (action: any) => {
 
       const { deviceId, event } = parsed;
 
-      // --- Presence ---
       if (event === 'presence') {
-        const presence = payload.toString() as 'online' | 'offline';
+        const presence = payload.toString() as DevicePresence;
         dispatch(mqttSlice.actions.devicePresenceUpdated({ deviceId, presence }));
 
         return;
       }
 
-      // --- Device info (update registry even if not active device) ---
+      // Before the active-device filter: the registry tracks every device.
       if (matchPattern(MqttTopics.DEVICE_INFO, topic)) {
         const msg = parseMqttMessage<DeviceInfoMessage>(topic, payload);
         if (msg) {
@@ -176,7 +154,6 @@ export const mqttMiddleware: Middleware = store => next => (action: any) => {
         }
       }
 
-      // --- Filter by active device ---
       const state = getState();
       const activeId = resolveActiveDeviceId(state);
       if (activeId) {
@@ -190,7 +167,6 @@ export const mqttMiddleware: Middleware = store => next => (action: any) => {
         }
       }
 
-      // --- Connection state ---
       if (matchPattern(MqttTopics.CONNECTION_STATE, topic)) {
         const msg = parseMqttMessage<ConnectionStateMessage>(topic, payload);
         if (msg) {
@@ -198,19 +174,16 @@ export const mqttMiddleware: Middleware = store => next => (action: any) => {
         }
       }
 
-      // --- Session started ---
       if (matchPattern(MqttTopics.SESSION_STARTED, topic)) {
         const msg = parseMqttMessage<SessionStartedMessage>(topic, payload);
         if (msg) {
           dispatch(mqttSlice.actions.sessionStarted(msg));
-          // Start a client-side countdown ticker if there's a delay
           if (msg.startDelaySeconds && msg.startDelaySeconds > 0) {
             startCountdownTimer(dispatch as (action: unknown) => void, getState);
           }
         }
       }
 
-      // --- Countdown complete ---
       if (matchPattern(MqttTopics.COUNTDOWN_COMPLETE, topic)) {
         const msg = parseMqttMessage<CountdownCompleteMessage>(topic, payload);
         if (msg) {
@@ -219,7 +192,6 @@ export const mqttMiddleware: Middleware = store => next => (action: any) => {
         }
       }
 
-      // --- Shot detected ---
       if (matchPattern(MqttTopics.SHOT_DETECTED, topic)) {
         const msg = parseMqttMessage<ShotDetectedMessage>(topic, payload);
         if (msg) {
@@ -227,7 +199,6 @@ export const mqttMiddleware: Middleware = store => next => (action: any) => {
         }
       }
 
-      // --- Session stopped ---
       if (matchPattern(MqttTopics.SESSION_STOPPED, topic)) {
         const msg = parseMqttMessage<SessionStoppedMessage>(topic, payload);
         if (msg) {
@@ -238,19 +209,14 @@ export const mqttMiddleware: Middleware = store => next => (action: any) => {
     });
   }
 
-  // ---- disconnected action: also tear down the client ----
   if (mqttSlice.actions.disconnected.match(action)) {
     stopCountdownTimer();
   }
 
-  // ---- sessionStarted with countdown: the slice already set COUNTDOWN state,
-  //      but we also need to schedule the fallback auto-transition in case
-  //      the MQTT countdownComplete message never arrives. ----
+  // Fallback in case the countdown/complete message is lost.
   if (mqttSlice.actions.sessionStarted.match(action)) {
     const delay = (action as ReturnType<typeof mqttSlice.actions.sessionStarted>).payload.startDelaySeconds;
     if (delay && delay > 0) {
-      // Safety timeout: transition to WAITING_FOR_SHOTS even if MQTT
-      // countdown/complete message is lost. Add 500ms buffer.
       setTimeout(() => {
         const state = getState();
         if (state.mqtt.displayState === 'COUNTDOWN') {
@@ -266,10 +232,6 @@ export const mqttMiddleware: Middleware = store => next => (action: any) => {
 
   return next(action);
 };
-
-// ---------------------------------------------------------------------------
-// Exported helper so components can trigger a disconnect
-// ---------------------------------------------------------------------------
 
 export function disconnectMqttClient() {
   if (mqttClient) {
