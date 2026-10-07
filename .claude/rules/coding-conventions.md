@@ -106,7 +106,7 @@ Match what the existing TypeScript already does:
 - 2-space indent, semicolons.
 - Single quotes in TS; double quotes in JSX attributes, with no braces around
   literal JSX props (`title="x"`, not `title={"x"}`).
-- Trailing commas on multi-line literals.
+- No trailing commas.
 - 1TBS braces, never on a single line. `if`/`else`/`for`/`while` always take
   braces, even for one statement.
 - **Blank line before every `return`** that follows another statement.
@@ -247,10 +247,12 @@ because it tells the reader something the code does not.
   functions.** Be consistent within a file rather than converting either way.
 - **Name non-trivial types instead of inlining them.** A one-field inline type in
   a signature is fine; a multi-field object literal in a parameter position is not.
-- **Keep a type next to its use.** `pwa-display-app/src/types.ts` exists and holds
-  the shared MQTT event shapes — that is the right place for types genuinely used
-  across components. Do not create a *new* `types.ts` just to relocate a type that
-  one module uses.
+- **Types live in the slice's `types.ts`.** Each vertical slice (feature folder)
+  keeps its interfaces and type aliases in a colocated `types.ts`, and the slice's
+  modules import from it. Do not scatter shape declarations through the
+  implementation files. Exception: a type derived from a value
+  (`ReturnType<typeof makeStore>`, `(typeof DISCIPLINES)[number]`) stays next to
+  that value.
 - **Pass an options object once a function takes more than two parameters**, and
   give it a named `interface`. Five positional arguments do not read at the call
   site.
@@ -377,8 +379,7 @@ export const LEDMatrix = (props: LEDMatrixProps) => {
   if (!props.onReset) { /* ... */ }
 ```
 
-- **Props type lives next to the component**, named `<Component>Props`. Export it
-  only if another module needs it.
+- **Props type lives in the slice's `types.ts`**, named `<Component>Props`.
 - **Component body order:** hooks → derived values → effects → handlers → early
   returns → JSX. Consistent ordering means a reader always knows where to look.
 - **Derive during render; do not mirror props into state.** Compute plain values
