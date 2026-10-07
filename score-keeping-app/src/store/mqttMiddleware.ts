@@ -233,6 +233,15 @@ export const mqttMiddleware: Middleware = store => next => (action: any) => {
   return next(action);
 };
 
+/** Fire-and-forget: dropped while disconnected, since a stale display message is worse than none. */
+export function publishMqtt(topic: string, payload: object) {
+  if (!mqttClient?.connected) {
+    return;
+  }
+
+  mqttClient.publish(topic, JSON.stringify(payload), { qos: 0, retain: false });
+}
+
 export function disconnectMqttClient() {
   if (mqttClient) {
     mqttClient.end(true);

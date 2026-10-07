@@ -142,6 +142,10 @@ void TimerApplication::run() {
   // ============================================================
   // MqttManager owns its own background task (core 0) for all socket I/O
   // and queue draining - nothing to pump from this loop.
+  UpNextInfo upNext;
+  if (mqttManager && displayManager && mqttManager->receiveUpNext(upNext)) {
+    displayManager->showUpNext(upNext.sessionId, upNext.next, upNext.onDeck);
+  }
 
   // ============================================================
   // PHASE 4: Display Update

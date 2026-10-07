@@ -1,4 +1,4 @@
-import type { Card, CardScore, CardWarning, MatchState, OutstandingItem, RosterInfo } from './types';
+import type { Card, CardScore, CardWarning, MatchState, OutstandingItem, RosterInfo, UpNextInfo } from './types';
 
 export const NO_SCORE = '--:--';
 
@@ -141,22 +141,28 @@ export function deriveRoster(state: MatchState): RosterInfo {
     return { current: null, next: null, onDeck: null };
   }
 
-  const cards = getSquadCards(state, squadId);
   const activeCardId = state.activeTurn?.cardId ?? null;
-  const current = cards.find(card => card.id === activeCardId)?.shooterName ?? null;
+  const current = state.cards.find(card => card.id === activeCardId)?.shooterName ?? null;
+
+  return { current, ...deriveSquadUpNext(state, squadId, activeCardId) };
+}
+
+/** Next and on deck in one squad: the current round's queue, then open reshoots and catch-ups. */
+export function deriveSquadUpNext(state: MatchState, squadId: string, activeCardId: string | null): UpNextInfo {
+  const cards = getSquadCards(state, squadId);
   const currentRound = deriveCurrentRound(cards);
 
   if (currentRound !== null) {
     const { next, onDeck } = deriveUpcomingShooters(cards, currentRound, activeCardId);
 
-    return { current, next: next?.shooterName ?? null, onDeck: onDeck?.shooterName ?? null };
+    return { next: next?.shooterName ?? null, onDeck: onDeck?.shooterName ?? null };
   }
 
   const outstanding = deriveOutstanding(cards).filter(item => item.card.id !== activeCardId);
   const next = outstanding[0] ? `${outstanding[0].card.shooterName} (reshoot)` : null;
   const onDeck = outstanding[1] ? `${outstanding[1].card.shooterName} (reshoot)` : null;
 
-  return { current, next, onDeck };
+  return { next, onDeck };
 }
 
 /** The round a shooter shoots when armed: the next pending round, then an open reshoot, then a catch-up round. */

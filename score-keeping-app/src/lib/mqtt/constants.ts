@@ -14,6 +14,9 @@ export const MqttTopics: IMqttTopics = {
   COUNTDOWN_COMPLETE: 'timer/+/countdown/complete'
 };
 
+/** Published by the timekeeper for the firmware, not subscribed to by any app view. */
+export const SESSION_UP_NEXT_EVENT = 'session/up-next';
+
 export function buildDeviceTopic(deviceId: string, event: string): string {
   return `timer/${deviceId}/${event}`;
 }

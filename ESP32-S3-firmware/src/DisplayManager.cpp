@@ -39,6 +39,11 @@ DisplayManager::DisplayManager()
     connectionState(DeviceConnectionState::DISCONNECTED),
     deviceName(nullptr),
     deviceNameStorage{},
+    upNextName{},
+    onDeckName{},
+    hasUpNext(false),
+    showingUpNext(false),
+    lastUpNextToggle(0),
     countdownStartTime(0),
     countdownDurationSeconds(0.0f),
     displayDirty(true),
@@ -210,12 +215,22 @@ void DisplayManager::update() {
       break;
 
     case DisplayState::SESSION_ENDED:
+      if (hasUpNext && currentTime - lastUpNextToggle >= UP_NEXT_TOGGLE_MS) {
+        showingUpNext = !showingUpNext;
+        lastUpNextToggle = currentTime;
+        markDirty(true);
+      }
+
       if (displayDirty) {
         if (needsClear) {
           clearDisplay();
           needsClear = false;
         }
-        renderSessionEnd();
+        if (showingUpNext) {
+          renderUpNext();
+        } else {
+          renderSessionEnd();
+        }
         displayDirty = false;
       }
       break;
@@ -326,7 +341,27 @@ void DisplayManager::showSessionEnd(const SessionData& sessionData, uint16_t las
   currentSessionData = sessionData;
   lastShotData.shotNumber = lastShotNumber; // Store for display
   lastUpdateTime = millis();
+  hasUpNext = false;
+  showingUpNext = false;
+  lastUpNextToggle = lastUpdateTime;
   markDirty(true);  // Signal display update needed with clear
+}
+
+void DisplayManager::showUpNext(uint32_t sessionId, const char* next, const char* onDeck) {
+  if (currentState != DisplayState::SESSION_ENDED || sessionId != currentSessionData.sessionId) {
+    LOG_DEBUG("DISPLAY", "Ignoring up-next for session %u", sessionId);
+    return;
+  }
+
+  strncpy(upNextName, next, sizeof(upNextName) - 1);
+  upNextName[sizeof(upNextName) - 1] = '\0';
+  strncpy(onDeckName, onDeck, sizeof(onDeckName) - 1);
+  onDeckName[sizeof(onDeckName) - 1] = '\0';
+  hasUpNext = true;
+  if (showingUpNext) {
+    markDirty(true);
+  }
+  LOG_DISPLAY("Up next: %s, on deck: %s", upNextName, onDeckName[0] ? onDeckName : "-");
 }
 
 void DisplayManager::clearDisplay() {
@@ -589,6 +624,30 @@ void DisplayManager::renderSessionEnd() {
   u8g2_for_adafruit_gfx.setForegroundColor(DisplayColors::RED);
   u8g2_for_adafruit_gfx.setCursor(65, 25);
   u8g2_for_adafruit_gfx.print(timeBuffer);
+}
+
+// Names longer than the panel are clipped at its right edge.
+void DisplayManager::renderUpNext() {
+  if (!display) return;
+
+  u8g2_for_adafruit_gfx.setFontMode(1);
+  u8g2_for_adafruit_gfx.setFontDirection(0);
+
+  u8g2_for_adafruit_gfx.setFont(u8g2_font_helvB10_tf);
+  u8g2_for_adafruit_gfx.setForegroundColor(DisplayColors::YELLOW);
+  u8g2_for_adafruit_gfx.setCursor(0, 12);
+  u8g2_for_adafruit_gfx.print(F("NEXT: "));
+  u8g2_for_adafruit_gfx.setFont(u8g2_font_helvR10_tf);
+  u8g2_for_adafruit_gfx.setForegroundColor(DisplayColors::WHITE);
+  u8g2_for_adafruit_gfx.print(upNextName);
+
+  u8g2_for_adafruit_gfx.setFont(u8g2_font_helvB10_tf);
+  u8g2_for_adafruit_gfx.setForegroundColor(DisplayColors::YELLOW);
+  u8g2_for_adafruit_gfx.setCursor(0, 28);
+  u8g2_for_adafruit_gfx.print(F("ON DECK: "));
+  u8g2_for_adafruit_gfx.setFont(u8g2_font_helvR10_tf);
+  u8g2_for_adafruit_gfx.setForegroundColor(DisplayColors::WHITE);
+  u8g2_for_adafruit_gfx.print(onDeckName[0] ? onDeckName : "-");
 }
 
 void DisplayManager::formatTime(uint32_t timeMs, char* buffer, size_t bufferSize) {

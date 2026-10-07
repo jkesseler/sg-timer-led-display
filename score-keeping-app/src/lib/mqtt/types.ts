@@ -75,6 +75,13 @@ export interface SessionStoppedMessage {
   timestamp: number;
 }
 
+/** Published by the timekeeper after a session stops; the firmware matches it on `sessionId`. */
+export interface SessionUpNextMessage {
+  sessionId: number;
+  next: string;
+  onDeck?: string;
+}
+
 export interface ShotDetectedMessage {
   sessionId: number;
   shotNumber: number;

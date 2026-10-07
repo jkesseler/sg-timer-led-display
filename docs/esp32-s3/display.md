@@ -107,6 +107,17 @@ Over 60 s:
 └────────────────────────────────┘
 ```
 
+When a `session/up-next` message arrives for this session, the screen alternates every 10 s with:
+
+```
+┌────────────────────────────────┐
+│  NEXT: Jan Jansen              │
+│  ON DECK: Piet de Vries        │
+└────────────────────────────────┘
+```
+
+Labels are yellow and names are white. Without an on-deck shooter, the second line shows `ON DECK: -`. Names longer than the panel are clipped at the right edge.
+
 ---
 
 ## Color codes (RGB565)

@@ -46,6 +46,7 @@ MqttManager::MqttManager()
     reconnectBackoffMs(MQTT_FAST_CHECK_INTERVAL),
     taskHandle(nullptr),
     eventQueue(nullptr),
+    upNextQueue(nullptr),
     totalEventsPublished(0),
     publishFailures(0) {
   // Zero-initialise all topic buffers
@@ -58,6 +59,7 @@ MqttManager::MqttManager()
   memset(topicSessionResumed, 0, sizeof(topicSessionResumed));
   memset(topicShotDetected, 0, sizeof(topicShotDetected));
   memset(topicCountdownComplete, 0, sizeof(topicCountdownComplete));
+  memset(topicSessionUpNext, 0, sizeof(topicSessionUpNext));
   memset(mqttClientId, 0, sizeof(mqttClientId));
 }
 
@@ -74,6 +76,7 @@ void MqttManager::buildTopics(const char* devId) {
   snprintf(topicSessionResumed,  TOPIC_BUFFER_SIZE, "timer/%s/session/resumed",   devId);
   snprintf(topicShotDetected,    TOPIC_BUFFER_SIZE, "timer/%s/shot/detected",     devId);
   snprintf(topicCountdownComplete,TOPIC_BUFFER_SIZE,"timer/%s/countdown/complete",devId);
+  snprintf(topicSessionUpNext,   TOPIC_BUFFER_SIZE, "timer/%s/session/up-next",   devId);
   // Unique per-device client ID prevents broker from dropping duplicate connections
   snprintf(mqttClientId, CLIENT_ID_BUFFER_SIZE, "pewpew-%s", devId);
   LOG_DEBUG("MQTT", "Topics built for device: %s", devId);
@@ -88,6 +91,36 @@ void MqttManager::publishPresence(bool online) {
   LOG_INFO("MQTT", "Presence: %s", payload);
 }
 
+void MqttManager::handleMessage(const char* topic, const uint8_t* payload, unsigned int length) {
+  if (strcmp(topic, topicSessionUpNext) != 0) {
+    return;
+  }
+
+  JsonDocument doc;
+  if (deserializeJson(doc, payload, length)) {
+    LOG_WARN("MQTT", "Ignoring malformed up-next message");
+    return;
+  }
+
+  const char* next = doc["next"];
+  if (!next || next[0] == '\0') {
+    return;
+  }
+  const char* onDeck = doc["onDeck"];
+
+  UpNextInfo info = {};
+  info.sessionId = doc["sessionId"] | 0u;
+  strncpy(info.next, next, sizeof(info.next) - 1);
+  if (onDeck) {
+    strncpy(info.onDeck, onDeck, sizeof(info.onDeck) - 1);
+  }
+  xQueueOverwrite(upNextQueue, &info);
+}
+
+bool MqttManager::receiveUpNext(UpNextInfo& out) {
+  return upNextQueue && xQueueReceive(upNextQueue, &out, 0) == pdTRUE;
+}
+
 MqttManager::~MqttManager() {
   if (taskHandle) {
     vTaskDelete(taskHandle);
@@ -96,6 +129,10 @@ MqttManager::~MqttManager() {
   if (eventQueue) {
     vQueueDelete(eventQueue);
     eventQueue = nullptr;
+  }
+  if (upNextQueue) {
+    vQueueDelete(upNextQueue);
+    upNextQueue = nullptr;
   }
   if (mqttConnected) {
     disconnectMqtt();
@@ -139,6 +176,10 @@ bool MqttManager::initialize() {
   // down. 5s was manufacturing disconnects during active shot sessions.
   mqttClient.setKeepAlive(30);  // 30 seconds keep-alive
 
+  mqttClient.setCallback([this](char* topic, uint8_t* payload, unsigned int length) {
+    handleMessage(topic, payload, length);
+  });
+
   LOG_SYSTEM("MQTT configured for %s:%d", mqttServer, mqttPort);
   LOG_SYSTEM("MQTT client ID: %s", mqttClientId);
   LOG_SYSTEM("Note: MQTT will connect when WiFi becomes available");
@@ -146,7 +187,8 @@ bool MqttManager::initialize() {
   // All MQTT socket I/O happens on this dedicated task from here on -
   // nothing else may call tryConnect()/mqttClient.loop()/publish*().
   eventQueue = xQueueCreate(EVENT_QUEUE_SIZE, sizeof(MqttEvent));
-  if (!eventQueue) {
+  upNextQueue = xQueueCreate(1, sizeof(UpNextInfo));
+  if (!eventQueue || !upNextQueue) {
     LOG_ERROR("MQTT", "Failed to create MQTT event queue");
     return false;
   }
@@ -223,6 +265,8 @@ bool MqttManager::tryConnect() {
     LOG_INFO("MQTT", "MQTT connected successfully");
     // Announce presence. Retained so late-joining displays see "online" immediately.
     publishPresence(true);
+    // Clean session drops subscriptions, so subscribe again on every connect.
+    mqttClient.subscribe(topicSessionUpNext);
     return true;
   }
 

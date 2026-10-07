@@ -64,6 +64,14 @@ All topics are prefixed with `timer/<deviceId>/`, where `deviceId` is the unique
 | `timer/<id>/shot/<n>` | ❌ | JSON: shot number, absoluteTimeMs, splitTimeMs | `SHOT_DETECTED` |
 | `timer/<id>/countdown/complete` | ❌ | JSON: sessionId | `COUNTDOWN_COMPLETE` |
 
+### Subscribed topics
+
+| Topic | Published by | Payload | Effect |
+|---|---|---|---|
+| `timer/<id>/session/up-next` | score-keeping-app timekeeper, not retained | JSON: `sessionId`, `next`, optional `onDeck` | The session-end screen alternates with a NEXT / ON DECK screen every 10 s |
+
+The firmware ignores an up-next message when its `sessionId` is not the session that just ended. The timekeeper publishes it only after a timed turn stops and a next shooter exists.
+
 ### Example payloads
 
 **Shot detected:**

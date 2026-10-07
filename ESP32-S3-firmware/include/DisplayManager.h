@@ -43,6 +43,15 @@ private:
   const char* deviceName;       // points at deviceNameStorage, or nullptr
   char deviceNameStorage[64];
 
+  // Next / on-deck shooters, alternated with the session-end screen
+  static constexpr size_t SHOOTER_NAME_SIZE = 48;
+  char upNextName[SHOOTER_NAME_SIZE];
+  char onDeckName[SHOOTER_NAME_SIZE];
+  bool hasUpNext;
+  bool showingUpNext;
+  unsigned long lastUpNextToggle;
+  static const uint16_t UP_NEXT_TOGGLE_MS = 10000;
+
   // Countdown tracking
   unsigned long countdownStartTime;
   float countdownDurationSeconds;
@@ -79,6 +88,7 @@ private:
   void renderWaitingForShots();
   void renderShotData();
   void renderSessionEnd();
+  void renderUpNext();
   void clearDisplay();
   void clearConnectionDetailLine();
 
@@ -101,6 +111,9 @@ public:
   void showWaitingForShots(const SessionData& sessionData);
   void showShotData(const NormalizedShotData& shotData);
   void showSessionEnd(const SessionData& sessionData, uint16_t lastShotNumber);
+  // Ignored unless sessionId is the session currently shown as ended.
+  // onDeck may be empty.
+  void showUpNext(uint32_t sessionId, const char* next, const char* onDeck);
 
   // Getters
   DisplayState getCurrentState() const { return currentState; }

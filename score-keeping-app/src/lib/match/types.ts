@@ -85,10 +85,13 @@ export interface OutstandingItem {
 
 export type CardWarning = 'multiple-rs' | 'signed-with-open-rounds';
 
-export interface RosterInfo {
-  current: string | null;
+export interface UpNextInfo {
   next: string | null;
   onDeck: string | null;
+}
+
+export interface RosterInfo extends UpNextInfo {
+  current: string | null;
 }
 
 // Everything below is persisted as JSON (localStorage and the match-states

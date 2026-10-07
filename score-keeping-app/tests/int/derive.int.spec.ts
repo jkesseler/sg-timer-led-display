@@ -3,6 +3,7 @@ import {
   deriveCurrentRound,
   deriveOutstanding,
   deriveRoster,
+  deriveSquadUpNext,
   deriveUpcomingShooters,
   findCardByKnsa,
   findNextRoundToShoot,
@@ -114,6 +115,33 @@ describe('deriveRoster', () => {
     const state = buildState([], { squads: [] });
 
     expect(deriveRoster(state)).toEqual({ current: null, next: null, onDeck: null });
+  });
+});
+
+describe('deriveSquadUpNext', () => {
+  const shotRound1 = [{ status: 'timed', timeMs: 1 }, { status: 'pending' }, { status: 'pending' }, { status: 'pending' }, { status: 'pending' }] as const;
+
+  it('wraps to the next round once everyone has shot the current one', () => {
+    const cards = ['a', 'b', 'c'].map((id, index) => buildCard({ id, queuePosition: index, rounds: [...shotRound1] }));
+
+    expect(deriveSquadUpNext(buildState(cards), 'squad-a', null)).toEqual({ next: 'Shooter a', onDeck: 'Shooter b' });
+  });
+
+  it('has no one on deck when one shooter is left', () => {
+    const cards = [
+      buildCard({ id: 'a', queuePosition: 0, rounds: [...shotRound1] }),
+      buildCard({ id: 'b', queuePosition: 1 })
+    ];
+
+    expect(deriveSquadUpNext(buildState(cards), 'squad-a', null)).toEqual({ next: 'Shooter b', onDeck: null });
+  });
+
+  it('uses the given squad, not the first active one', () => {
+    const cards = [buildCard({ id: 'a' }), buildCard({ id: 'x', squadId: 'squad-b' })];
+    const state = buildState(cards);
+    state.squads[1].status = 'active';
+
+    expect(deriveSquadUpNext(state, 'squad-b', null)).toEqual({ next: 'Shooter x', onDeck: null });
   });
 });
 
