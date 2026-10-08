@@ -18,7 +18,7 @@ The design is in
 - **Nothing blocks a correction.** Every edit is accepted; rule breaches
   (a second RS, signing with open rounds) only show as warnings.
 - **Timer results arrive over MQTT** as `timer/<deviceId>/<event>`, from the
-  ESP32 bridge or from the Node BLE bridge in [`ble-bridge/`](ble-bridge).
+  ESP32 bridge or from the Node BLE bridge in [`ble-nodejs-bridge/`](../ble-nodejs-bridge).
   The browser binds a session to whichever shooter is armed; a result with
   nobody armed is kept as "unassigned".
 - **Audit log:** every change is also appended to `match-audit` with the
@@ -38,7 +38,7 @@ cp .env.example .env   # then set PAYLOAD_SECRET
 | `PAYLOAD_SECRET` | Payload | any long random string |
 | `MQTT_WS_URL` | browser (WebSocket), handed over by the server at request time; leave unset unless the broker is on another host | `ws://broker.example:9001` |
 | `MQTT_USERNAME` / `MQTT_PASSWORD` | browser (optional) | |
-| `MQTT_BROKER_URL` | `ble-bridge` (TCP), in `ble-bridge/.env` | `mqtt://localhost:1883` |
+| `MQTT_BROKER_URL` | BLE bridge (TCP), in `ble-nodejs-bridge/.env` | `mqtt://localhost:1883` |
 
 When `MQTT_WS_URL` is unset, the browser uses `ws://<host it loaded the page
 from>:9001`, so a TV opening `http://<laptop>:3000/display` finds the
@@ -94,7 +94,7 @@ password_file /etc/mosquitto/passwd
 
 Create the password file with `mosquitto_passwd -c /etc/mosquitto/passwd <user>`
 and set the same user in `MQTT_USERNAME` / `MQTT_PASSWORD` (app) and
-`ble-bridge/.env`.
+`ble-nodejs-bridge/.env`.
 
 ## Collections
 
@@ -102,7 +102,7 @@ and set the same user in `MQTT_USERNAME` / `MQTT_PASSWORD` (app) and
   `timekeeper` role.
 - **`shooters`**: names, optional ASN and KNSA numbers. `knsaNumber` is the
   barcode scan key.
-- **`devices`**: timer device IDs (ESP32 or `ble-bridge`) with a label.
+- **`devices`**: timer device IDs (ESP32 or BLE bridge) with a label.
 - **`matches`**: label, date, timer device, and `active`. The app works on
   the active match (the newest date if several are ticked).
 - **`squads`**: time block and discipline within a match.
@@ -150,7 +150,7 @@ change it if the labels are another size, e.g. 101.6 x 152.4 mm for 4x6".
 
 - `npm run dev`: Next.js dev server.
 - `npm run seed`: fill the database with a test match.
-- `npm run bridge`: start the BLE bridge (see [`ble-bridge/README.md`](ble-bridge/README.md)).
+- `npm run bridge`: start the BLE bridge (see [`ble-nodejs-bridge/README.md`](../ble-nodejs-bridge/README.md)).
 - `npm run generate:types`: regenerate `src/payload-types.ts`.
 - `npm run test:int`: Vitest tests in `tests/int/`. The Payload tests need
   MongoDB at `DATABASE_URI` from `test.env`.

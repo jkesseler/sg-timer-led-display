@@ -31,7 +31,7 @@ Make sure no other MQTT broker (such as a Windows Mosquitto service) listens on 
 
 ```bash
 npm run bridge        # from score-keeping-app/
-npm start             # from ble-bridge/
+npm start             # from ble-nodejs-bridge/
 ```
 
 The bridge writes one line to stdout for each connect, disconnect, session event and shot. It writes errors to stderr. When it loses the timer, it waits 5 s and scans again.
