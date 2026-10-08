@@ -1,15 +1,10 @@
-/** "S.CC" under a minute, "M:SS.CC" from a minute up. */
+/** Seconds with hundredths ("S.CC"), never rolled into minutes: 70 s is "70.00". */
 export function formatTimeValue(timeMs: number): string {
-  const totalSeconds = timeMs / 1000;
+  // Integer centiseconds avoid float artefacts in toFixed (1.005.toFixed(2) === "1.00").
+  const totalCentiseconds = Math.round(timeMs / 10);
+  const centisecondsText = String(totalCentiseconds % 100).padStart(2, '0');
 
-  if (totalSeconds < 60) {
-    return totalSeconds.toFixed(2);
-  }
-
-  const minutes = Math.floor(totalSeconds / 60);
-  const seconds = totalSeconds - minutes * 60;
-
-  return `${minutes}:${seconds.toFixed(2).padStart(5, '0')}`;
+  return `${Math.floor(totalCentiseconds / 100)}.${centisecondsText}`;
 }
 
 export function formatCountdown(remainingSeconds: number): string {

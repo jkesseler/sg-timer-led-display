@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
 import { STARTUP_DISPLAY_MS } from '@/lib/display/constants';
 import {
@@ -47,6 +47,8 @@ function DisplayApp() {
   const [showSettings, setShowSettings] = useState(false);
   const [showStatus, setShowStatus] = useState(false);
   const [roster, setRoster] = useState<RosterInfo | null>(null);
+
+  const appRef = useRef<HTMLDivElement>(null);
 
   // The startup effect connects on first render, so the reconnect effect skips it.
   const isInitialMount = useRef(true);
@@ -135,10 +137,18 @@ function DisplayApp() {
     return () => window.removeEventListener('keydown', handleKeyPress);
   }, []);
 
-  const brightnessFilter = `brightness(${(settings.brightness / 255).toFixed(2)})`;
+  // Set on the DOM, not via `style`: brightness comes from localStorage, which the server render can't see.
+  useLayoutEffect(() => {
+    if (!appRef.current) {
+      return;
+    }
+
+    const isDimmed = settings.brightness < 255;
+    appRef.current.style.filter = isDimmed ? `brightness(${(settings.brightness / 255).toFixed(2)})` : '';
+  }, [settings.brightness]);
 
   return (
-    <div className="app" style={{ filter: brightnessFilter }}>
+    <div className="app" ref={appRef}>
       {showStatus && (
         <div className="status-bar">
           <div className="status-item">
