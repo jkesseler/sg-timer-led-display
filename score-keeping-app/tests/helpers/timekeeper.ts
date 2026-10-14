@@ -2,8 +2,9 @@ import { execSync } from 'node:child_process'
 import mqtt from 'mqtt'
 import { expect } from '@playwright/test'
 import type { Page } from '@playwright/test'
+import { baseURL } from './login'
 
-export const baseURL = process.env.PLAYWRIGHT_BASE_URL ?? 'http://localhost:3000'
+export { baseURL }
 export const brokerURL = process.env.MQTT_BROKER_URL ?? 'mqtt://localhost:1883'
 export const DEVICE_ID = 'TKUI01'
 
