@@ -1,28 +1,24 @@
-version: '3'
-
 services:
-  payload:
-    image: node:20-alpine
+  scoring-app:
+    build: .
+    restart: unless-stopped
     ports:
       - '3000:3000'
-    volumes:
-      - .:/home/node/app
-      - node_modules:/home/node/app/node_modules
-    working_dir: /home/node/app/
-    command: sh -c "npm install && npm run dev"
     depends_on:
-      - postgres
+      mongo:
+        condition: service_healthy
+      mosquitto:
+        condition: service_started
     env_file:
       - .env
+    environment:
+      DATABASE_URI: mongodb://mongo:27017/score-keeping-app
 
-  # Ensure your DATABASE_URL uses 'postgres' as the hostname,
   mongo:
     image: mongo:8
-    restart: on-failure
+    restart: unless-stopped
     command:
       - --storageEngine=wiredTiger
-    ports:
-      - '27017:27017'
     volumes:
       - mongo-data:/data/db
     healthcheck:
@@ -32,7 +28,15 @@ services:
       retries: 5
       start_period: 10s
 
+  # The BLE bridge, ESP32 boards and the TV's browser connect from outside Docker.
+  mosquitto:
+    image: eclipse-mosquitto:2
+    restart: unless-stopped
+    ports:
+      - '1883:1883'
+      - '9001:9001'
+    volumes:
+      - ./mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+
 volumes:
   mongo-data:
-  node_modules:
-

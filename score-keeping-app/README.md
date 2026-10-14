@@ -67,7 +67,18 @@ npm install
 npm run dev
 ```
 
-### 4. Seed a match
+### 4. Run on match day
+
+```bash
+docker compose up -d --build
+```
+
+Builds a production image and starts it with MongoDB and Mosquitto. The
+containers restart with Docker, so the stack comes back after a laptop reboot.
+MongoDB is not published to the host; its data stays in the `mongo-data`
+volume. Create the first admin at `http://localhost:3000/admin`.
+
+### 5. Seed a match
 
 ```bash
 npm run seed
@@ -76,10 +87,10 @@ npm run seed
 Creates an admin (`admin@timer.tsd` / `qazwsx123`), timer device `TKUI01` and
 an active match with two squads. Open `http://localhost:3000/timekeeper`.
 
-## MQTT broker outside development
+## MQTT broker with a password
 
-The broker is an external process. A production `mosquitto.conf` for the
-laptop:
+Both compose files mount `mosquitto.conf`, which allows anonymous access. To
+require a password, replace it with:
 
 ```
 listener 1883
@@ -89,11 +100,17 @@ listener 9001
 protocol websockets
 
 allow_anonymous false
-password_file /etc/mosquitto/passwd
+password_file /mosquitto/config/passwd
 ```
 
-Create the password file with `mosquitto_passwd -c /etc/mosquitto/passwd <user>`
-and set the same user in `MQTT_USERNAME` / `MQTT_PASSWORD` (app) and
+Create the password file next to it and mount it into the `mosquitto` service
+as `./passwd:/mosquitto/config/passwd:ro`:
+
+```bash
+docker run --rm -it -v "$PWD":/work eclipse-mosquitto:2 mosquitto_passwd -c /work/passwd <user>
+```
+
+Set the same user in `MQTT_USERNAME` / `MQTT_PASSWORD` (app) and
 `ble-nodejs-bridge/.env`.
 
 ## Collections
