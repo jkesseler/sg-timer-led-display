@@ -22,6 +22,11 @@ private:
   std::unique_ptr<DisplayManager> displayManager;
   std::unique_ptr<MqttManager> mqttManager;
 
+  // Portal timer type 2: show another bridge's timer from MQTT; BLE stays off.
+  bool isFollowingMqttTimer;
+  bool isFollowedTimerConnected;
+  bool hasFollowerLeftStartup;
+
   // Application state
   bool sessionActive;
   uint16_t lastShotNumber;
@@ -57,6 +62,7 @@ private:
   void onSessionSuspended(const SessionData& sessionData);
   void onSessionResumed(const SessionData& sessionData);
   void onConnectionStateChanged(DeviceConnectionState state);
+  void onFollowedConnectionState(DeviceConnectionState state, const char* deviceName);
 
   // Helper methods
   void setupCallbacks();
@@ -65,6 +71,8 @@ private:
   void updateActivityTime();
   void scanForDevices();
   void processScanResults();
+  void processFollowedEvents();
+  bool shouldRelayToMqtt() const;
 
 public:
   TimerApplication();

@@ -2,7 +2,7 @@
 
 ## Overview
 
-MQTT and WiFi are **optional** in this firmware. If no broker IP is configured, the firmware operates in display-only mode. WiFi initialises lazily after the first BLE connection so BLE scanning is never blocked by network delays.
+MQTT and WiFi are **optional** in BLE mode. If no broker IP is configured, the firmware operates in display-only mode. WiFi starts at boot in non-blocking mode, so BLE scanning is never blocked by network delays.
 
 ---
 
@@ -24,6 +24,8 @@ Connect from a phone or laptop, open `http://192.168.4.1`, and fill in:
 | MQTT port | Broker port | 1883 |
 | MQTT username | Optional auth | *(empty)* |
 | MQTT password | Optional auth | *(empty)* |
+| Timer type | `1` = BLE: connect to the timer and publish its events. `2` = MQTT: show another bridge's timer (see [MQTT timer mode](#mqtt-timer-mode)) | `1` |
+| Follow timer ID | MQTT mode only: the device ID of the bridge to show. `+` follows any bridge | `+` |
 | Startup text | Marquee text shown on boot | `J.K. PewPew Timer Bridge` |
 
 All settings are persisted to NVS (ESP32 flash) using the `Preferences` API under namespace `wifi-config`. They survive power cycles and firmware reflashes that do not erase NVS.
@@ -42,15 +44,13 @@ Implementation: `ESP32-S3-firmware/src/WiFiConfig.cpp`
 
 ```
 TimerApplication::initialize()
-  1. WiFiConfig::initialize()   — loads NVS settings, starts non-blocking WiFiManager
+  1. WiFiConfig::initialize()   — loads NVS settings, starts non-blocking WiFiManager (autoConnect)
   2. DisplayManager::init()
-  3. BLE client init
-  4. (first BLE connection established)
-     → WiFiConfig: WiFi stack starts, connects to saved SSID
-     → MqttManager::initialize()  — only if MQTT server is non-empty
+  3. MqttManager::initialize()  — only if MQTT server is non-empty; connects once WiFi is up
+  4. BLE client init            — BLE mode only
 ```
 
-This ensures BLE scanning works immediately, even in environments with no WiFi.
+BLE scanning works immediately, even in environments with no WiFi.
 
 ---
 
@@ -99,6 +99,20 @@ The firmware ignores an up-next message when its `sessionId` is not the session 
   "startDelaySeconds": 3.0
 }
 ```
+
+---
+
+## MQTT timer mode
+
+With timer type `2`, the board does not use BLE. It shows the events of another bridge, such as `ble-nodejs-bridge` on the score-keeping laptop, so the board and the laptop can use one timer together. Restart the board after you change the timer type.
+
+- The board subscribes to `timer/<follow timer ID>/#` and shows `session/*`, `shot/detected`, `countdown/complete`, `connection/state` and `session/up-next`, the same as from its own timer.
+- It shows one bridge at a time: the first whose `presence` is `online`. While that presence is `offline`, the board shows the timer as disconnected and ignores the bridge's retained `connection/state`, which a crashed bridge leaves at `CONNECTED`. When the bridge goes offline, the next bridge to come online is shown.
+- The board publishes nothing. It sets no last will and clears its own retained `presence`, `connection/state` and `device/info`, so the score-keeping app and `/display` never take the board for a timer.
+- With `+`, the board follows whichever bridge it sees online first. Set the bridge's device ID if more than one bridge is online.
+- MQTT is required in this mode. Until the bridge reports a connected timer, the board shows the timer as disconnected.
+
+To test without a timer, start `mqtt-simulator` against the same broker.
 
 ---
 

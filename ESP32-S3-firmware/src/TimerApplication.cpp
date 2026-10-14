@@ -19,7 +19,10 @@ void onBleScanComplete(BLEScanResults /*scanResults*/) {
 }
 
 TimerApplication::TimerApplication()
-  : sessionActive(false),
+  : isFollowingMqttTimer(false),
+    isFollowedTimerConnected(false),
+    hasFollowerLeftStartup(false),
+    sessionActive(false),
     lastShotNumber(0),
     lastShotTime(0),
     maxQueueDepth(0),
@@ -62,21 +65,20 @@ bool TimerApplication::initialize() {
     displayManager->drawFirmwareUpdate(percent);
   });
 
-  // Initialize MQTT manager in BLE mode.
+  isFollowingMqttTimer = WiFiConfig::getTimerType() == TIMER_TYPE_MQTT;
+
   // Runtime MQTT enable/disable is controlled by WiFiConfig::getMqttServer().
-  if (TIMER_TYPE == TIMER_TYPE_BLE) {
-    // Initialize MQTT manager
-    mqttManager = std::unique_ptr<MqttManager>(new MqttManager());
-    if (!mqttManager->initialize()) {
-      LOG_SYSTEM("MQTT disabled - server not configured");
-      // Non-fatal - continue without MQTT
+  mqttManager = std::unique_ptr<MqttManager>(new MqttManager());
+  if (isFollowingMqttTimer) {
+    if (!mqttManager->initialize(WiFiConfig::getTimerSource())) {
+      LOG_ERROR("SYSTEM", "MQTT timer mode needs an MQTT server - set one in the WiFi portal");
     }
-  } else {
-    LOG_SYSTEM("MQTT disabled (TIMER_TYPE=%d)", TIMER_TYPE);
+  } else if (!mqttManager->initialize()) {
+    LOG_SYSTEM("MQTT disabled - server not configured");
+    // Non-fatal - continue without MQTT
   }
 
-  // Initialize BLE only if timer type is BLE
-  if (TIMER_TYPE == TIMER_TYPE_BLE) {
+  if (!isFollowingMqttTimer) {
     BLEDevice::init(BLE_DEVICE_NAME);
     LOG_BLE("ESP32-S3 BLE Client initialized");
 
@@ -90,8 +92,7 @@ bool TimerApplication::initialize() {
 
     LOG_SYSTEM("Ready to scan for timer devices (SG Timer or Special Pie Timer)");
   } else {
-    // MQTT client not implemented yet
-    LOG_SYSTEM("BLE disabled - Timer Type: MQTT");
+    LOG_SYSTEM("BLE disabled - showing timer events from MQTT");
   }
 
   LOG_SYSTEM("Application initialized successfully");
@@ -108,9 +109,11 @@ void TimerApplication::run() {
   WiFiConfig::update();
 
   // ============================================================
-  // PHASE 2: BLE Device Management (only if TIMER_TYPE == TIMER_TYPE_BLE)
+  // PHASE 2: Timer events - from the BLE device, or from MQTT
   // ============================================================
-  if (TIMER_TYPE == TIMER_TYPE_BLE) {
+  if (isFollowingMqttTimer) {
+    processFollowedEvents();
+  } else {
     if (gBleScanResultsReady) {
       gBleScanResultsReady = false;
       scanResultsReady = true;
@@ -213,10 +216,7 @@ void TimerApplication::onShotDetected(const NormalizedShotData& shotData) {
   // MqttManager's own background task.
   // Only queue if MQTT is available - don't buffer when unavailable
   // ============================================================
-  // Only publish to MQTT if TIMER_TYPE == TIMER_TYPE_BLE and connected to MQTT broker
-  bool shouldPublishMqtt = (TIMER_TYPE == TIMER_TYPE_BLE) && mqttManager && mqttManager->canPublish();
-
-  if (shouldPublishMqtt) {
+  if (shouldRelayToMqtt()) {
     if (mqttManager->enqueueShot(shotData)) {
       totalShotsQueued++;
 
@@ -251,7 +251,7 @@ void TimerApplication::onSessionStarted(const SessionData& sessionData) {
   lastShotTime = 0;
 
   // Enqueue for the MQTT task to publish (this callback runs on the BLE task)
-  if (mqttManager && mqttManager->canPublish()) {
+  if (shouldRelayToMqtt()) {
     mqttManager->enqueueSessionStarted(sessionData.sessionId, sessionData.startDelaySeconds);
   }
 
@@ -267,7 +267,7 @@ void TimerApplication::onSessionStarted(const SessionData& sessionData) {
 void TimerApplication::onCountdownComplete(const SessionData& sessionData) {
   LOG_TIMER("Countdown complete - ready for shots");
 
-  if (mqttManager && mqttManager->canPublish()) {
+  if (shouldRelayToMqtt()) {
     mqttManager->enqueueCountdownComplete(sessionData.sessionId);
   }
 
@@ -285,7 +285,7 @@ void TimerApplication::onSessionStopped(const SessionData& sessionData) {
   // Enqueue session-stopped behind whatever shots are already queued: they
   // were detected before this event fired, so the single ordered queue
   // publishes them first and this event after - no separate discard needed.
-  if (mqttManager && mqttManager->canPublish()) {
+  if (shouldRelayToMqtt()) {
     mqttManager->enqueueSessionStopped(sessionData.sessionId, sessionData.totalShots, lastShotTime);
   }
 
@@ -298,7 +298,7 @@ void TimerApplication::onSessionSuspended(const SessionData& sessionData) {
   LOG_TIMER("Session suspended: ID %u, Total shots: %d",
             sessionData.sessionId, sessionData.totalShots);
 
-  if (mqttManager && mqttManager->canPublish()) {
+  if (shouldRelayToMqtt()) {
     mqttManager->enqueueSessionSuspended(sessionData.sessionId);
   }
 }
@@ -309,7 +309,7 @@ void TimerApplication::onSessionResumed(const SessionData& sessionData) {
 
   sessionActive = true;
 
-  if (mqttManager && mqttManager->canPublish()) {
+  if (shouldRelayToMqtt()) {
     mqttManager->enqueueSessionResumed(sessionData.sessionId);
   }
 
@@ -334,7 +334,7 @@ void TimerApplication::onConnectionStateChanged(DeviceConnectionState state) {
     deviceModel = timerDevice->getDeviceModel();
   }
 
-  if (mqttManager && mqttManager->canPublish()) {
+  if (shouldRelayToMqtt()) {
     mqttManager->enqueueConnectionState(state, deviceName, deviceModel);
   }
 
@@ -354,6 +354,89 @@ void TimerApplication::onConnectionStateChanged(DeviceConnectionState state) {
   }
 }
 
+void TimerApplication::onFollowedConnectionState(DeviceConnectionState state, const char* deviceName) {
+  LOG_SYSTEM("Followed timer connection state: %d", (int)state);
+  updateActivityTime();
+
+  isFollowedTimerConnected = state == DeviceConnectionState::CONNECTED;
+  if (isFollowedTimerConnected) {
+    hadDeviceConnected = true;
+  }
+  if (state == DeviceConnectionState::DISCONNECTED) {
+    sessionActive = false;
+  }
+
+  if (displayManager) {
+    displayManager->showConnectionState(state, deviceName);
+  }
+}
+
+void TimerApplication::processFollowedEvents() {
+  // Same startup screen time as BLE mode; events wait in the queue meanwhile.
+  if (!mqttManager || millis() - startupTime < STARTUP_MESSAGE_DELAY) {
+    return;
+  }
+  if (!hasFollowerLeftStartup) {
+    hasFollowerLeftStartup = true;
+    onFollowedConnectionState(DeviceConnectionState::DISCONNECTED, nullptr);
+  }
+
+  MqttEvent event;
+  while (mqttManager->receiveFollowedEvent(event)) {
+    updateActivityTime();
+    SessionData sessionData;
+
+    switch (event.type) {
+      case MqttEventType::SHOT_DETECTED:
+        onShotDetected(event.shot);
+        break;
+
+      case MqttEventType::SESSION_STARTED:
+        sessionData.sessionId = event.sessionStarted.sessionId;
+        sessionData.isActive = true;
+        sessionData.startDelaySeconds = event.sessionStarted.startDelaySeconds;
+        onSessionStarted(sessionData);
+        break;
+
+      case MqttEventType::SESSION_STOPPED:
+        sessionData.sessionId = event.sessionStopped.sessionId;
+        sessionData.totalShots = event.sessionStopped.totalShots;
+        onSessionStopped(sessionData);
+        break;
+
+      case MqttEventType::SESSION_SUSPENDED:
+        sessionData.sessionId = event.sessionSimple.sessionId;
+        onSessionSuspended(sessionData);
+        break;
+
+      case MqttEventType::SESSION_RESUMED:
+        sessionData.sessionId = event.sessionSimple.sessionId;
+        sessionData.isActive = true;
+        onSessionResumed(sessionData);
+        break;
+
+      case MqttEventType::COUNTDOWN_COMPLETE:
+        sessionData.sessionId = event.sessionSimple.sessionId;
+        sessionData.isActive = true;
+        onCountdownComplete(sessionData);
+        break;
+
+      case MqttEventType::CONNECTION_STATE:
+        onFollowedConnectionState(event.connectionState.state,
+                                  event.connectionState.hasDeviceName ? event.connectionState.deviceName : nullptr);
+        break;
+
+      case MqttEventType::DEVICE_INFO:
+        break;
+    }
+  }
+}
+
+// A follower must not echo the followed bridge's events under its own ID.
+bool TimerApplication::shouldRelayToMqtt() const {
+  return !isFollowingMqttTimer && mqttManager && mqttManager->canPublish();
+}
+
 void TimerApplication::logShotData(const NormalizedShotData& shotData) {
   LOG_TIMER("Shot #%d: %.3fs (split: %.3fs)",
             shotData.shotNumber,
@@ -371,7 +454,7 @@ void TimerApplication::performHealthCheck() {
 
   // Check component health
   bool displayHealthy = displayManager && displayManager->isInitialized();
-  bool timerHealthy = timerDevice != nullptr;
+  bool timerHealthy = isFollowingMqttTimer ? isFollowedTimerConnected : timerDevice != nullptr;
 
   if (!displayHealthy) {
     LOG_ERROR("HEALTH", "Display manager not healthy");
@@ -383,7 +466,7 @@ void TimerApplication::performHealthCheck() {
 
   // Activity timeout warning
   if (currentTime - lastActivityTime > AppConfig::WATCHDOG_TIMEOUT_MS) {
-    LOG_WARN("HEALTH", "No BLE activity for %lu ms", currentTime - lastActivityTime);
+    LOG_WARN("HEALTH", "No timer activity for %lu ms", currentTime - lastActivityTime);
   }
 
   // Queue metrics (only if there's been activity). The queue itself and its
@@ -407,7 +490,7 @@ void TimerApplication::updateActivityTime() {
 
 bool TimerApplication::isHealthy() const {
   bool displayHealthy = displayManager && displayManager->isInitialized();
-  bool timerHealthy = timerDevice != nullptr;
+  bool timerHealthy = isFollowingMqttTimer ? isFollowedTimerConnected : timerDevice != nullptr;
   bool activityHealthy = (millis() - lastActivityTime) < AppConfig::WATCHDOG_TIMEOUT_MS;
 
   return displayHealthy && timerHealthy && activityHealthy;
@@ -419,7 +502,7 @@ unsigned long TimerApplication::getUptimeMs() const {
 
 bool TimerApplication::isRuntimeReady() const {
   bool displayHealthy = displayManager && displayManager->isInitialized();
-  bool timerHealthy = timerDevice != nullptr;
+  bool timerHealthy = isFollowingMqttTimer ? isFollowedTimerConnected : timerDevice != nullptr;
 
   return displayHealthy && timerHealthy;
 }

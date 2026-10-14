@@ -47,8 +47,10 @@ MqttManager::MqttManager()
     taskHandle(nullptr),
     eventQueue(nullptr),
     upNextQueue(nullptr),
+    followedEventQueue(nullptr),
     totalEventsPublished(0),
-    publishFailures(0) {
+    publishFailures(0),
+    isFollower(false) {
   // Zero-initialise all topic buffers
   memset(topicPresence, 0, sizeof(topicPresence));
   memset(topicConnectionState, 0, sizeof(topicConnectionState));
@@ -60,6 +62,7 @@ MqttManager::MqttManager()
   memset(topicShotDetected, 0, sizeof(topicShotDetected));
   memset(topicCountdownComplete, 0, sizeof(topicCountdownComplete));
   memset(topicSessionUpNext, 0, sizeof(topicSessionUpNext));
+  memset(topicFollowedTimer, 0, sizeof(topicFollowedTimer));
   memset(mqttClientId, 0, sizeof(mqttClientId));
 }
 
@@ -92,10 +95,54 @@ void MqttManager::publishPresence(bool online) {
 }
 
 void MqttManager::handleMessage(const char* topic, const uint8_t* payload, unsigned int length) {
-  if (strcmp(topic, topicSessionUpNext) != 0) {
+  if (isFollower) {
+    handleFollowedMessage(topic, payload, length);
+    return;
+  }
+  if (strcmp(topic, topicSessionUpNext) == 0) {
+    handleUpNext(payload, length);
+  }
+}
+
+void MqttManager::handleFollowedMessage(const char* topic, const uint8_t* payload, unsigned int length) {
+  // Following "+" also matches this board's own topics; topicPresence starts with its "timer/<id>/".
+  size_t ownTopicPrefixLength = strlen(topicPresence) - strlen("presence");
+  if (strncmp(topic, topicPresence, ownTopicPrefixLength) == 0) {
     return;
   }
 
+  const char* topicPrefix = "timer/";
+  if (strncmp(topic, topicPrefix, strlen(topicPrefix)) != 0) {
+    return;
+  }
+  const char* deviceIdStart = topic + strlen(topicPrefix);
+  const char* deviceIdEnd = strchr(deviceIdStart, '/');
+  size_t deviceIdLength = deviceIdEnd ? (size_t)(deviceIdEnd - deviceIdStart) : 0;
+  if (deviceIdLength == 0 || deviceIdLength >= FollowedTimer::DEVICE_ID_SIZE) {
+    return;
+  }
+  char sourceDeviceId[FollowedTimer::DEVICE_ID_SIZE];
+  memcpy(sourceDeviceId, deviceIdStart, deviceIdLength);
+  sourceDeviceId[deviceIdLength] = '\0';
+  const char* event = deviceIdEnd + 1;
+
+  if (strcmp(event, "session/up-next") == 0) {
+    if (followedTimer.isShowing(sourceDeviceId)) {
+      handleUpNext(payload, length);
+    }
+    return;
+  }
+
+  MqttEvent followedEvent;
+  if (!followedTimer.handle(sourceDeviceId, event, payload, length, followedEvent)) {
+    return;
+  }
+  if (xQueueSend(followedEventQueue, &followedEvent, 0) != pdTRUE) {
+    LOG_WARN("MQTT", "Followed event queue full - %s dropped", event);
+  }
+}
+
+void MqttManager::handleUpNext(const uint8_t* payload, unsigned int length) {
   JsonDocument doc;
   if (deserializeJson(doc, payload, length)) {
     LOG_WARN("MQTT", "Ignoring malformed up-next message");
@@ -121,6 +168,18 @@ bool MqttManager::receiveUpNext(UpNextInfo& out) {
   return upNextQueue && xQueueReceive(upNextQueue, &out, 0) == pdTRUE;
 }
 
+bool MqttManager::receiveFollowedEvent(MqttEvent& out) {
+  return followedEventQueue && xQueueReceive(followedEventQueue, &out, 0) == pdTRUE;
+}
+
+// Retained state from BLE mode would make displays treat this board as a live timer.
+void MqttManager::clearOwnRetainedTopics() {
+  const uint8_t empty[] = {0};
+  mqttClient.publish(topicPresence, empty, 0, /*retain=*/true);
+  mqttClient.publish(topicConnectionState, empty, 0, /*retain=*/true);
+  mqttClient.publish(topicDeviceInfo, empty, 0, /*retain=*/true);
+}
+
 MqttManager::~MqttManager() {
   if (taskHandle) {
     vTaskDelete(taskHandle);
@@ -134,17 +193,27 @@ MqttManager::~MqttManager() {
     vQueueDelete(upNextQueue);
     upNextQueue = nullptr;
   }
+  if (followedEventQueue) {
+    vQueueDelete(followedEventQueue);
+    followedEventQueue = nullptr;
+  }
   if (mqttConnected) {
     disconnectMqtt();
   }
 }
 
-bool MqttManager::initialize() {
+bool MqttManager::initialize(const char* followedDeviceId) {
   LOG_SYSTEM("Initializing MQTT Manager");
 
   // Build device-specific topic strings using the unique device ID.
   // Must be called after deviceId.initialize().
   buildTopics(deviceId.get().c_str());
+
+  isFollower = followedDeviceId != nullptr;
+  if (isFollower) {
+    snprintf(topicFollowedTimer, TOPIC_BUFFER_SIZE, "timer/%s/#", followedDeviceId);
+    LOG_SYSTEM("MQTT timer mode: following %s", topicFollowedTimer);
+  }
 
   // Get MQTT configuration from WiFiConfig (will use defaults if not configured)
   const char* mqttServer = WiFiConfig::getMqttServer();
@@ -188,7 +257,10 @@ bool MqttManager::initialize() {
   // nothing else may call tryConnect()/mqttClient.loop()/publish*().
   eventQueue = xQueueCreate(EVENT_QUEUE_SIZE, sizeof(MqttEvent));
   upNextQueue = xQueueCreate(1, sizeof(UpNextInfo));
-  if (!eventQueue || !upNextQueue) {
+  if (isFollower) {
+    followedEventQueue = xQueueCreate(FOLLOWED_EVENT_QUEUE_SIZE, sizeof(MqttEvent));
+  }
+  if (!eventQueue || !upNextQueue || (isFollower && !followedEventQueue)) {
     LOG_ERROR("MQTT", "Failed to create MQTT event queue");
     return false;
   }
@@ -249,7 +321,11 @@ bool MqttManager::tryConnect() {
   bool connected = false;
   bool useAuth = (mqttUser && mqttUser[0] != '\0' && mqttPassword && mqttPassword[0] != '\0');
 
-  if (useAuth) {
+  if (isFollower) {
+    // No last will: a follower never announces presence.
+    connected = useAuth ? mqttClient.connect(mqttClientId, mqttUser, mqttPassword)
+                        : mqttClient.connect(mqttClientId);
+  } else if (useAuth) {
     LOG_DEBUG("MQTT", "Using authentication (user: %s)", mqttUser);
     connected = mqttClient.connect(mqttClientId, mqttUser, mqttPassword,
                                    topicPresence, willQos, willRetain, willMessage);
@@ -263,10 +339,16 @@ bool MqttManager::tryConnect() {
     mqttConnected = true;
     reconnectBackoffMs = MQTT_FAST_CHECK_INTERVAL;  // Reset backoff on success
     LOG_INFO("MQTT", "MQTT connected successfully");
-    // Announce presence. Retained so late-joining displays see "online" immediately.
-    publishPresence(true);
     // Clean session drops subscriptions, so subscribe again on every connect.
-    mqttClient.subscribe(topicSessionUpNext);
+    if (isFollower) {
+      clearOwnRetainedTopics();
+      followedTimer.onBrokerReconnect();
+      mqttClient.subscribe(topicFollowedTimer);
+    } else {
+      // Announce presence. Retained so late-joining displays see "online" immediately.
+      publishPresence(true);
+      mqttClient.subscribe(topicSessionUpNext);
+    }
     return true;
   }
 

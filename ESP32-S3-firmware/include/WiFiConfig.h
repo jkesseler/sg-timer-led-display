@@ -24,6 +24,7 @@ private:
   static char mqtt_user[41];
   static char mqtt_password[41];
   static char timer_type[7];
+  static char timer_source[33];
   static char startup_text[41];
 
   // Configuration constants
@@ -48,6 +49,7 @@ private:
   static WiFiManagerParameter* customMqttUser;
   static WiFiManagerParameter* customMqttPassword;
   static WiFiManagerParameter* customTimerType;
+  static WiFiManagerParameter* customTimerSource;
   static WiFiManagerParameter* customStartupText;
 
   // Helper methods
@@ -114,5 +116,7 @@ public:
   static const char* getMqttUser();
   static const char* getMqttPassword();
   static int getTimerType();
+  // Device ID whose timer/<id>/... topics the board shows in MQTT timer mode; "+" follows any.
+  static const char* getTimerSource();
   static const char* getStartupText();
 };

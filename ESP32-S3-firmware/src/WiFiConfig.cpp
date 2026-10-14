@@ -48,6 +48,7 @@ char WiFiConfig::mqtt_port[7] = "1883";
 char WiFiConfig::mqtt_user[41] = MQTT_USER;
 char WiFiConfig::mqtt_password[41] = MQTT_PASSWORD;
 char WiFiConfig::timer_type[7] = "";
+char WiFiConfig::timer_source[33] = "";
 char WiFiConfig::startup_text[41] = STARTUP_TEXT;
 
 // Persistent WiFiManager custom parameters (required for non-blocking portal)
@@ -56,6 +57,7 @@ WiFiManagerParameter* WiFiConfig::customMqttPort = nullptr;
 WiFiManagerParameter* WiFiConfig::customMqttUser = nullptr;
 WiFiManagerParameter* WiFiConfig::customMqttPassword = nullptr;
 WiFiManagerParameter* WiFiConfig::customTimerType = nullptr;
+WiFiManagerParameter* WiFiConfig::customTimerSource = nullptr;
 WiFiManagerParameter* WiFiConfig::customStartupText = nullptr;
 
 // Global WiFiManager instance (persistent across WiFiConfig function calls)
@@ -78,6 +80,7 @@ void WiFiConfig::loadConfiguration() {
   prefs.getString("mqtt_user",   MQTT_USER).toCharArray(mqtt_user, sizeof(mqtt_user));
   prefs.getString("mqtt_pass",   MQTT_PASSWORD).toCharArray(mqtt_password, sizeof(mqtt_password));
   snprintf(timer_type, sizeof(timer_type), "%d", prefs.getInt("timer_type", TIMER_TYPE));
+  prefs.getString("timer_source", "+").toCharArray(timer_source, sizeof(timer_source));
   prefs.getString("startup_text", STARTUP_TEXT).toCharArray(startup_text, sizeof(startup_text));
 
   prefs.end();
@@ -87,6 +90,7 @@ void WiFiConfig::loadConfiguration() {
   LOG_SYSTEM("  MQTT Port: %s", mqtt_port);
   LOG_SYSTEM("  MQTT User: %s", mqtt_user[0] ? mqtt_user : "(empty)");
   LOG_SYSTEM("  Timer Type: %s", timer_type);
+  LOG_SYSTEM("  Timer Source: %s", timer_source);
   LOG_SYSTEM("  Startup Text: %s", startup_text);
 }
 
@@ -104,6 +108,7 @@ void WiFiConfig::saveConfiguration() {
   prefs.putString("mqtt_user",    mqtt_user);
   prefs.putString("mqtt_pass",    mqtt_password);
   prefs.putInt(   "timer_type",   atoi(timer_type));
+  prefs.putString("timer_source", timer_source);
   prefs.putString("startup_text", startup_text);
   prefs.end();
 
@@ -128,6 +133,7 @@ void WiFiConfig::initialize() {
   customMqttUser = new WiFiManagerParameter("mqtt_user", "MQTT User", mqtt_user, 40);
   customMqttPassword = new WiFiManagerParameter("mqtt_password", "MQTT Password", mqtt_password, 40);
   customTimerType = new WiFiManagerParameter("timer_type", "Timer Type (1=BLE, 2=MQTT)", timer_type, 6);
+  customTimerSource = new WiFiManagerParameter("timer_source", "Follow Timer ID (MQTT mode, + = any)", timer_source, 32);
   customStartupText = new WiFiManagerParameter("startup_text", "Startup Text", startup_text, 40);
 
   // Add parameters to WiFiManager
@@ -136,6 +142,7 @@ void WiFiConfig::initialize() {
   wifiManager.addParameter(customMqttUser);
   wifiManager.addParameter(customMqttPassword);
   wifiManager.addParameter(customTimerType);
+  wifiManager.addParameter(customTimerSource);
   wifiManager.addParameter(customStartupText);
 
   // The portal's "Update" page reports no progress, only the start.
@@ -154,6 +161,7 @@ void WiFiConfig::initialize() {
     copyIfProvided(mqtt_user,     sizeof(mqtt_user),     customMqttUser,     "mqtt_user");
     copyIfProvided(mqtt_password, sizeof(mqtt_password), customMqttPassword, "mqtt_password");
     copyIfProvided(timer_type,    sizeof(timer_type),    customTimerType,    "timer_type");
+    copyIfProvided(timer_source,  sizeof(timer_source),  customTimerSource,  "timer_source");
     copyIfProvided(startup_text,  sizeof(startup_text),  customStartupText,  "startup_text");
     WiFiConfig::saveConfiguration();
   });
@@ -290,6 +298,7 @@ void WiFiConfig::startConfigPortal() {
   customMqttUser = new WiFiManagerParameter("mqtt_user", "MQTT User", mqtt_user, 40);
   customMqttPassword = new WiFiManagerParameter("mqtt_password", "MQTT Password", mqtt_password, 40);
   customTimerType = new WiFiManagerParameter("timer_type", "Timer Type (1=BLE, 2=MQTT)", timer_type, 6);
+  customTimerSource = new WiFiManagerParameter("timer_source", "Follow Timer ID (MQTT mode, + = any)", timer_source, 32);
   customStartupText = new WiFiManagerParameter("startup_text", "Startup Text", startup_text, 40);
 
   // Re-add parameters to portal (old ones are replaced)
@@ -298,6 +307,7 @@ void WiFiConfig::startConfigPortal() {
   wifiManager.addParameter(customMqttUser);
   wifiManager.addParameter(customMqttPassword);
   wifiManager.addParameter(customTimerType);
+  wifiManager.addParameter(customTimerSource);
   wifiManager.addParameter(customStartupText);
 
   // Start config portal (blocking)
@@ -373,6 +383,12 @@ const char* WiFiConfig::getMqttPassword() {
 int WiFiConfig::getTimerType() {
   int type = atoi(timer_type);
   return (type > 0) ? type : TIMER_TYPE;
+}
+
+const char* WiFiConfig::getTimerSource() {
+  // A topic level must not contain '/' or '#'.
+  bool isUsable = timer_source[0] != '\0' && !strpbrk(timer_source, "/#");
+  return isUsable ? timer_source : "+";
 }
 
 const char* WiFiConfig::getStartupText() {

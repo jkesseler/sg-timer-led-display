@@ -39,6 +39,7 @@ pio test -e native-tests
 pio test -e native-tests --filter test_protocol_parsing
 pio test -e native-tests --filter test_ring_buffer
 pio test -e native-tests --filter test_time_formatting
+pio test -e native-tests --filter test_timer_event_parsing
 
 # Build/flash diagnostics tools (hardware required, not production firmware)
 pio run -e tools-led-matrix -t upload
@@ -65,7 +66,8 @@ ESP32-S3-firmware/
     ├── stubs/        # Arduino/BLE header stubs for host builds
     ├── test_protocol_parsing/
     ├── test_ring_buffer/
-    └── test_time_formatting/
+    ├── test_time_formatting/
+    └── test_timer_event_parsing/
 docs/                 # Hardware & protocol reference
 memory-bank/          # Architecture decision records
 ```
@@ -152,7 +154,7 @@ MQTT topics are per-device, built at `initialize()` time: `timer/<deviceId>/<eve
 
 ### Compile-time configuration (`common.h`)
 
-`TIMER_TYPE` (`TIMER_TYPE_BLE` / `TIMER_TYPE_MQTT`) controls which input path is compiled. `TIMER_TYPE_MQTT` is not yet implemented. `DEBUG_BUILD` shortens `STARTUP_MESSAGE_DELAY` from 5 s to 1 s.
+`TIMER_TYPE` (`TIMER_TYPE_BLE` / `TIMER_TYPE_MQTT`) is the default timer type; the WiFi portal's "Timer Type" overrides it at runtime. In MQTT mode the board skips BLE and shows another bridge's events from `timer/<follow timer ID>/#` (`TimerEventParser`, `MqttManager::initialize(followedDeviceId)`), publishing nothing itself. `DEBUG_BUILD` shortens `STARTUP_MESSAGE_DELAY` from 5 s to 1 s.
 
 ## Logging
 
@@ -213,7 +215,7 @@ HUB75 full pin mapping: `docs/HUB75_WIRING.md`. Power: 5 V / 10 A for the LED pa
 - No `delay()` inside device driver classes — use `millis()` deltas and return promptly.
 - Avoid floating-point math in performance-sensitive paths (BLE callbacks, display render loop).
 - Do **not** call `u8g2_for_adafruit_gfx.getUTF8Width()` — use the pixel-width estimate already in `DisplayManager` (`textPixelWidth`).
-- Wi-Fi is initialized lazily after the first BLE connection; don't assume it is ready at startup.
+- Wi-Fi starts at boot in non-blocking mode (`WiFiConfig::initialize()`); don't assume it is connected yet.
 
 ## Code conventions
 

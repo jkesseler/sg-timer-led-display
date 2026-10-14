@@ -1,71 +1,13 @@
 #pragma once
 
 #include "ITimerDevice.h"
+#include "MqttEvent.h"
+#include "FollowedTimer.h"
 #include "Logger.h"
 #include <memory>
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/queue.h"
-
-// Events that can reach the MQTT broker. Every event is enqueued from
-// whichever task detects it (the BLE notification task or the main loop)
-// and is only ever dispatched by MqttManager's own background task -
-// PubSubClient is not thread-safe, so nothing outside that task may call
-// into it directly.
-enum class MqttEventType : uint8_t {
-  SHOT_DETECTED,
-  SESSION_STARTED,
-  SESSION_STOPPED,
-  SESSION_SUSPENDED,
-  SESSION_RESUMED,
-  COUNTDOWN_COMPLETE,
-  CONNECTION_STATE,
-  DEVICE_INFO,
-};
-
-struct MqttEvent {
-  MqttEventType type;
-
-  union {
-    NormalizedShotData shot;
-
-    struct {
-      uint32_t sessionId;
-      float startDelaySeconds;
-    } sessionStarted;
-
-    struct {
-      uint32_t sessionId;
-      uint16_t totalShots;
-      uint32_t lastShotTimeMs;
-    } sessionStopped;
-
-    // Reused for SESSION_SUSPENDED / SESSION_RESUMED / COUNTDOWN_COMPLETE,
-    // which all carry only a session ID.
-    struct {
-      uint32_t sessionId;
-    } sessionSimple;
-
-    struct {
-      DeviceConnectionState state;
-      bool hasDeviceName;
-      bool hasDeviceModel;
-      char deviceName[64];
-      char deviceModel[32];
-    } connectionState;
-
-    struct {
-      bool hasDeviceName;
-      bool hasDeviceModel;
-      bool hasFirmwareVersion;
-      char deviceName[64];
-      char deviceModel[32];
-      char firmwareVersion[16];
-    } deviceInfo;
-  };
-
-  MqttEvent() : type(MqttEventType::SHOT_DETECTED) {}
-};
 
 // Next / on-deck shooters, published by the score-keeping app after a
 // session stops. An empty onDeck means there is no one on deck.
@@ -107,10 +49,12 @@ private:
   TaskHandle_t taskHandle;
   QueueHandle_t eventQueue;
   QueueHandle_t upNextQueue;  // length 1, overwritten: only the latest matters
+  QueueHandle_t followedEventQueue;  // FIFO: every shot must reach the display
   uint32_t totalEventsPublished;
   uint32_t publishFailures;
 
   static constexpr uint16_t EVENT_QUEUE_SIZE = 32;
+  static constexpr uint16_t FOLLOWED_EVENT_QUEUE_SIZE = 32;
   static constexpr uint16_t MAX_EVENTS_PER_DRAIN_CYCLE = 8;
   static constexpr uint32_t TASK_LOOP_DELAY_MS = 20;
   static constexpr uint32_t TASK_STACK_SIZE = 4096;
@@ -135,6 +79,11 @@ private:
   char topicCountdownComplete[TOPIC_BUFFER_SIZE];
   char topicSessionUpNext[TOPIC_BUFFER_SIZE];
 
+  // Set when the board shows another bridge's timer instead of relaying its own.
+  bool isFollower;
+  char topicFollowedTimer[TOPIC_BUFFER_SIZE];  // timer/<followed id>/#
+  FollowedTimer followedTimer;  // MQTT task only
+
   // Unique MQTT client ID (includes device ID to avoid broker conflicts)
   static constexpr size_t CLIENT_ID_BUFFER_SIZE = 32;
   char mqttClientId[CLIENT_ID_BUFFER_SIZE];
@@ -154,6 +103,9 @@ private:
   void publishPresence(bool online);
 
   void handleMessage(const char* topic, const uint8_t* payload, unsigned int length);
+  void handleUpNext(const uint8_t* payload, unsigned int length);
+  void handleFollowedMessage(const char* topic, const uint8_t* payload, unsigned int length);
+  void clearOwnRetainedTopics();
 
   // Helper methods - uses pre-allocated buffer
   // retain=true → broker stores the last value for late-joining subscribers
@@ -185,7 +137,8 @@ public:
 
   // Lifecycle. On success, creates the event queue and starts the
   // background MQTT task; nothing else needs to be called from the main loop.
-  bool initialize();
+  // followedDeviceId ("+" = any): show that bridge's events; publish no presence, so displays never pick this board.
+  bool initialize(const char* followedDeviceId = nullptr);
 
   // Connection status - inlined for performance in hot path
   inline bool isHealthy() const {
@@ -218,6 +171,9 @@ public:
 
   // Main-loop side of the up-next handoff from the MQTT task.
   bool receiveUpNext(UpNextInfo& out);
+
+  // Main-loop side of the followed timer's events, in arrival order.
+  bool receiveFollowedEvent(MqttEvent& out);
 
   // Settings/status
   // NOTE: touches PubSubClient directly - only safe to call from the
