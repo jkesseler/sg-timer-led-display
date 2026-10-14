@@ -1,38 +1,10 @@
 import mqtt from 'mqtt'
 import { test, expect } from '@playwright/test'
-import type { Page } from '@playwright/test'
+import { DEVICE_ID, baseURL, brokerURL, logIn, publishTimerSession, scanCard, seedMatch } from '../helpers/timekeeper'
 
-// Runs against a database filled by `npm run seed` (scripts/seed-match.ts).
-const baseURL = process.env.PLAYWRIGHT_BASE_URL ?? 'http://localhost:3000'
-const brokerURL = process.env.MQTT_BROKER_URL ?? 'mqtt://localhost:1883'
-const DEVICE_ID = 'TKUI01'
-
-async function publishTimerSession(lastShotTimeMs: number): Promise<void> {
-  const client = await mqtt.connectAsync(brokerURL)
-  const sessionId = Date.now()
-
-  await client.publishAsync(`timer/${DEVICE_ID}/presence`, 'online', { retain: true })
-  await client.publishAsync(`timer/${DEVICE_ID}/session/started`, JSON.stringify({ sessionId, timestamp: Date.now(), startDelaySeconds: 0 }))
-  await client.publishAsync(`timer/${DEVICE_ID}/shot/detected`, JSON.stringify({
-    sessionId, shotNumber: 1, absoluteTimeMs: lastShotTimeMs, splitTimeMs: lastShotTimeMs, deviceModel: 'Test', isFirstShot: true, timestamp: Date.now(),
-  }))
-  await client.publishAsync(`timer/${DEVICE_ID}/session/stopped`, JSON.stringify({ sessionId, timestamp: Date.now(), totalShots: 1, lastShotTimeMs }))
-  await client.endAsync()
-}
-
-/** A barcode scanner types the digits ~10 ms apart and ends with Enter; no input needs focus. */
-async function scanCard(page: Page, knsaNumber: string): Promise<void> {
-  await page.keyboard.type(knsaNumber, { delay: 10 })
-  await page.keyboard.press('Enter')
-}
-
-async function logIn(page: Page): Promise<void> {
-  await page.goto(`${baseURL}/timekeeper/login`)
-  await page.fill('#email', 'admin@timer.tsd')
-  await page.fill('#password', 'qazwsx123')
-  await page.click('button[type="submit"]')
-  await page.waitForURL(`${baseURL}/timekeeper`)
-}
+test.beforeEach(() => {
+  seedMatch()
+})
 
 test('a scanned shooter\'s timer result lands on the card and survives a reload from the server copy', async ({ page }) => {
   await logIn(page)
