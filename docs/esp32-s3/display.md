@@ -110,7 +110,7 @@ Over 60 s:
 └────────────────────────────────┘
 ```
 
-When a `session/up-next` message arrives for this session, the screen alternates every 10 s with:
+When a `session/up-next` message arrives for this session, the screen alternates every 10 s with the screen below. The first change comes 10 s after the message arrives. A repeated session-end event for the same session keeps the names and the 10 s cycle.
 
 ```
 ┌────────────────────────────────┐

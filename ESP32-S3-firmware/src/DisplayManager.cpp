@@ -369,13 +369,19 @@ void DisplayManager::showShotData(const NormalizedShotData& shotData) {
 }
 
 void DisplayManager::showSessionEnd(const SessionData& sessionData, uint16_t lastShotNumber) {
+  // A repeated session-end for the session already shown keeps the up-next
+  // names and the toggle cycle; the app does not resend up-next for it
+  const bool isSameSessionEnded = currentState == DisplayState::SESSION_ENDED &&
+                                  currentSessionData.sessionId == sessionData.sessionId;
+
   currentState = DisplayState::SESSION_ENDED;
   currentSessionData = sessionData;
   lastShotData.shotNumber = lastShotNumber; // Store for display
   lastUpdateTime = millis();
-  hasUpNext = false;
-  showingUpNext = false;
-  lastUpNextToggle = lastUpdateTime;
+  if (!isSameSessionEnded) {
+    hasUpNext = false;
+    showingUpNext = false;
+  }
   markDirty(true);  // Signal display update needed with clear
 }
 
@@ -394,6 +400,11 @@ void DisplayManager::showUpNext(uint32_t sessionId, const char* next, const char
   }
   upNextNameWidth = estimateNameWidth(upNextName);
   onDeckNameWidth = estimateNameWidth(onDeckName);
+  if (!hasUpNext) {
+    // Time the first toggle from arrival, so a late up-next message still
+    // leaves the session-end screen up for a full UP_NEXT_TOGGLE_MS
+    lastUpNextToggle = millis();
+  }
   hasUpNext = true;
   if (showingUpNext) {
     markDirty(true);
