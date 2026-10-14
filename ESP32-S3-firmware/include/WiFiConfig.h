@@ -53,6 +53,7 @@ private:
   // Helper methods
   static void loadConfiguration();
   static void saveConfiguration();
+  static void ensureWebPortal();
 
   static bool otaStarted;
   static FirmwareUpdateCallback firmwareUpdateCallback;

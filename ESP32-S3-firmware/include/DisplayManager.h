@@ -87,6 +87,7 @@ private:
   int16_t startupTextPixelWidth;
 
   static const uint16_t SCROLL_SPEED_MS = 25;  // Update scroll every 25ms
+  static const int16_t STARTUP_IP_LINE_HEIGHT = 8;  // 5x7 font band above the startup text
   static const uint16_t SCROLL_PAUSE_MS = 1000; // Pause at start/end
 
   // Signal that display needs to be redrawn
@@ -94,6 +95,7 @@ private:
 
   // Internal display methods
   void renderStartupMessage();
+  void renderStartupIpAddress();
   void renderConnectionStatus();
   void renderCountdown();
   void renderWaitingForShots();

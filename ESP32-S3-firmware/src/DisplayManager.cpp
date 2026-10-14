@@ -2,6 +2,7 @@
 #include "WiFiConfig.h"
 #include "Logger.h"
 #include <stdio.h>
+#include <WiFi.h>
 #include <U8g2_for_Adafruit_GFX.h>
 
 U8G2_FOR_ADAFRUIT_GFX u8g2_for_adafruit_gfx;
@@ -461,6 +462,31 @@ void DisplayManager::renderStartupMessage() {
     u8g2_for_adafruit_gfx.setCursor(xPos2, lineY);
     u8g2_for_adafruit_gfx.print(startupText);
   }
+
+  renderStartupIpAddress();
+}
+
+void DisplayManager::renderStartupIpAddress() {
+  // Small line above the startup text so the config portal URL is visible.
+  // Only on a STA connection - in AP mode the portal is always 192.168.4.1.
+  // Checked on every render because WiFi may connect during the startup delay.
+  const int16_t displayWidth = PANEL_WIDTH * PANEL_CHAIN;
+  display->fillRect(0, 0, displayWidth, STARTUP_IP_LINE_HEIGHT, 0);
+
+  if (!WiFiConfig::isConnected()) {
+    return;
+  }
+
+  // Format from octets rather than IPAddress::toString() - no heap String
+  // allocation on every 25 ms marquee frame
+  IPAddress ip = WiFi.localIP();
+  char ipText[16];
+  snprintf(ipText, sizeof(ipText), "%u.%u.%u.%u", ip[0], ip[1], ip[2], ip[3]);
+
+  u8g2_for_adafruit_gfx.setForegroundColor(DisplayColors::WHITE);
+  u8g2_for_adafruit_gfx.setFont(u8g2_font_5x7_tr);
+  u8g2_for_adafruit_gfx.setCursor(2, STARTUP_IP_LINE_HEIGHT - 1);
+  u8g2_for_adafruit_gfx.print(ipText);
 }
 
 void DisplayManager::renderConnectionStatus() {

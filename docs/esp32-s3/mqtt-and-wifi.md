@@ -28,6 +28,12 @@ Connect from a phone or laptop, open `http://192.168.4.1`, and fill in:
 
 All settings are persisted to NVS (ESP32 flash) using the `Preferences` API under namespace `wifi-config`. They survive power cycles and firmware reflashes that do not erase NVS.
 
+### Portal on the network address
+
+When WiFi is connected to a network, the firmware closes the access point and serves the same portal pages on the IP address of the board. The startup screen shows this address (see `display.md`). Use it to change the settings without a reset to access-point mode. If you select **Exit** in the portal menu, the firmware starts the portal again at the next connection check.
+
+> **Note:** The portal has no password. Any device on the same network can change the WiFi, MQTT and startup-text settings.
+
 Implementation: `ESP32-S3-firmware/src/WiFiConfig.cpp`
 
 ---

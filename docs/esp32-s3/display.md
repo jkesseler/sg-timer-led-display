@@ -48,11 +48,14 @@
 
 ```
 ┌────────────────────────────────┐
+│ 192.168.1.42                   │  ← IP address, white, 5x7 font
 │  J.K. PewPew Timer Bridge      │  ← marquee scrolls left, green
 └────────────────────────────────┘
 ```
 
 Configurable text via WiFi portal (`STARTUP_TEXT` default, overridden by NVS).
+
+The top line shows the IP address of the board when WiFi is connected to a network. Open this address in a browser to get the WiFi configuration portal (see `mqtt-and-wifi.md`). The line stays empty when WiFi is not connected, and in access-point mode, where the portal is always at `192.168.4.1`. WiFi can connect while the startup screen shows, so the address can appear after the screen does.
 
 ---
 

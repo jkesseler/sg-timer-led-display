@@ -194,6 +194,21 @@ void WiFiConfig::initialize() {
     LOG_SYSTEM("  Subnet: %s", WiFi.subnetMask().toString().c_str());
     LOG_SYSTEM("  RSSI: %d dBm", WiFi.RSSI());
   }
+
+  ensureWebPortal();
+}
+
+void WiFiConfig::ensureWebPortal() {
+  // WiFiManager closes the AP portal once STA connects. Serve the same config
+  // pages on the STA address instead so settings stay editable while the
+  // device runs. Skipped while the AP portal is up (they share one server);
+  // also restarts the portal after the user hits "Exit" in the menu.
+  if (!isConnected() || wifiManager.getWebPortalActive() || wifiManager.getConfigPortalActive()) {
+    return;
+  }
+
+  wifiManager.startWebPortal();
+  LOG_SYSTEM("Config portal available at http://%s", WiFi.localIP().toString().c_str());
 }
 
 void WiFiConfig::update() {
@@ -217,6 +232,8 @@ void WiFiConfig::update() {
   }
 
   lastConnectionCheck = now;
+
+  ensureWebPortal();
 
   bool isNowConnected = (WiFi.status() == WL_CONNECTED);
 
@@ -256,6 +273,10 @@ void WiFiConfig::startConfigPortal() {
   LOG_SYSTEM("Starting WiFi configuration portal");
   LOG_SYSTEM("Connect to AP: %s - captive portal will open automatically", AP_SSID);
   LOG_SYSTEM("If portal doesn't open, visit http://192.168.4.1");
+
+  // The web portal holds the HTTP server; release it before the AP portal
+  // builds its own, or shutdownConfigPortal() would refuse to clean up later
+  wifiManager.stopWebPortal();
 
   // Disconnect from current WiFi to start AP mode
   WiFi.disconnect(true);  // true = turn off WiFi radio
